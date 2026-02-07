@@ -1,0 +1,15 @@
+{
+    "name": "tracking-script",
+    "version": "1.0.0",
+    "private": true,
+    "description": "Lightweight tracking script for TrackFlow Analytics",
+    "main": "dist/v.js",
+    "scripts": {
+        "build": "esbuild src/index.ts --bundle --minify --outfile=dist/v.js --format=iife --global-name=TF",
+        "dev": "esbuild src/index.ts --bundle --outfile=dist/v.js --format=iife --global-name=TF --watch"
+    },
+    "devDependencies": {
+        "esbuild": "^0.20.0",
+        "typescript": "^5.3.0"
+    }
+}
