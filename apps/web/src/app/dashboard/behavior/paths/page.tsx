@@ -14,29 +14,30 @@ export default function PathsPage() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        const loadPaths = async () => {
+            if (!selectedDomainId) return;
+            setLoading(true);
+            // Use analytics endpoint
+            const result = await analytics.getTopPages(selectedDomainId);
+            if (result.data) {
+                // Generate path data from pages
+                const pages = result.data.pages || [];
+                const mockPaths = pages.slice(0, 5).map((page: any, idx: number) => ({
+                    from: idx === 0 ? '(entry)' : pages[idx - 1]?.path || '/',
+                    to: page.path,
+                    count: page.pageviews || 0,
+                    percentage: 100 - (idx * 15)
+                }));
+                setPaths(mockPaths);
+            }
+            setLoading(false);
+        };
+
         if (selectedDomainId) {
             loadPaths();
         }
     }, [selectedDomainId]);
 
-    const loadPaths = async () => {
-        if (!selectedDomainId) return;
-        setLoading(true);
-        // Use analytics endpoint
-        const result = await analytics.getTopPages(selectedDomainId);
-        if (result.data) {
-            // Generate path data from pages
-            const pages = result.data.pages || [];
-            const mockPaths = pages.slice(0, 5).map((page: any, idx: number) => ({
-                from: idx === 0 ? '(entry)' : pages[idx - 1]?.path || '/',
-                to: page.path,
-                count: page.pageviews || 0,
-                percentage: 100 - (idx * 15)
-            }));
-            setPaths(mockPaths);
-        }
-        setLoading(false);
-    };
 
     if (domainLoading || loading) {
         return (

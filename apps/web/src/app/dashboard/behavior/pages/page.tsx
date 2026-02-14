@@ -23,20 +23,21 @@ export default function PagesPage() {
     const [sortBy, setSortBy] = useState('pageviews');
 
     useEffect(() => {
+        const loadPages = async () => {
+            if (!selectedDomainId) return;
+            setLoading(true);
+            const result = await analytics.getTopPages(selectedDomainId);
+            if (result.data) {
+                setPages(result.data.pages || []);
+            }
+            setLoading(false);
+        };
+
         if (selectedDomainId) {
             loadPages();
         }
     }, [selectedDomainId]);
 
-    const loadPages = async () => {
-        if (!selectedDomainId) return;
-        setLoading(true);
-        const result = await analytics.getTopPages(selectedDomainId);
-        if (result.data) {
-            setPages(result.data.pages || []);
-        }
-        setLoading(false);
-    };
 
     const filteredPages = pages
         .filter(p => p.path?.toLowerCase().includes(searchQuery.toLowerCase()))
