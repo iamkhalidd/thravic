@@ -1,12 +1,16 @@
+import { Router, Request, Response } from 'express';
+import { z } from 'zod';
 import { checkIp } from '../services/geoService';
 import * as eventService from '../services/eventService';
 import * as sessionService from '../services/sessionService';
 import { classifySource } from '../services/sessionService';
+import * as domainService from '../services/domainService';
 
 import { eventSchema, batchSchema } from '../validators/collect';
 import { triggerWebhooks } from '../services/webhookService';
 
-// ...
+const router = Router();
+
 
 // ── POST /api/collect/:trackingId ───────────
 router.post('/:trackingId', async (req: Request, res: Response) => {
