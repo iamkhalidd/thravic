@@ -10,11 +10,46 @@ CREATE TABLE IF NOT EXISTS users (
     subscription VARCHAR(50) DEFAULT 'free' CHECK (subscription IN ('free', 'growth', 'pro', 'enterprise')),
     stripe_customer_id VARCHAR(255),
     stripe_subscription_id VARCHAR(255),
+    preferences JSONB DEFAULT '{}',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+
+);
+
+-- Webhooks (Event notifications)
+CREATE TABLE IF NOT EXISTS webhooks (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    domain_id UUID NOT NULL REFERENCES domains(id) ON DELETE CASCADE,
+    url TEXT NOT NULL,
+    events TEXT[] NOT NULL, -- Array of event types: ['pageview', 'click', 'form']
+    secret VARCHAR(255),
+    enabled BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- A/B Experiments
+CREATE TABLE IF NOT EXISTS experiments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    domain_id UUID NOT NULL REFERENCES domains(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    status VARCHAR(50) DEFAULT 'draft' CHECK (status IN ('draft', 'active', 'ended')),
+    variants JSONB NOT NULL DEFAULT '[]', -- [{ id: 'A', name: 'Original', weight: 50 }, { id: 'B', ... }]
+    traffic_allocation INTEGER DEFAULT 100, -- 0-100%
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Indexes for performance
+CREATE INDEX IF NOT EXISTS idx_sessions_domain_started ON sessions(domain_id, started_at DESC);
+CREATE INDEX IF NOT EXISTS idx_sessions_visitor ON sessions(visitor_id);
+CREATE INDEX IF NOT EXISTS idx_events_domain_created ON events(domain_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_events_session ON events(session_id);
+CREATE INDEX IF NOT EXISTS idx_events_type ON events(type);
+
 -- Domains (Multi-domain support)
+
+
 CREATE TABLE IF NOT EXISTS domains (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -25,6 +60,17 @@ CREATE TABLE IF NOT EXISTS domains (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     UNIQUE(user_id, domain)
 );
+
+-- Domain Members (Team collaboration)
+CREATE TABLE IF NOT EXISTS domain_members (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    domain_id UUID NOT NULL REFERENCES domains(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role VARCHAR(50) DEFAULT 'viewer' CHECK (role IN ('admin', 'viewer')),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(domain_id, user_id)
+);
+
 
 -- Visitors (Unique visitor records)
 CREATE TABLE IF NOT EXISTS visitors (
@@ -66,8 +112,14 @@ CREATE TABLE IF NOT EXISTS sessions (
     screen_height INTEGER,
     language VARCHAR(20),
     
+    -- Geo Tracking
+    country VARCHAR(2),
+    city VARCHAR(100),
+    region VARCHAR(100),
+    
     UNIQUE(session_id, domain_id)
 );
+
 
 -- Events (Raw event data)
 CREATE TABLE IF NOT EXISTS events (

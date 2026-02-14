@@ -2,12 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { domains } from '@/lib/api';
-
-interface Domain {
-    id: string;
-    domain: string;
-    name: string;
-}
+import type { Domain } from '@/types';
 
 interface DomainContextType {
     domains: Domain[];

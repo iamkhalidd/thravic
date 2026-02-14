@@ -25,39 +25,7 @@ import {
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { analytics, domains } from '@/lib/api';
-
-interface Metrics {
-    pageviews: number;
-    uniqueVisitors: number;
-    sessions: number;
-    bounceRate: number;
-    avgSessionDuration: number;
-}
-
-interface TopPage {
-    path: string;
-    views: number;
-}
-
-interface TimeseriesData {
-    date: string;
-    pageviews: number;
-    visitors: number;
-}
-
-interface RealtimeData {
-    activeVisitors: number;
-    pageviewsLast30Min: number;
-    activePages: Array<{ path: string; count: number }>;
-}
-
-interface Domain {
-    id: string;
-    domain: string;
-    name: string;
-    trackingId: string;
-    verified: boolean;
-}
+import type { Metrics, TopPage, TimeseriesData, RealtimeData, Domain } from '@/types';
 
 const sourceColors = ['#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899', '#f43f5e'];
 

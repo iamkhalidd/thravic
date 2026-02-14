@@ -1,167 +1,121 @@
-import { Router, Request, Response } from 'express';
-import { v4 as uuidv4 } from 'uuid';
-import { z } from 'zod';
+import { checkIp } from '../services/geoService';
+import * as eventService from '../services/eventService';
+import * as sessionService from '../services/sessionService';
+import { eventSchema, batchSchema } from '../validators/collect';
+import { triggerWebhooks } from '../services/webhookService';
 
-const router = Router();
+// ...
 
-// In-memory event storage (replace with time-series DB or PostgreSQL in production)
-interface Event {
-    id: string;
-    trackingId: string;
-    type: 'pageview' | 'click' | 'scroll' | 'form' | 'custom';
-    timestamp: Date;
-    visitorId: string;
-    sessionId: string;
-    url: string;
-    referrer: string | null;
-
-    // UTM Parameters
-    utmSource: string | null;
-    utmMedium: string | null;
-    utmCampaign: string | null;
-    utmTerm: string | null;
-    utmContent: string | null;
-
-    // Device Info
-    userAgent: string;
-    screenWidth: number | null;
-    screenHeight: number | null;
-    language: string | null;
-
-    // Event-specific data
-    data: Record<string, unknown>;
-}
-
-interface Session {
-    id: string;
-    visitorId: string;
-    trackingId: string;
-    startedAt: Date;
-    lastActivity: Date;
-    pageviews: number;
-    source: string | null;
-    sourceType: 'direct' | 'organic' | 'paid' | 'social' | 'referral' | 'email';
-}
-
-const events: Event[] = [];
-const sessions: Map<string, Session> = new Map();
-const visitors: Set<string> = new Set();
-
-// Event validation schema
-const eventSchema = z.object({
-    type: z.enum(['pageview', 'click', 'scroll', 'form', 'custom']),
-    url: z.string().url(),
-    referrer: z.string().nullable().optional(),
-    visitorId: z.string(),
-    sessionId: z.string(),
-
-    // UTM
-    utmSource: z.string().nullable().optional(),
-    utmMedium: z.string().nullable().optional(),
-    utmCampaign: z.string().nullable().optional(),
-    utmTerm: z.string().nullable().optional(),
-    utmContent: z.string().nullable().optional(),
-
-    // Device
-    screenWidth: z.number().nullable().optional(),
-    screenHeight: z.number().nullable().optional(),
-    language: z.string().nullable().optional(),
-
-    // Event data
-    data: z.record(z.unknown()).optional()
-});
-
-const batchEventSchema = z.object({
-    trackingId: z.string(),
-    events: z.array(eventSchema)
-});
-
-// Determine source type from referrer or UTM
-function getSourceType(referrer: string | null, utmMedium: string | null): Session['sourceType'] {
-    if (utmMedium) {
-        const medium = utmMedium.toLowerCase();
-        if (medium === 'cpc' || medium === 'ppc' || medium === 'paid') return 'paid';
-        if (medium === 'email') return 'email';
-        if (medium === 'social') return 'social';
-        if (medium === 'organic') return 'organic';
-        if (medium === 'referral') return 'referral';
-    }
-
-    if (!referrer) return 'direct';
-
-    const ref = referrer.toLowerCase();
-
-    // Social platforms
-    if (ref.includes('facebook') || ref.includes('twitter') ||
-        ref.includes('linkedin') || ref.includes('instagram') ||
-        ref.includes('tiktok') || ref.includes('youtube')) {
-        return 'social';
-    }
-
-    // Search engines
-    if (ref.includes('google') || ref.includes('bing') ||
-        ref.includes('yahoo') || ref.includes('duckduckgo')) {
-        return 'organic';
-    }
-
-    return 'referral';
-}
-
-// Extract domain from referrer
-function getSourceDomain(referrer: string | null): string | null {
-    if (!referrer) return null;
+// ── POST /api/collect/:trackingId ───────────
+router.post('/:trackingId', async (req: Request, res: Response) => {
     try {
-        return new URL(referrer).hostname;
-    } catch {
-        return null;
-    }
-}
+        const { trackingId } = req.params;
 
-// POST /api/collect - Batch event collection
-router.post('/', async (req: Request, res: Response) => {
-    try {
-        const { trackingId, events: eventBatch } = batchEventSchema.parse(req.body);
+        // Validate tracking ID exists
+        const domain = await domainService.getByTrackingId(trackingId);
+        if (!domain) {
+            return res.status(404).json({ error: 'Invalid tracking ID' });
+        }
+
+        const event = eventSchema.parse(req.body);
         const userAgent = req.headers['user-agent'] || '';
 
-        const processedEvents: string[] = [];
+        // Get IP for Geo
+        const ip = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '';
+        const location = checkIp(ip.split(',')[0].trim());
 
-        for (const event of eventBatch) {
-            const eventId = uuidv4();
+        // Classify traffic source
+        const sourceType = classifySource(
+            event.referrer || null,
+            event.utmSource || null,
+            event.utmMedium || null
+        );
 
-            // Update or create session
-            let session = sessions.get(event.sessionId);
-            if (!session) {
-                session = {
-                    id: event.sessionId,
-                    visitorId: event.visitorId,
-                    trackingId,
-                    startedAt: new Date(),
-                    lastActivity: new Date(),
-                    pageviews: 0,
-                    source: getSourceDomain(event.referrer || null) || event.utmSource || null,
-                    sourceType: getSourceType(event.referrer || null, event.utmMedium || null)
-                };
-                sessions.set(event.sessionId, session);
-            }
+        // Upsert session
+        await sessionService.upsert({
+            sessionId: event.sessionId,
+            domainId: domain.id,
+            visitorId: event.visitorId,
+            source: event.utmSource || event.referrer || null,
+            sourceType,
+            referrer: event.referrer || null,
+            utmSource: event.utmSource || null,
+            utmMedium: event.utmMedium || null,
+            utmCampaign: event.utmCampaign || null,
+            utmTerm: event.utmTerm || null,
+            utmContent: event.utmContent || null,
+            userAgent,
+            screenWidth: event.screenWidth || null,
+            screenHeight: event.screenHeight || null,
+            language: event.language || null,
+            country: location?.country || null,
+            region: location?.region || null,
+            city: location?.city || null,
+        });
 
-            // Update session
-            session.lastActivity = new Date();
-            if (event.type === 'pageview') {
-                session.pageviews++;
-            }
+        // Insert event
+        await eventService.insertEvent({
+            domainId: domain.id,
+            sessionId: event.sessionId,
+            visitorId: event.visitorId,
+            type: event.type,
+            url: event.url,
+            referrer: event.referrer || null,
+            utmSource: event.utmSource || null,
+            utmMedium: event.utmMedium || null,
+            utmCampaign: event.utmCampaign || null,
+            data: event.data || {},
+        });
 
-            // Track unique visitors
-            visitors.add(event.visitorId);
+        // Trigger Webhooks (async)
+        triggerWebhooks(domain.id, event.type, {
+            ...event,
+            location,
+            sourceType
+        });
 
-            // Store event
-            const storedEvent: Event = {
-                id: eventId,
-                trackingId,
-                type: event.type,
-                timestamp: new Date(),
-                visitorId: event.visitorId,
+        res.status(202).json({ success: true });
+
+    } catch (error) {
+        if (error instanceof z.ZodError) {
+            return res.status(400).json({ error: 'Invalid event data', details: error.errors });
+        }
+        console.error('Collect error:', error);
+        res.status(500).json({ error: 'Failed to process event' });
+    }
+});
+
+
+// ── POST /api/collect/:trackingId/batch ─────
+router.post('/:trackingId/batch', async (req: Request, res: Response) => {
+    try {
+        const { trackingId } = req.params;
+
+        const domain = await domainService.getByTrackingId(trackingId);
+        if (!domain) {
+            return res.status(404).json({ error: 'Invalid tracking ID' });
+        }
+
+        const { events } = batchSchema.parse(req.body);
+        const userAgent = req.headers['user-agent'] || '';
+
+        // Process each event
+        const inserts: eventService.InsertEventParams[] = [];
+
+        for (const event of events) {
+            const sourceType = classifySource(
+                event.referrer || null,
+                event.utmSource || null,
+                event.utmMedium || null
+            );
+
+            // Upsert session
+            await sessionService.upsert({
                 sessionId: event.sessionId,
-                url: event.url,
+                domainId: domain.id,
+                visitorId: event.visitorId,
+                source: event.utmSource || event.referrer || null,
+                sourceType,
                 referrer: event.referrer || null,
                 utmSource: event.utmSource || null,
                 utmMedium: event.utmMedium || null,
@@ -172,84 +126,56 @@ router.post('/', async (req: Request, res: Response) => {
                 screenWidth: event.screenWidth || null,
                 screenHeight: event.screenHeight || null,
                 language: event.language || null,
-                data: event.data || {}
-            };
+            });
 
-            events.push(storedEvent);
-            processedEvents.push(eventId);
+            inserts.push({
+                domainId: domain.id,
+                sessionId: event.sessionId,
+                visitorId: event.visitorId,
+                type: event.type,
+                url: event.url,
+                referrer: event.referrer || null,
+                utmSource: event.utmSource || null,
+                utmMedium: event.utmMedium || null,
+                utmCampaign: event.utmCampaign || null,
+                data: event.data || {},
+            });
         }
+
+        // Batch insert all events
+        const count = await eventService.batchInsert(inserts);
 
         res.status(202).json({
             success: true,
-            processed: processedEvents.length
+            processed: count
         });
     } catch (error) {
         if (error instanceof z.ZodError) {
-            return res.status(400).json({ error: 'Invalid event data' });
+            return res.status(400).json({ error: 'Invalid batch data', details: error.errors });
         }
-        console.error('Event collection error:', error);
+        console.error('Batch collect error:', error);
         res.status(500).json({ error: 'Failed to process events' });
     }
 });
 
-// POST /api/collect/beacon - SendBeacon endpoint (smaller response)
-router.post('/beacon', (req: Request, res: Response) => {
-    // Same as above but optimized for sendBeacon
-    // SendBeacon doesn't wait for response, so this is mostly for logging
+// ── GET /api/collect/realtime/:trackingId ───
+router.get('/realtime/:trackingId', async (req: Request, res: Response) => {
     try {
-        const { trackingId, events: eventBatch } = batchEventSchema.parse(req.body);
-        const userAgent = req.headers['user-agent'] || '';
-
-        for (const event of eventBatch) {
-            const eventId = uuidv4();
-
-            let session = sessions.get(event.sessionId);
-            if (!session) {
-                session = {
-                    id: event.sessionId,
-                    visitorId: event.visitorId,
-                    trackingId,
-                    startedAt: new Date(),
-                    lastActivity: new Date(),
-                    pageviews: 0,
-                    source: getSourceDomain(event.referrer || null) || event.utmSource || null,
-                    sourceType: getSourceType(event.referrer || null, event.utmMedium || null)
-                };
-                sessions.set(event.sessionId, session);
-            }
-
-            session.lastActivity = new Date();
-            if (event.type === 'pageview') session.pageviews++;
-            visitors.add(event.visitorId);
-
-            events.push({
-                id: eventId,
-                trackingId,
-                type: event.type,
-                timestamp: new Date(),
-                visitorId: event.visitorId,
-                sessionId: event.sessionId,
-                url: event.url,
-                referrer: event.referrer || null,
-                utmSource: event.utmSource || null,
-                utmMedium: event.utmMedium || null,
-                utmCampaign: event.utmCampaign || null,
-                utmTerm: event.utmTerm || null,
-                utmContent: event.utmContent || null,
-                userAgent,
-                screenWidth: event.screenWidth || null,
-                screenHeight: event.screenHeight || null,
-                language: event.language || null,
-                data: event.data || {}
-            });
+        const domain = await domainService.getByTrackingId(req.params.trackingId);
+        if (!domain) {
+            return res.status(404).json({ error: 'Invalid tracking ID' });
         }
 
-        res.status(204).send();
+        const activeVisitors = await eventService.countRealtimeVisitors(domain.id, 5);
+
+        res.json({
+            activeVisitors,
+            trackingId: req.params.trackingId
+        });
     } catch (error) {
-        res.status(204).send(); // Always return 204 for beacon
+        console.error('Realtime error:', error);
+        res.status(500).json({ error: 'Failed to get realtime data' });
     }
 });
 
-// Export for analytics routes
-export { events, sessions, visitors };
 export default router;

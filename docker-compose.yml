@@ -1,0 +1,81 @@
+# ──────────────────────────────────────────────
+# TrackFlow — Local Development Stack
+# ──────────────────────────────────────────────
+# Usage:
+#   docker-compose up -d        → start postgres + redis
+#   docker-compose down         → stop
+#   docker-compose down -v      → stop + wipe data
+# ──────────────────────────────────────────────
+
+services:
+  server:
+    build:
+      context: .
+      dockerfile: apps/server/Dockerfile
+    container_name: trackflow-server
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      - DATABASE_URL=postgresql://postgres:trackflow@postgres:5432/trackflow
+      - REDIS_URL=redis://redis:6379
+      - NODE_ENV=development
+      - JWT_SECRET=your-safe-secret-key-for-dev
+      - JWT_REFRESH_SECRET=your-safe-refresh-secret-key-for-dev
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    container_name: trackflow-web
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:3001
+      - NODE_ENV=development
+    depends_on:
+      - server
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: trackflow-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: trackflow
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: trackflow
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Auto-run schema on first start
+      - ./apps/server/src/db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres -d trackflow" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: trackflow-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  pgdata:
+  redisdata:

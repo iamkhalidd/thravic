@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import '@/styles/globals.css';
 import { ThemeProvider } from '@/contexts/ThemeContext';
+import { ToastProvider, ErrorBoundary } from '@/components';
 
 export const metadata: Metadata = {
     title: 'TrackFlow - Traffic Intelligence & Analytics',
@@ -24,10 +25,15 @@ export default function RootLayout({
             </head>
             <body>
                 <ThemeProvider>
-                    {children}
+                    <ToastProvider>
+                        <ErrorBoundary>
+                            {children}
+                        </ErrorBoundary>
+                    </ToastProvider>
                 </ThemeProvider>
             </body>
         </html>
     );
 }
+
 

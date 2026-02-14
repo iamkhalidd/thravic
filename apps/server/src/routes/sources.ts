@@ -1,391 +1,272 @@
 import { Router, Response } from 'express';
 import { authenticate, AuthRequest } from '../middleware/auth';
-import { domains } from './domains';
-import { events, sessions } from './collect';
+import * as domainService from '../services/domainService';
+import * as eventService from '../services/eventService';
+import * as sessionService from '../services/sessionService';
 
 const router = Router();
 
-// Social platform patterns for detailed breakdown
-const socialPlatforms: { name: string; patterns: string[] }[] = [
-    { name: 'Twitter / X', patterns: ['twitter.com', 't.co', 'x.com'] },
-    { name: 'LinkedIn', patterns: ['linkedin.com', 'lnkd.in'] },
+// Social platform patterns
+const SOCIAL_PLATFORMS = [
     { name: 'Facebook', patterns: ['facebook.com', 'fb.com', 'fb.me'] },
-    { name: 'Instagram', patterns: ['instagram.com', 'instagr.am'] },
+    { name: 'Twitter/X', patterns: ['twitter.com', 'x.com', 't.co'] },
+    { name: 'LinkedIn', patterns: ['linkedin.com', 'lnkd.in'] },
+    { name: 'Instagram', patterns: ['instagram.com'] },
     { name: 'YouTube', patterns: ['youtube.com', 'youtu.be'] },
     { name: 'TikTok', patterns: ['tiktok.com'] },
-    { name: 'Reddit', patterns: ['reddit.com', 'redd.it'] },
-    { name: 'Pinterest', patterns: ['pinterest.com', 'pin.it'] }
+    { name: 'Reddit', patterns: ['reddit.com'] },
+    { name: 'Pinterest', patterns: ['pinterest.com'] },
 ];
 
-// Search engine patterns
-const searchEngines: { name: string; patterns: string[] }[] = [
+const SEARCH_ENGINES = [
     { name: 'Google', patterns: ['google.com', 'google.co'] },
     { name: 'Bing', patterns: ['bing.com'] },
     { name: 'Yahoo', patterns: ['yahoo.com', 'search.yahoo'] },
     { name: 'DuckDuckGo', patterns: ['duckduckgo.com'] },
-    { name: 'Baidu', patterns: ['baidu.com'] }
+    { name: 'Baidu', patterns: ['baidu.com'] },
 ];
 
-// Helper: Get date range from query params
-function getDateRange(start?: string, end?: string): { startDate: Date; endDate: Date } {
+function getDateRange(start?: string, end?: string) {
     const endDate = end ? new Date(end) : new Date();
-    const startDate = start ? new Date(start) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const startDate = start ? new Date(start) : new Date(endDate.getTime() - 30 * 24 * 60 * 60 * 1000);
     return { startDate, endDate };
 }
 
-// Helper: Identify social platform from referrer
-function identifySocialPlatform(referrer: string | null): string | null {
-    if (!referrer) return null;
-    const ref = referrer.toLowerCase();
-    for (const platform of socialPlatforms) {
-        if (platform.patterns.some(p => ref.includes(p))) {
-            return platform.name;
-        }
-    }
-    return null;
-}
-
-// Helper: Identify search engine from referrer
-function identifySearchEngine(referrer: string | null): string | null {
-    if (!referrer) return null;
-    const ref = referrer.toLowerCase();
-    for (const engine of searchEngines) {
-        if (engine.patterns.some(p => ref.includes(p))) {
-            return engine.name;
-        }
-    }
-    return null;
-}
-
-// Helper: Extract clean referrer domain
-function extractReferrerDomain(referrer: string | null): string | null {
+function identifyPlatform(referrer: string | null, platforms: typeof SOCIAL_PLATFORMS): string | null {
     if (!referrer) return null;
     try {
-        const url = new URL(referrer);
-        return url.hostname.replace('www.', '');
+        const host = new URL(referrer).hostname.replace('www.', '');
+        for (const p of platforms) {
+            if (p.patterns.some(pattern => host.includes(pattern))) return p.name;
+        }
+    } catch { /* ignore */ }
+    return null;
+}
+
+function extractDomain(referrer: string | null): string | null {
+    if (!referrer) return null;
+    try {
+        return new URL(referrer).hostname.replace('www.', '');
     } catch {
         return null;
     }
 }
 
 // GET /api/sources/:domainId/referrers - Top referring websites
-router.get('/:domainId/referrers', authenticate, (req: AuthRequest, res: Response) => {
-    const domain = domains.get(req.params.domainId);
-    if (!domain || domain.userId !== req.userId) {
-        return res.status(404).json({ error: 'Domain not found' });
-    }
-
-    const { startDate, endDate } = getDateRange(
-        req.query.start as string,
-        req.query.end as string
-    );
-
-    // Get all sessions with referrers
-    const domainSessions = Array.from(sessions.values())
-        .filter(s => s.trackingId === domain.trackingId && s.sourceType === 'referral');
-
-    // Get all pageview events for conversion calculation
-    const pageviewEvents = events.filter(e =>
-        e.trackingId === domain.trackingId &&
-        e.type === 'pageview' &&
-        e.timestamp >= startDate &&
-        e.timestamp <= endDate
-    );
-
-    // Aggregate referrers
-    const referrerMap = new Map<string, { visitors: Set<string>; sessions: number; pageviews: number }>();
-
-    for (const session of domainSessions) {
-        if (!session.source) continue;
-        const domain = extractReferrerDomain(session.source) || session.source;
-
-        if (!referrerMap.has(domain)) {
-            referrerMap.set(domain, { visitors: new Set(), sessions: 0, pageviews: 0 });
+router.get('/:domainId/referrers', authenticate, async (req: AuthRequest, res: Response) => {
+    try {
+        const domain = await domainService.getById(req.params.domainId);
+        if (!domain || domain.user_id !== req.userId) {
+            return res.status(404).json({ error: 'Domain not found' });
         }
 
-        const data = referrerMap.get(domain)!;
-        data.visitors.add(session.visitorId);
-        data.sessions++;
+        const { startDate, endDate } = getDateRange(req.query.start as string, req.query.end as string);
+        const topReferrers = await sessionService.getTopReferrers(domain.id, startDate, endDate, 20);
+
+        res.json({
+            period: { start: startDate, end: endDate },
+            referrers: topReferrers.map(r => ({
+                domain: extractDomain(r.referrer) || r.referrer,
+                sessions: r.sessions,
+                visitors: r.visitors,
+            }))
+        });
+    } catch (error) {
+        console.error('Referrers error:', error);
+        res.status(500).json({ error: 'Failed to get referrer data' });
     }
-
-    // Count pageviews per referrer
-    for (const event of pageviewEvents) {
-        if (!event.referrer) continue;
-        const domain = extractReferrerDomain(event.referrer);
-        if (domain && referrerMap.has(domain)) {
-            referrerMap.get(domain)!.pageviews++;
-        }
-    }
-
-    const referrers = Array.from(referrerMap.entries())
-        .map(([site, data]) => ({
-            site,
-            visitors: data.visitors.size,
-            sessions: data.sessions,
-            pageviews: data.pageviews,
-            pagesPerSession: data.sessions > 0 ? Math.round((data.pageviews / data.sessions) * 10) / 10 : 0
-        }))
-        .sort((a, b) => b.visitors - a.visitors)
-        .slice(0, 20);
-
-    res.json({
-        period: { start: startDate, end: endDate },
-        referrers
-    });
 });
 
-// GET /api/sources/:domainId/social - Social media platform breakdown
-router.get('/:domainId/social', authenticate, (req: AuthRequest, res: Response) => {
-    const domain = domains.get(req.params.domainId);
-    if (!domain || domain.userId !== req.userId) {
-        return res.status(404).json({ error: 'Domain not found' });
-    }
-
-    const { startDate, endDate } = getDateRange(
-        req.query.start as string,
-        req.query.end as string
-    );
-
-    // Get social sessions
-    const socialSessions = Array.from(sessions.values())
-        .filter(s => s.trackingId === domain.trackingId && s.sourceType === 'social');
-
-    // Aggregate by platform
-    const platformMap = new Map<string, { visitors: Set<string>; sessions: number; bounced: number }>();
-
-    for (const session of socialSessions) {
-        const platform = identifySocialPlatform(session.source) || 'Other Social';
-
-        if (!platformMap.has(platform)) {
-            platformMap.set(platform, { visitors: new Set(), sessions: 0, bounced: 0 });
+// GET /api/sources/:domainId/social - Social media breakdown
+router.get('/:domainId/social', authenticate, async (req: AuthRequest, res: Response) => {
+    try {
+        const domain = await domainService.getById(req.params.domainId);
+        if (!domain || domain.user_id !== req.userId) {
+            return res.status(404).json({ error: 'Domain not found' });
         }
 
-        const data = platformMap.get(platform)!;
-        data.visitors.add(session.visitorId);
-        data.sessions++;
-        if (session.pageviews <= 1) {
-            data.bounced++;
+        const { startDate, endDate } = getDateRange(req.query.start as string, req.query.end as string);
+        const sessions = await sessionService.queryByDomain(domain.id, startDate, endDate);
+
+        // Filter to social sessions and group by platform
+        const platformMap: Record<string, { visitors: Set<string | null>; sessions: number }> = {};
+        for (const session of sessions) {
+            const platform = identifyPlatform(session.referrer, SOCIAL_PLATFORMS);
+            if (!platform) continue;
+            if (!platformMap[platform]) {
+                platformMap[platform] = { visitors: new Set(), sessions: 0 };
+            }
+            platformMap[platform].visitors.add(session.visitor_id);
+            platformMap[platform].sessions++;
         }
+
+        const platforms = Object.entries(platformMap)
+            .map(([platform, data]) => ({
+                platform,
+                visitors: data.visitors.size,
+                sessions: data.sessions,
+            }))
+            .sort((a, b) => b.visitors - a.visitors);
+
+        res.json({
+            period: { start: startDate, end: endDate },
+            totalSocialVisitors: platforms.reduce((sum, p) => sum + p.visitors, 0),
+            platforms
+        });
+    } catch (error) {
+        console.error('Social sources error:', error);
+        res.status(500).json({ error: 'Failed to get social data' });
     }
-
-    const platforms = Array.from(platformMap.entries())
-        .map(([platform, data]) => ({
-            platform,
-            visitors: data.visitors.size,
-            sessions: data.sessions,
-            bounceRate: data.sessions > 0 ? Math.round((data.bounced / data.sessions) * 100) : 0,
-            engagement: data.sessions > 0
-                ? (data.bounced / data.sessions < 0.4 ? 'High' : data.bounced / data.sessions < 0.6 ? 'Medium' : 'Low')
-                : 'N/A'
-        }))
-        .sort((a, b) => b.visitors - a.visitors);
-
-    res.json({
-        period: { start: startDate, end: endDate },
-        totalSocialVisitors: socialSessions.length,
-        platforms
-    });
 });
 
 // GET /api/sources/:domainId/search - Search engine breakdown
-router.get('/:domainId/search', authenticate, (req: AuthRequest, res: Response) => {
-    const domain = domains.get(req.params.domainId);
-    if (!domain || domain.userId !== req.userId) {
-        return res.status(404).json({ error: 'Domain not found' });
-    }
-
-    const { startDate, endDate } = getDateRange(
-        req.query.start as string,
-        req.query.end as string
-    );
-
-    // Get organic sessions
-    const organicSessions = Array.from(sessions.values())
-        .filter(s => s.trackingId === domain.trackingId && s.sourceType === 'organic');
-
-    // Aggregate by search engine
-    const engineMap = new Map<string, { visitors: Set<string>; sessions: number }>();
-
-    for (const session of organicSessions) {
-        const engine = identifySearchEngine(session.source) || 'Other Search';
-
-        if (!engineMap.has(engine)) {
-            engineMap.set(engine, { visitors: new Set(), sessions: 0 });
+router.get('/:domainId/search', authenticate, async (req: AuthRequest, res: Response) => {
+    try {
+        const domain = await domainService.getById(req.params.domainId);
+        if (!domain || domain.user_id !== req.userId) {
+            return res.status(404).json({ error: 'Domain not found' });
         }
 
-        const data = engineMap.get(engine)!;
-        data.visitors.add(session.visitorId);
-        data.sessions++;
+        const { startDate, endDate } = getDateRange(req.query.start as string, req.query.end as string);
+        const sessions = await sessionService.queryByDomain(domain.id, startDate, endDate);
+
+        const engineMap: Record<string, { visitors: Set<string | null>; sessions: number }> = {};
+        for (const session of sessions) {
+            const engine = identifyPlatform(session.referrer, SEARCH_ENGINES);
+            if (!engine) continue;
+            if (!engineMap[engine]) {
+                engineMap[engine] = { visitors: new Set(), sessions: 0 };
+            }
+            engineMap[engine].visitors.add(session.visitor_id);
+            engineMap[engine].sessions++;
+        }
+
+        const engines = Object.entries(engineMap)
+            .map(([engine, data]) => ({
+                engine,
+                visitors: data.visitors.size,
+                sessions: data.sessions,
+            }))
+            .sort((a, b) => b.visitors - a.visitors);
+
+        const totalOrganic = engines.reduce((sum, e) => sum + e.sessions, 0);
+
+        res.json({
+            period: { start: startDate, end: endDate },
+            totalOrganicSessions: totalOrganic,
+            engines: engines.map(e => ({
+                ...e,
+                share: totalOrganic > 0 ? Math.round((e.sessions / totalOrganic) * 100) : 0
+            }))
+        });
+    } catch (error) {
+        console.error('Search sources error:', error);
+        res.status(500).json({ error: 'Failed to get search data' });
     }
-
-    const engines = Array.from(engineMap.entries())
-        .map(([engine, data]) => ({
-            engine,
-            visitors: data.visitors.size,
-            sessions: data.sessions,
-            share: organicSessions.length > 0
-                ? Math.round((data.sessions / organicSessions.length) * 100)
-                : 0
-        }))
-        .sort((a, b) => b.visitors - a.visitors);
-
-    res.json({
-        period: { start: startDate, end: endDate },
-        totalOrganicSessions: organicSessions.length,
-        engines
-    });
 });
 
-// GET /api/sources/:domainId/campaigns - UTM campaign performance with metrics
-router.get('/:domainId/campaigns', authenticate, (req: AuthRequest, res: Response) => {
-    const domain = domains.get(req.params.domainId);
-    if (!domain || domain.userId !== req.userId) {
-        return res.status(404).json({ error: 'Domain not found' });
-    }
-
-    const { startDate, endDate } = getDateRange(
-        req.query.start as string,
-        req.query.end as string
-    );
-
-    // Get events with UTM campaigns
-    const campaignEvents = events.filter(e =>
-        e.trackingId === domain.trackingId &&
-        e.utmCampaign &&
-        e.timestamp >= startDate &&
-        e.timestamp <= endDate
-    );
-
-    // Aggregate by campaign
-    const campaignMap = new Map<string, {
-        source: string;
-        medium: string;
-        visitors: Set<string>;
-        sessions: Set<string>;
-        pageviews: number;
-    }>();
-
-    for (const event of campaignEvents) {
-        const campaign = event.utmCampaign!;
-
-        if (!campaignMap.has(campaign)) {
-            campaignMap.set(campaign, {
-                source: event.utmSource || 'unknown',
-                medium: event.utmMedium || 'unknown',
-                visitors: new Set(),
-                sessions: new Set(),
-                pageviews: 0
-            });
+// GET /api/sources/:domainId/campaigns - UTM campaign performance
+router.get('/:domainId/campaigns', authenticate, async (req: AuthRequest, res: Response) => {
+    try {
+        const domain = await domainService.getById(req.params.domainId);
+        if (!domain || domain.user_id !== req.userId) {
+            return res.status(404).json({ error: 'Domain not found' });
         }
 
-        const data = campaignMap.get(campaign)!;
-        data.visitors.add(event.visitorId);
-        data.sessions.add(event.sessionId);
-        if (event.type === 'pageview') {
-            data.pageviews++;
+        const { startDate, endDate } = getDateRange(req.query.start as string, req.query.end as string);
+        const events = await eventService.queryByDomain(domain.id, startDate, endDate);
+
+        // Group by UTM campaign
+        const campaignMap: Record<string, {
+            source: string | null;
+            medium: string | null;
+            visitors: Set<string | null>;
+            sessions: Set<string | null>;
+            pageviews: number;
+        }> = {};
+
+        for (const event of events) {
+            if (!event.utm_campaign) continue;
+            const key = event.utm_campaign;
+            if (!campaignMap[key]) {
+                campaignMap[key] = {
+                    source: event.utm_source,
+                    medium: event.utm_medium,
+                    visitors: new Set(),
+                    sessions: new Set(),
+                    pageviews: 0,
+                };
+            }
+            campaignMap[key].visitors.add(event.visitor_id);
+            campaignMap[key].sessions.add(event.session_id);
+            if (event.type === 'pageview') campaignMap[key].pageviews++;
         }
+
+        const campaigns = Object.entries(campaignMap)
+            .map(([campaign, data]) => ({
+                campaign,
+                source: data.source,
+                medium: data.medium,
+                visitors: data.visitors.size,
+                sessions: data.sessions.size,
+                pageviews: data.pageviews,
+            }))
+            .sort((a, b) => b.visitors - a.visitors)
+            .slice(0, 20);
+
+        res.json({
+            period: { start: startDate, end: endDate },
+            totalCampaignVisitors: new Set(
+                events.filter(e => e.utm_campaign).map(e => e.visitor_id)
+            ).size,
+            campaigns
+        });
+    } catch (error) {
+        console.error('Campaigns error:', error);
+        res.status(500).json({ error: 'Failed to get campaign data' });
     }
-
-    const campaigns = Array.from(campaignMap.entries())
-        .map(([campaign, data]) => ({
-            campaign,
-            source: data.source,
-            medium: data.medium,
-            visitors: data.visitors.size,
-            sessions: data.sessions.size,
-            pageviews: data.pageviews,
-            pagesPerSession: data.sessions.size > 0
-                ? Math.round((data.pageviews / data.sessions.size) * 10) / 10
-                : 0
-        }))
-        .sort((a, b) => b.visitors - a.visitors)
-        .slice(0, 20);
-
-    res.json({
-        period: { start: startDate, end: endDate },
-        totalCampaignVisitors: new Set(campaignEvents.map(e => e.visitorId)).size,
-        campaigns
-    });
 });
 
 // GET /api/sources/:domainId/overview - Complete sources overview
-router.get('/:domainId/overview', authenticate, (req: AuthRequest, res: Response) => {
-    const domain = domains.get(req.params.domainId);
-    if (!domain || domain.userId !== req.userId) {
-        return res.status(404).json({ error: 'Domain not found' });
+router.get('/:domainId/overview', authenticate, async (req: AuthRequest, res: Response) => {
+    try {
+        const domain = await domainService.getById(req.params.domainId);
+        if (!domain || domain.user_id !== req.userId) {
+            return res.status(404).json({ error: 'Domain not found' });
+        }
+
+        const { startDate, endDate } = getDateRange(req.query.start as string, req.query.end as string);
+
+        const [sourceTypes, topReferrers] = await Promise.all([
+            sessionService.getSourceTypeBreakdown(domain.id, startDate, endDate),
+            sessionService.getTopReferrers(domain.id, startDate, endDate, 10),
+        ]);
+
+        const breakdown: Record<string, number> = {
+            direct: 0, organic: 0, paid: 0, social: 0, referral: 0, email: 0
+        };
+        for (const s of sourceTypes) {
+            breakdown[s.source_type] = s.count;
+        }
+        const total = Object.values(breakdown).reduce((a, b) => a + b, 0);
+
+        res.json({
+            period: { start: startDate, end: endDate },
+            total,
+            breakdown,
+            percentages: Object.fromEntries(
+                Object.entries(breakdown).map(([k, v]) => [k, total > 0 ? Math.round((v / total) * 100) : 0])
+            ),
+            topReferrers: topReferrers.map(r => ({
+                domain: extractDomain(r.referrer) || r.referrer,
+                sessions: r.sessions,
+                visitors: r.visitors,
+            }))
+        });
+    } catch (error) {
+        console.error('Sources overview error:', error);
+        res.status(500).json({ error: 'Failed to get sources overview' });
     }
-
-    const { startDate, endDate } = getDateRange(
-        req.query.start as string,
-        req.query.end as string
-    );
-
-    const domainSessions = Array.from(sessions.values())
-        .filter(s => s.trackingId === domain.trackingId);
-
-    // Calculate source type distribution
-    const sourceTypes = domainSessions.reduce((acc, s) => {
-        acc[s.sourceType] = (acc[s.sourceType] || 0) + 1;
-        return acc;
-    }, {} as Record<string, number>);
-
-    const total = domainSessions.length || 1;
-
-    // Get top referrers (quick snapshot)
-    const referrerCounts = new Map<string, number>();
-    for (const session of domainSessions.filter(s => s.sourceType === 'referral')) {
-        const domain = extractReferrerDomain(session.source) || session.source || 'unknown';
-        referrerCounts.set(domain, (referrerCounts.get(domain) || 0) + 1);
-    }
-    const topReferrers = Array.from(referrerCounts.entries())
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 5)
-        .map(([site, sessions]) => ({ site, sessions }));
-
-    // Get top social platforms (quick snapshot)
-    const socialCounts = new Map<string, number>();
-    for (const session of domainSessions.filter(s => s.sourceType === 'social')) {
-        const platform = identifySocialPlatform(session.source) || 'Other';
-        socialCounts.set(platform, (socialCounts.get(platform) || 0) + 1);
-    }
-    const topSocial = Array.from(socialCounts.entries())
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 5)
-        .map(([platform, sessions]) => ({ platform, sessions }));
-
-    // Get top campaigns (quick snapshot)
-    const campaignEvents = events.filter(e =>
-        e.trackingId === domain.trackingId &&
-        e.utmCampaign &&
-        e.timestamp >= startDate &&
-        e.timestamp <= endDate
-    );
-    const campaignCounts = new Map<string, number>();
-    for (const event of campaignEvents) {
-        campaignCounts.set(event.utmCampaign!, (campaignCounts.get(event.utmCampaign!) || 0) + 1);
-    }
-    const topCampaigns = Array.from(campaignCounts.entries())
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 5)
-        .map(([campaign, events]) => ({ campaign, events }));
-
-    res.json({
-        period: { start: startDate, end: endDate },
-        summary: {
-            totalSessions: domainSessions.length,
-            byType: {
-                direct: { count: sourceTypes.direct || 0, percentage: Math.round(((sourceTypes.direct || 0) / total) * 100) },
-                organic: { count: sourceTypes.organic || 0, percentage: Math.round(((sourceTypes.organic || 0) / total) * 100) },
-                social: { count: sourceTypes.social || 0, percentage: Math.round(((sourceTypes.social || 0) / total) * 100) },
-                referral: { count: sourceTypes.referral || 0, percentage: Math.round(((sourceTypes.referral || 0) / total) * 100) },
-                paid: { count: sourceTypes.paid || 0, percentage: Math.round(((sourceTypes.paid || 0) / total) * 100) },
-                email: { count: sourceTypes.email || 0, percentage: Math.round(((sourceTypes.email || 0) / total) * 100) }
-            }
-        },
-        topReferrers,
-        topSocial,
-        topCampaigns
-    });
 });
 
 export default router;
