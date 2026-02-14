@@ -221,3 +221,41 @@ export async function getRealtimeActiveSessions(
     );
     return parseInt(row?.count || '0', 10);
 }
+
+/**
+ * Classify traffic source based on UTM params and referrer.
+ */
+export function classifySource(
+    referrer: string | null,
+    utmSource: string | null,
+    utmMedium: string | null
+): string {
+    const medium = (utmMedium || '').toLowerCase();
+    const source = (utmSource || '').toLowerCase();
+
+    if (medium === 'email' || source === 'email') return 'email';
+    if (medium === 'cpc' || medium === 'ppc' || medium === 'paid') return 'ad';
+    if (source) return 'campaign';
+
+    if (!referrer) return 'direct';
+
+    try {
+        const refUrl = new URL(referrer);
+        const hostname = refUrl.hostname.toLowerCase();
+
+        if (hostname.includes('google') || hostname.includes('bing') || hostname.includes('yahoo') || hostname.includes('duckduckgo') || hostname.includes('baidu')) {
+            return 'search';
+        }
+        if (hostname.includes('facebook') || hostname.includes('twitter') || hostname.includes('linkedin') || hostname.includes('instagram') || hostname.includes('t.co') || hostname.includes('pinterest') || hostname.includes('tiktok')) {
+            return 'social';
+        }
+        if (hostname.includes(process.env.DOMAIN || 'trackflow')) {
+            return 'internal';
+        }
+    } catch (e) {
+        // Invalid URL
+    }
+
+    return 'referral';
+}
+

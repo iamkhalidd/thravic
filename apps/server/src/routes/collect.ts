@@ -1,6 +1,8 @@
 import { checkIp } from '../services/geoService';
 import * as eventService from '../services/eventService';
 import * as sessionService from '../services/sessionService';
+import { classifySource } from '../services/sessionService';
+
 import { eventSchema, batchSchema } from '../validators/collect';
 import { triggerWebhooks } from '../services/webhookService';
 
