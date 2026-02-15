@@ -7,6 +7,14 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
     plugins: [react()],
+    optimizeDeps: {
+        include: ['@exodus/bytes'],
+    },
+    ssr: {
+        optimizeDeps: {
+            include: ['@exodus/bytes'],
+        },
+    },
     test: {
         environment: 'jsdom',
         globals: true,
@@ -20,6 +28,16 @@ export default defineConfig({
                     '@exodus/bytes',
                     'html-encoding-sniffer',
                 ],
+            },
+        },
+        deps: {
+            optimizer: {
+                web: {
+                    include: ['@exodus/bytes', 'html-encoding-sniffer'],
+                },
+                ssr: {
+                    include: ['@exodus/bytes', 'html-encoding-sniffer'],
+                },
             },
         },
     },
