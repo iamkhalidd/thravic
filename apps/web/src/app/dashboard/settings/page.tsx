@@ -22,7 +22,7 @@ interface UserData {
     name: string;
     email: string;
     subscription: string;
-    createdAt: string;
+    createdAt?: string;
 }
 
 const plans = [

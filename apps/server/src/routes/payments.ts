@@ -56,7 +56,7 @@ router.get('/plans', (req, res: Response) => {
 // GET /api/payments/current - Get current subscription
 router.get('/current', authenticate, async (req: AuthRequest, res: Response) => {
     try {
-        const userId = req.user?.id;
+        const userId = req.userId;
 
         // Check if database is available
         if (!process.env.DATABASE_URL) {
@@ -64,11 +64,11 @@ router.get('/current', authenticate, async (req: AuthRequest, res: Response) => 
             return res.json({
                 success: true,
                 subscription: {
-                    plan: req.user?.subscription || 'free',
+                    plan: 'free',
                     status: 'active',
                     eventsUsed: 0,
-                    eventsLimit: PRICING_TIERS[req.user?.subscription as keyof typeof PRICING_TIERS || 'free'].eventsLimit,
-                    domainsLimit: PRICING_TIERS[req.user?.subscription as keyof typeof PRICING_TIERS || 'free'].domainsLimit
+                    eventsLimit: PRICING_TIERS.free.eventsLimit,
+                    domainsLimit: PRICING_TIERS.free.domainsLimit
                 }
             });
         }
@@ -122,8 +122,8 @@ router.post('/checkout', authenticate, async (req: AuthRequest, res: Response) =
         }
 
         const { plan } = req.body;
-        const userId = req.user?.id;
-        const userEmail = req.user?.email;
+        const userId = req.userId;
+        const userEmail = req.email;
 
         if (!plan || !['growth', 'pro', 'enterprise'].includes(plan)) {
             return res.status(400).json({ error: 'Invalid plan' });
@@ -201,7 +201,7 @@ router.post('/portal', authenticate, async (req: AuthRequest, res: Response) => 
             return res.status(400).json({ error: 'Stripe not configured' });
         }
 
-        const userId = req.user?.id;
+        const userId = req.userId;
 
         if (!process.env.DATABASE_URL) {
             return res.status(400).json({ error: 'Database required for billing portal' });
@@ -354,14 +354,14 @@ router.post('/webhook', async (req: Request, res: Response) => {
 // GET /api/payments/usage - Get current usage
 router.get('/usage', authenticate, async (req: AuthRequest, res: Response) => {
     try {
-        const userId = req.user?.id;
+        const userId = req.userId;
 
         if (!process.env.DATABASE_URL) {
             return res.json({
                 success: true,
                 usage: {
                     eventsThisMonth: 0,
-                    eventsLimit: PRICING_TIERS[req.user?.subscription as keyof typeof PRICING_TIERS || 'free'].eventsLimit,
+                    eventsLimit: PRICING_TIERS.free.eventsLimit,
                     percentUsed: 0
                 }
             });
@@ -378,7 +378,7 @@ router.get('/usage', authenticate, async (req: AuthRequest, res: Response) => {
                 success: true,
                 usage: {
                     eventsThisMonth: 0,
-                    eventsLimit: PRICING_TIERS[req.user?.subscription as keyof typeof PRICING_TIERS || 'free'].eventsLimit,
+                    eventsLimit: PRICING_TIERS.free.eventsLimit,
                     percentUsed: 0
                 }
             });

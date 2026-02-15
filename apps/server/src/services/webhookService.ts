@@ -1,6 +1,5 @@
 import { query } from '../db';
 import { logger } from '../middleware/logger';
-import axios from 'axios';
 import crypto from 'crypto';
 
 interface WebhookPayload {
@@ -44,8 +43,20 @@ export const triggerWebhooks = async (domainId: string, event: string, data: any
                     headers['X-TrackFlow-Signature'] = signature;
                 }
 
-                await axios.post(webhook.url, payload, { headers, timeout: 5000 });
-                logger.info(`[Webhook] Sent ${event} to ${webhook.url}`);
+                const controller = new AbortController();
+                const timeout = setTimeout(() => controller.abort(), 5000);
+
+                try {
+                    await fetch(webhook.url, {
+                        method: 'POST',
+                        headers,
+                        body: JSON.stringify(payload),
+                        signal: controller.signal
+                    });
+                    logger.info(`[Webhook] Sent ${event} to ${webhook.url}`);
+                } finally {
+                    clearTimeout(timeout);
+                }
             } catch (err) {
                 logger.error(`[Webhook] Failed to send to ${webhook.url}`, err);
             }
