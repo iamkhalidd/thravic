@@ -26,20 +26,20 @@ export default function CampaignsPage() {
     const [sortBy, setSortBy] = useState('sessions');
 
     useEffect(() => {
+        const loadCampaigns = async () => {
+            if (!selectedDomainId) return;
+            setLoading(true);
+            const result = await sources.getCampaigns(selectedDomainId);
+            if (result.data) {
+                setCampaigns(result.data.campaigns || []);
+            }
+            setLoading(false);
+        };
+
         if (selectedDomainId) {
             loadCampaigns();
         }
     }, [selectedDomainId]);
-
-    const loadCampaigns = async () => {
-        if (!selectedDomainId) return;
-        setLoading(true);
-        const result = await sources.getCampaigns(selectedDomainId);
-        if (result.data) {
-            setCampaigns(result.data.campaigns || []);
-        }
-        setLoading(false);
-    };
 
     const filteredCampaigns = campaigns
         .filter(c => c.campaign?.toLowerCase().includes(searchQuery.toLowerCase()))

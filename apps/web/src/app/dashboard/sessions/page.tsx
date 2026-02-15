@@ -29,20 +29,20 @@ export default function SessionsPage() {
     });
 
     useEffect(() => {
+        const loadSessions = async () => {
+            if (!selectedDomainId) return;
+            setLoading(true);
+            const result = await recordings.list(selectedDomainId);
+            if (result.data) {
+                setSessions(result.data.recordings || []);
+            }
+            setLoading(false);
+        };
+
         if (selectedDomainId) {
             loadSessions();
         }
     }, [selectedDomainId]);
-
-    const loadSessions = async () => {
-        if (!selectedDomainId) return;
-        setLoading(true);
-        const result = await recordings.list(selectedDomainId);
-        if (result.data) {
-            setSessions(result.data.recordings || []);
-        }
-        setLoading(false);
-    };
 
     const filteredSessions = sessions.filter(session => {
         if (searchQuery && !session.visitorId?.includes(searchQuery)) return false;

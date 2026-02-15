@@ -20,20 +20,20 @@ export default function TrendsPage() {
     const [metric, setMetric] = useState<'visitors' | 'sessions' | 'pageviews'>('visitors');
 
     useEffect(() => {
+        const loadData = async () => {
+            if (!selectedDomainId) return;
+            setLoading(true);
+            const result = await analytics.getDashboard(selectedDomainId);
+            if (result.data) {
+                setData(result.data);
+            }
+            setLoading(false);
+        };
+
         if (selectedDomainId) {
             loadData();
         }
     }, [selectedDomainId]);
-
-    const loadData = async () => {
-        if (!selectedDomainId) return;
-        setLoading(true);
-        const result = await analytics.getDashboard(selectedDomainId);
-        if (result.data) {
-            setData(result.data);
-        }
-        setLoading(false);
-    };
 
     if (domainLoading || loading) {
         return (

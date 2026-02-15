@@ -112,20 +112,9 @@ app.use('/api/sources', sourcesRoutes);
 app.use('/api/demo', demoRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/export', exportRoutes);
-
-
-// ...
 app.use('/api/teams', teamRoutes);
-
-
-// ...
 app.use('/api/webhooks', webhookRoutes);
 app.use('/api/experiments', experimentRoutes);
-
-
-
-
-
 
 // 404 handler
 app.use((req, res) => {
@@ -135,10 +124,6 @@ app.use((req, res) => {
 // Centralized error handler (must be AFTER all routes)
 app.use(errorHandler);
 
-
-
-// ... other imports ...
-
 // Start server with database initialization
 async function start() {
     try {
@@ -147,8 +132,6 @@ async function start() {
 
         // Initialize scheduled jobs
         initJobs();
-
-
 
         // Initialize database (required — all routes use PostgreSQL)
         if (process.env.DATABASE_URL) {
@@ -188,7 +171,5 @@ process.on('SIGINT', async () => {
 });
 
 start();
-
-
 
 export default app;

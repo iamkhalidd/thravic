@@ -592,7 +592,7 @@ export default function HomePage() {
                             marginBottom: 'var(--space-xl)',
                             fontStyle: 'italic'
                         }}>
-                            "{testimonials[currentTestimonial].quote}"
+                            &quot;{testimonials[currentTestimonial].quote}&quot;
                         </p>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--space-md)' }}>
                             <div style={{

@@ -152,7 +152,7 @@ export default function DemoPage() {
             }}>
                 <Sparkles size={16} />
                 <span style={{ fontSize: '0.875rem', fontWeight: 500 }}>
-                    You're viewing a demo of the real dashboard. Ready to track your own site?
+                    You&apos;re viewing a demo of the real dashboard. Ready to track your own site?
                 </span>
                 <Link
                     href="/register"

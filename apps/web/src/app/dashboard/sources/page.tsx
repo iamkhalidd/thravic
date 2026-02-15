@@ -100,13 +100,39 @@ export default function SourcesPage() {
     }, []);
 
     useEffect(() => {
-        if (!selectedDomainId) return;
-        loadData();
+        const loadData = async () => {
+            if (!selectedDomainId) return;
+            setLoading(true);
+
+            try {
+                const [overviewRes, referrersRes, socialRes, searchRes, campaignsRes] = await Promise.all([
+                    sources.getOverview(selectedDomainId),
+                    sources.getReferrers(selectedDomainId),
+                    sources.getSocial(selectedDomainId),
+                    sources.getSearch(selectedDomainId),
+                    sources.getCampaigns(selectedDomainId)
+                ]);
+
+                if (overviewRes.data) setOverview(overviewRes.data);
+                if (referrersRes.data) setReferrers(referrersRes.data.referrers);
+                if (socialRes.data) setSocialPlatforms(socialRes.data.platforms);
+                if (searchRes.data) setSearchEngines(searchRes.data.engines);
+                if (campaignsRes.data) setCampaigns(campaignsRes.data.campaigns);
+            } catch (error) {
+                console.error('Failed to load sources data:', error);
+            }
+
+            setLoading(false);
+        };
+
+        if (selectedDomainId) {
+            loadData();
+        }
     }, [selectedDomainId]);
 
-    const loadData = async () => {
+    const handleRefresh = async () => {
         if (!selectedDomainId) return;
-        setLoading(true);
+        setRefreshing(true);
 
         try {
             const [overviewRes, referrersRes, socialRes, searchRes, campaignsRes] = await Promise.all([
@@ -123,15 +149,9 @@ export default function SourcesPage() {
             if (searchRes.data) setSearchEngines(searchRes.data.engines);
             if (campaignsRes.data) setCampaigns(campaignsRes.data.campaigns);
         } catch (error) {
-            console.error('Failed to load sources data:', error);
+            console.error('Failed to refresh sources data:', error);
         }
 
-        setLoading(false);
-    };
-
-    const handleRefresh = async () => {
-        setRefreshing(true);
-        await loadData();
         setRefreshing(false);
     };
 

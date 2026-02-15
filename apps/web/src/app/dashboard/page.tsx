@@ -176,7 +176,7 @@ export default function DashboardPage() {
                     </div>
                     <h2 style={{ marginBottom: 'var(--space-sm)' }}>Add your first website</h2>
                     <p style={{ marginBottom: 'var(--space-xl)', color: 'var(--color-text-secondary)', maxWidth: '500px', margin: '0 auto var(--space-xl)' }}>
-                        Get started by adding your website. We'll generate a tracking script you can install in minutes.
+                        Get started by adding your website. We&apos;ll generate a tracking script you can install in minutes.
                     </p>
                     <Link href="/dashboard/domains/new" className="btn btn-primary" style={{ padding: 'var(--space-md) var(--space-xl)' }}>
                         <Plus size={20} />
@@ -185,7 +185,7 @@ export default function DashboardPage() {
                 </div>
 
                 {/* Quick Features Overview */}
-                <h3 style={{ marginBottom: 'var(--space-lg)' }}>What you'll get</h3>
+                <h3 style={{ marginBottom: 'var(--space-lg)' }}>What you&apos;ll get</h3>
                 <div className="grid grid-cols-3 gap-lg">
                     {[
                         { icon: BarChart3, title: 'Real-time Analytics', desc: 'See visitors, pageviews, and engagement as it happens' },
