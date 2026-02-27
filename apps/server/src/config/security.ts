@@ -3,6 +3,10 @@
 // Centralizes security-related config and startup validation.
 // ──────────────────────────────────────────────
 
+import { createLogger } from './logger';
+
+const log = createLogger('Security');
+
 const INSECURE_DEFAULTS = ['default-secret', 'default-refresh-secret', 'your-secret-key', 'change-me'];
 
 /**
@@ -55,10 +59,10 @@ export function validateSecurityConfig(): void {
         const msg = `\n🔒 Security Configuration Issues:\n${issues.map((i) => `   ⚠️  ${i}`).join('\n')}\n`;
 
         if (isProd) {
-            console.error(msg);
+            log.error(msg);
             throw new Error('Refusing to start: security configuration is insecure for production.');
         } else {
-            console.warn(msg);
+            log.warn(msg);
         }
     }
 }

@@ -1,16 +1,20 @@
 import { Router, Response } from 'express';
 import { z } from 'zod';
 import { authenticate, AuthRequest } from '../middleware/auth';
+import { requireFeature } from '../middleware/featureGate';
 import * as domainService from '../services/domainService';
 import * as recordingService from '../services/recordingService';
 import { appendEventsSchema, startRecordingSchema } from '../validators/recordings';
+import { createLogger } from '../config/logger';
+
+const log = createLogger('Recordings');
 
 const router = Router();
 
 
 
 // POST /api/recordings/:domainId/start - Start a new recording
-router.post('/:domainId/start', authenticate, async (req: AuthRequest, res: Response) => {
+router.post('/:domainId/start', authenticate, requireFeature('recordings'), async (req: AuthRequest, res: Response) => {
     try {
         const domain = await domainService.getById(req.params.domainId);
         if (!domain || domain.user_id !== req.userId) {
@@ -27,13 +31,13 @@ router.post('/:domainId/start', authenticate, async (req: AuthRequest, res: Resp
             status: 'recording'
         });
     } catch (error) {
-        console.error('Start recording error:', error);
+        log.error('Start recording error', error);
         res.status(500).json({ error: 'Failed to start recording' });
     }
 });
 
 // POST /api/recordings/:domainId/:recordingId/events - Append events to recording
-router.post('/:domainId/:recordingId/events', authenticate, async (req: AuthRequest, res: Response) => {
+router.post('/:domainId/:recordingId/events', authenticate, requireFeature('recordings'), async (req: AuthRequest, res: Response) => {
     try {
         const domain = await domainService.getById(req.params.domainId);
         if (!domain || domain.user_id !== req.userId) {
@@ -54,13 +58,13 @@ router.post('/:domainId/:recordingId/events', authenticate, async (req: AuthRequ
         if (error instanceof z.ZodError) {
             return res.status(400).json({ error: 'Invalid event data' });
         }
-        console.error('Append events error:', error);
+        log.error('Append events error', error);
         res.status(500).json({ error: 'Failed to append events' });
     }
 });
 
 // POST /api/recordings/:domainId/:recordingId/end - End a recording
-router.post('/:domainId/:recordingId/end', authenticate, async (req: AuthRequest, res: Response) => {
+router.post('/:domainId/:recordingId/end', authenticate, requireFeature('recordings'), async (req: AuthRequest, res: Response) => {
     try {
         const domain = await domainService.getById(req.params.domainId);
         if (!domain || domain.user_id !== req.userId) {
@@ -79,13 +83,13 @@ router.post('/:domainId/:recordingId/end', authenticate, async (req: AuthRequest
             status: 'completed'
         });
     } catch (error) {
-        console.error('End recording error:', error);
+        log.error('End recording error', error);
         res.status(500).json({ error: 'Failed to end recording' });
     }
 });
 
 // GET /api/recordings/:domainId - List recordings
-router.get('/:domainId', authenticate, async (req: AuthRequest, res: Response) => {
+router.get('/:domainId', authenticate, requireFeature('recordings'), async (req: AuthRequest, res: Response) => {
     try {
         const domain = await domainService.getById(req.params.domainId);
         if (!domain || domain.user_id !== req.userId) {
@@ -118,13 +122,13 @@ router.get('/:domainId', authenticate, async (req: AuthRequest, res: Response) =
             }
         });
     } catch (error) {
-        console.error('List recordings error:', error);
+        log.error('List recordings error', error);
         res.status(500).json({ error: 'Failed to list recordings' });
     }
 });
 
 // GET /api/recordings/:domainId/:recordingId - Get single recording with full data
-router.get('/:domainId/:recordingId', authenticate, async (req: AuthRequest, res: Response) => {
+router.get('/:domainId/:recordingId', authenticate, requireFeature('recordings'), async (req: AuthRequest, res: Response) => {
     try {
         const domain = await domainService.getById(req.params.domainId);
         if (!domain || domain.user_id !== req.userId) {
@@ -146,13 +150,13 @@ router.get('/:domainId/:recordingId', authenticate, async (req: AuthRequest, res
             endedAt: recording.ended_at
         });
     } catch (error) {
-        console.error('Get recording error:', error);
+        log.error('Get recording error', error);
         res.status(500).json({ error: 'Failed to get recording' });
     }
 });
 
 // DELETE /api/recordings/:domainId/:recordingId - Delete recording
-router.delete('/:domainId/:recordingId', authenticate, async (req: AuthRequest, res: Response) => {
+router.delete('/:domainId/:recordingId', authenticate, requireFeature('recordings'), async (req: AuthRequest, res: Response) => {
     try {
         const domain = await domainService.getById(req.params.domainId);
         if (!domain || domain.user_id !== req.userId) {
@@ -167,7 +171,7 @@ router.delete('/:domainId/:recordingId', authenticate, async (req: AuthRequest, 
         await recordingService.remove(req.params.recordingId);
         res.json({ message: 'Recording deleted successfully' });
     } catch (error) {
-        console.error('Delete recording error:', error);
+        log.error('Delete recording error', error);
         res.status(500).json({ error: 'Failed to delete recording' });
     }
 });

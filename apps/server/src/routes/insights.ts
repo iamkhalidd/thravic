@@ -1,8 +1,12 @@
 import { Router, Response } from 'express';
 import { authenticate, AuthRequest } from '../middleware/auth';
+import { requireFeature } from '../middleware/featureGate';
 import * as domainService from '../services/domainService';
 import * as eventService from '../services/eventService';
 import * as sessionService from '../services/sessionService';
+import { createLogger } from '../config/logger';
+
+const log = createLogger('Insights');
 import { v4 as uuidv4 } from 'uuid';
 
 const router = Router();
@@ -14,7 +18,7 @@ function percentChange(current: number, previous: number): number {
 }
 
 // GET /api/insights/:domainId - Get AI-generated insights
-router.get('/:domainId', authenticate, async (req: AuthRequest, res: Response) => {
+router.get('/:domainId', authenticate, requireFeature('insights'), async (req: AuthRequest, res: Response) => {
     try {
         const domain = await domainService.getById(req.params.domainId);
         if (!domain || domain.user_id !== req.userId) {
@@ -146,7 +150,7 @@ router.get('/:domainId', authenticate, async (req: AuthRequest, res: Response) =
             generatedAt: new Date()
         });
     } catch (error) {
-        console.error('Insights error:', error);
+        log.error('Insights error', error);
         res.status(500).json({ error: 'Failed to generate insights' });
     }
 });

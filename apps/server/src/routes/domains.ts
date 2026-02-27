@@ -1,21 +1,19 @@
 import { Router, Response } from 'express';
+import crypto from 'crypto';
 import { z } from 'zod';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import * as domainService from '../services/domainService';
 import { createDomainSchema, updateSettingsSchema } from '../validators/domains';
+import { createLogger } from '../config/logger';
+
+const log = createLogger('Domains');
 
 const router = Router();
 
 
-
-// Generate tracking ID
+// Generate cryptographically secure tracking ID
 function generateTrackingId(): string {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let result = 'TF-';
-    for (let i = 0; i < 8; i++) {
-        result += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return result;
+    return `TF-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
 }
 
 // GET /api/domains - List user's domains
@@ -34,7 +32,7 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
             }))
         });
     } catch (error) {
-        console.error('List domains error:', error);
+        log.error('List domains error', error);
         res.status(500).json({ error: 'Failed to list domains' });
     }
 });
@@ -66,7 +64,7 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
         if (error?.code === '23505') {
             return res.status(400).json({ error: 'Domain already added' });
         }
-        console.error('Create domain error:', error);
+        log.error('Create domain error', error);
         res.status(500).json({ error: 'Failed to create domain' });
     }
 });
@@ -89,7 +87,7 @@ router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
             createdAt: domain.created_at
         });
     } catch (error) {
-        console.error('Get domain error:', error);
+        log.error('Get domain error', error);
         res.status(500).json({ error: 'Failed to get domain' });
     }
 });
@@ -131,7 +129,7 @@ TF("init");
             ]
         });
     } catch (error) {
-        console.error('Get script error:', error);
+        log.error('Get script error', error);
         res.status(500).json({ error: 'Failed to get script' });
     }
 });
@@ -152,7 +150,7 @@ router.post('/:id/verify', authenticate, async (req: AuthRequest, res: Response)
             message: 'Domain verified successfully'
         });
     } catch (error) {
-        console.error('Verify domain error:', error);
+        log.error('Verify domain error', error);
         res.status(500).json({ error: 'Failed to verify domain' });
     }
 });
@@ -193,7 +191,7 @@ router.delete('/:id', authenticate, async (req: AuthRequest, res: Response) => {
 
         res.json({ message: 'Domain deleted successfully' });
     } catch (error) {
-        console.error('Delete domain error:', error);
+        log.error('Delete domain error', error);
         res.status(500).json({ error: 'Failed to delete domain' });
     }
 });

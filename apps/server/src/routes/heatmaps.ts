@@ -1,12 +1,16 @@
 import { Router, Response } from 'express';
 import { authenticate, AuthRequest } from '../middleware/auth';
+import { requireFeature } from '../middleware/featureGate';
 import * as domainService from '../services/domainService';
 import * as eventService from '../services/eventService';
+import { createLogger } from '../config/logger';
+
+const log = createLogger('Heatmaps');
 
 const router = Router();
 
 // GET /api/heatmaps/:domainId - Get heatmap data for a page
-router.get('/:domainId', authenticate, async (req: AuthRequest, res: Response) => {
+router.get('/:domainId', authenticate, requireFeature('heatmaps'), async (req: AuthRequest, res: Response) => {
     try {
         const domain = await domainService.getById(req.params.domainId);
         if (!domain || domain.user_id !== req.userId) {
@@ -57,13 +61,13 @@ router.get('/:domainId', authenticate, async (req: AuthRequest, res: Response) =
             period: { start: startDate, end: endDate }
         });
     } catch (error) {
-        console.error('Heatmap error:', error);
+        log.error('Heatmap error', error);
         res.status(500).json({ error: 'Failed to get heatmap data' });
     }
 });
 
 // GET /api/heatmaps/:domainId/pages - List pages with heatmap data
-router.get('/:domainId/pages', authenticate, async (req: AuthRequest, res: Response) => {
+router.get('/:domainId/pages', authenticate, requireFeature('heatmaps'), async (req: AuthRequest, res: Response) => {
     try {
         const domain = await domainService.getById(req.params.domainId);
         if (!domain || domain.user_id !== req.userId) {
@@ -99,7 +103,7 @@ router.get('/:domainId/pages', authenticate, async (req: AuthRequest, res: Respo
 
         res.json({ pages });
     } catch (error) {
-        console.error('Heatmap pages error:', error);
+        log.error('Heatmap pages error', error);
         res.status(500).json({ error: 'Failed to get heatmap pages' });
     }
 });

@@ -3,6 +3,9 @@ import { authenticate, AuthRequest } from '../middleware/auth';
 import * as domainService from '../services/domainService';
 import * as eventService from '../services/eventService';
 import * as sessionService from '../services/sessionService';
+import { createLogger } from '../config/logger';
+
+const log = createLogger('Analytics');
 
 const router = Router();
 
@@ -45,7 +48,7 @@ router.get('/:domainId/overview', authenticate, async (req: AuthRequest, res: Re
             })
         });
     } catch (error) {
-        console.error('Analytics overview error:', error);
+        log.error('Analytics overview error', error);
         res.status(500).json({ error: 'Failed to get analytics' });
     }
 });
@@ -83,7 +86,7 @@ router.get('/:domainId/sources', authenticate, async (req: AuthRequest, res: Res
             }))
         });
     } catch (error) {
-        console.error('Analytics sources error:', error);
+        log.error('Analytics sources error', error);
         res.status(500).json({ error: 'Failed to get source data' });
     }
 });
@@ -122,7 +125,7 @@ router.get('/:domainId/utm', authenticate, async (req: AuthRequest, res: Respons
                 .map(([name, count]) => ({ name, count }))
         });
     } catch (error) {
-        console.error('Analytics UTM error:', error);
+        log.error('Analytics UTM error', error);
         res.status(500).json({ error: 'Failed to get UTM data' });
     }
 });
@@ -165,7 +168,7 @@ router.get('/:domainId/realtime', authenticate, async (req: AuthRequest, res: Re
                 .map(([path, count]) => ({ path, count }))
         });
     } catch (error) {
-        console.error('Analytics realtime error:', error);
+        log.error('Analytics realtime error', error);
         res.status(500).json({ error: 'Failed to get realtime data' });
     }
 });
@@ -199,7 +202,7 @@ router.get('/:domainId/timeseries', authenticate, async (req: AuthRequest, res: 
             }))
         });
     } catch (error) {
-        console.error('Analytics timeseries error:', error);
+        log.error('Analytics timeseries error', error);
         res.status(500).json({ error: 'Failed to get timeseries data' });
     }
 });
@@ -268,7 +271,7 @@ router.get('/:domainId/dashboard', authenticate, async (req: AuthRequest, res: R
             realtime: { activeVisitors }
         });
     } catch (error) {
-        console.error('Analytics dashboard error:', error);
+        log.error('Analytics dashboard error', error);
         res.status(500).json({ error: 'Failed to get dashboard data' });
     }
 });
@@ -296,7 +299,7 @@ router.get('/:domainId/pages', authenticate, async (req: AuthRequest, res: Respo
             })
         });
     } catch (error) {
-        console.error('Analytics pages error:', error);
+        log.error('Analytics pages error', error);
         res.status(500).json({ error: 'Failed to get page data' });
     }
 });

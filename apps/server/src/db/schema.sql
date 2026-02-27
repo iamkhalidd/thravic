@@ -235,6 +235,72 @@ CREATE TABLE IF NOT EXISTS experiments (
 );
 
 -- ═══════════════════════════════════════════════
+-- 14. Admin Audit Log
+-- ═══════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS admin_audit_log (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    admin_id UUID REFERENCES users(id),
+    action VARCHAR(100) NOT NULL,
+    target_type VARCHAR(50),
+    target_id UUID,
+    details JSONB,
+    ip_address VARCHAR(45),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- ═══════════════════════════════════════════════
+-- 15. System Settings (runtime key-value config)
+-- ═══════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS system_settings (
+    key VARCHAR(100) PRIMARY KEY,
+    value JSONB NOT NULL,
+    updated_by UUID REFERENCES users(id),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- ═══════════════════════════════════════════════
+-- 16. Data Retention Policies
+-- ═══════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS data_retention_policies (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    plan VARCHAR(50) NOT NULL UNIQUE,
+    events_days INTEGER NOT NULL,
+    sessions_days INTEGER NOT NULL,
+    recordings_days INTEGER NOT NULL,
+    heatmaps_days INTEGER NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- ═══════════════════════════════════════════════
+-- Add role column to users (safe: uses ADD COLUMN IF NOT EXISTS workaround)
+-- ═══════════════════════════════════════════════
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='role') THEN
+        ALTER TABLE users ADD COLUMN role VARCHAR(20) DEFAULT 'user' CHECK (role IN ('user', 'admin', 'super_admin'));
+    END IF;
+END $$;
+
+-- ═══════════════════════════════════════════════
+-- Default system settings
+-- ═══════════════════════════════════════════════
+INSERT INTO system_settings (key, value) VALUES
+    ('registration_enabled', 'true'::jsonb),
+    ('maintenance_mode', 'false'::jsonb),
+    ('require_email_verification', 'false'::jsonb),
+    ('feature_flags', '{"ai_insights": true, "recordings": true, "heatmaps": true, "experiments": true}'::jsonb)
+ON CONFLICT (key) DO NOTHING;
+
+-- ═══════════════════════════════════════════════
+-- Default retention policies
+-- ═══════════════════════════════════════════════
+INSERT INTO data_retention_policies (plan, events_days, sessions_days, recordings_days, heatmaps_days) VALUES
+    ('free', 7, 7, 7, 7),
+    ('growth', 90, 90, 30, 90),
+    ('pro', 365, 365, 90, 365),
+    ('enterprise', 730, 730, 365, 730)
+ON CONFLICT (plan) DO NOTHING;
+
+-- ═══════════════════════════════════════════════
 -- Indexes (single block, no duplicates)
 -- ═══════════════════════════════════════════════
 CREATE INDEX IF NOT EXISTS idx_domains_tracking_id ON domains(tracking_id);
@@ -248,3 +314,6 @@ CREATE INDEX IF NOT EXISTS idx_visitors_domain ON visitors(domain_id);
 CREATE INDEX IF NOT EXISTS idx_heatmap_domain_url ON heatmap_data(domain_id, url_path);
 CREATE INDEX IF NOT EXISTS idx_recordings_domain ON session_recordings(domain_id);
 CREATE INDEX IF NOT EXISTS idx_usage_logs_domain_month ON usage_logs(domain_id, month);
+CREATE INDEX IF NOT EXISTS idx_audit_admin ON admin_audit_log(admin_id);
+CREATE INDEX IF NOT EXISTS idx_audit_created ON admin_audit_log(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);

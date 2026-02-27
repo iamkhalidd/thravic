@@ -5,7 +5,11 @@ import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import { requestLogger } from './middleware/logger';
 import { errorHandler } from './middleware/errorHandler';
+import { redirectGuard } from './middleware/redirectGuard';
 import { validateSecurityConfig } from './config/security';
+import { createLogger } from './config/logger';
+
+const log = createLogger('Server');
 
 // Load environment variables
 dotenv.config();
@@ -32,11 +36,33 @@ import exportRoutes from './routes/export';
 import teamRoutes from './routes/team';
 import webhookRoutes from './routes/webhooks';
 import experimentRoutes from './routes/experiments';
+import adminRoutes from './routes/admin';
+import announcementRoutes from './routes/announcements';
+import { maintenanceModeGate, registrationGate, trackingGate } from './middleware/settingsGate';
 
 
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// ── CORS Origin Whitelist ─────────────────────
+// Parsed once at startup, shared by Helmet CSP & CORS middleware
+const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:3000,http://localhost:3002')
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean);
+
+const isProd = process.env.NODE_ENV === 'production';
+
+// Validate origins at startup in production
+if (isProd) {
+    for (const o of allowedOrigins) {
+        if (o === '*') throw new Error('CORS wildcard "*" is forbidden in production.');
+        if (!o.startsWith('https://')) {
+            log.warn(`CORS origin "${o}" is not HTTPS — strongly recommended for production.`);
+        }
+    }
+}
 
 // Security middleware — hardened helmet CSP
 app.use(helmet({
@@ -46,20 +72,57 @@ app.use(helmet({
             scriptSrc: ["'self'"],
             styleSrc: ["'self'", "'unsafe-inline'"],
             imgSrc: ["'self'", 'data:', 'https:'],
-            connectSrc: ["'self'", process.env.CORS_ORIGIN || 'http://localhost:3000'],
+            connectSrc: ["'self'", ...allowedOrigins],
             fontSrc: ["'self'", 'https://fonts.gstatic.com'],
             objectSrc: ["'none'"],
-            upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? [] : null,
+            upgradeInsecureRequests: isProd ? [] : null,
         },
     },
     crossOriginEmbedderPolicy: false, // needed for tracking script
 }));
-app.use(cors({
-    origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+
+app.use(cors((req, callback) => {
+    const requestOrigin = (req as any).headers?.origin as string | undefined;
+
+    // ── Collect endpoint: open to any origin ────────────────────────────────
+    // Customer websites send tracking events from their own domains.
+    // The route itself applies Access-Control-Allow-Origin: * headers,
+    // so we bypass the whitelist check here.
+    if (req.url?.startsWith('/api/collect')) {
+        return callback(null, {
+            origin: '*',
+            methods: ['POST', 'OPTIONS'],
+            allowedHeaders: ['Content-Type'],
+            maxAge: 600,
+            optionsSuccessStatus: 204,
+        });
+    }
+
+    // ── All other routes: strict whitelist ──────────────────────────────────
+    if (!requestOrigin) return callback(null, { origin: true }); // server-to-server
+    if (allowedOrigins.includes(requestOrigin)) {
+        return callback(null, {
+            origin: true,
+            credentials: true,
+            methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+            allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+            exposedHeaders: ['RateLimit-Limit', 'RateLimit-Remaining', 'RateLimit-Reset'],
+            maxAge: 600,
+            optionsSuccessStatus: 200,
+            preflightContinue: false,
+        });
+    }
+    callback(new Error(`CORS: origin "${requestOrigin}" is not allowed`));
 }));
+
+// Ensure Vary: Origin is always set to prevent CDN cache poisoning
+app.use((_req, res, next) => {
+    res.setHeader('Vary', 'Origin');
+    next();
+});
+
+// Redirect guard — validates all res.redirect() calls against CORS_ORIGIN allowlist
+app.use(redirectGuard());
 
 // Rate limiting — API general (100 req / 15 min)
 const apiLimiter = rateLimit({
@@ -99,7 +162,13 @@ app.get('/health', async (req, res) => {
     res.json(health);
 });
 
+// ── Runtime Settings Gates ─────────────────────────────────────
+// Maintenance mode: all non-admin routes return 503 when enabled
+app.use(maintenanceModeGate);
+
 // API Routes
+app.use('/api/auth/register', registrationGate);
+app.use('/api/collect', trackingGate);
 app.use('/api/auth', authRoutes);
 app.use('/api/domains', domainRoutes);
 app.use('/api/collect', collectRoutes);
@@ -115,6 +184,8 @@ app.use('/api/export', exportRoutes);
 app.use('/api/teams', teamRoutes);
 app.use('/api/webhooks', webhookRoutes);
 app.use('/api/experiments', experimentRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/announcements', announcementRoutes);
 
 // 404 handler
 app.use((req, res) => {
@@ -136,35 +207,34 @@ async function start() {
         // Initialize database (required — all routes use PostgreSQL)
         if (process.env.DATABASE_URL) {
             await initDatabase();
-            console.log('✅ Database connected');
+            log.info('Database connected');
         } else {
-            console.warn('⚠️  DATABASE_URL not set — API routes will fail without a PostgreSQL connection.');
-            console.warn('   Set DATABASE_URL=postgresql://user:pass@localhost:5432/trackflow');
+            log.warn('DATABASE_URL not set — API routes will fail without a PostgreSQL connection. Set DATABASE_URL=postgresql://user:pass@localhost:5432/trackflow');
         }
 
         // Initialize Redis cache (optional — graceful degradation)
         await initRedis();
 
         app.listen(PORT, () => {
-            console.log(`🚀 Server running on http://localhost:${PORT}`);
-            console.log(`📊 TrackFlow API ready`);
+            log.info(`Server running on port ${PORT}`);
+            log.info('TrackFlow API ready');
         });
     } catch (error) {
-        console.error('❌ Failed to start server:', error);
+        log.error('Failed to start server', error);
         process.exit(1);
     }
 }
 
 // Graceful shutdown
 process.on('SIGTERM', async () => {
-    console.log('SIGTERM received, shutting down gracefully...');
+    log.info('SIGTERM received, shutting down gracefully');
     await closeRedis();
     await closeDatabase();
     process.exit(0);
 });
 
 process.on('SIGINT', async () => {
-    console.log('SIGINT received, shutting down gracefully...');
+    log.info('SIGINT received, shutting down gracefully');
     await closeRedis();
     await closeDatabase();
     process.exit(0);

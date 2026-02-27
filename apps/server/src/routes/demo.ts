@@ -5,8 +5,18 @@ import * as userService from '../services/userService';
 import * as domainService from '../services/domainService';
 import * as eventService from '../services/eventService';
 import * as sessionService from '../services/sessionService';
+import { createLogger } from '../config/logger';
+
+const log = createLogger('Demo');
 
 const router = Router();
+
+// ── Guard: only expose demo routes when DEMO_MODE is explicitly enabled ──
+if (process.env.DEMO_MODE !== 'true') {
+    router.all('*', (_req, res: Response) =>
+        res.status(404).json({ error: 'Not found' })
+    );
+}
 
 // Demo user credentials
 const DEMO_EMAIL = 'demo@trackflow.io';
@@ -197,7 +207,7 @@ router.post('/seed', async (req, res: Response) => {
             credentials: { email: DEMO_EMAIL, password: DEMO_PASSWORD }
         });
     } catch (error) {
-        console.error('Demo seed error:', error);
+        log.error('Demo seed error', error);
         res.status(500).json({ error: 'Failed to seed demo data' });
     }
 });

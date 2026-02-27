@@ -29,9 +29,14 @@ FROM node:18-alpine
 
 WORKDIR /app
 
+# Run as non-root user for security
+RUN addgroup -g 1001 -S nodejs && adduser -S trackflow -u 1001
+
 COPY --from=builder /app/apps/server/package*.json ./
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/apps/server/dist ./dist
+
+USER trackflow
 
 EXPOSE 3001
 

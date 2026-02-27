@@ -1,23 +1,42 @@
 /**
  * TrackFlow Analytics - Lightweight Tracking Script
- * 
+ *
  * Features:
  * - Page view tracking
- * - Click tracking
+ * - Click tracking (with PII-safe text capture)
  * - Scroll depth tracking
  * - UTM parameter capture
  * - Session management
- * - Batch event sending
- * - Privacy-respecting (no fingerprinting)
+ * - Batch event sending via sendBeacon / fetch
+ * - Privacy-respecting: no fingerprinting, DNT respected
+ * - Consent mode: optionally delay tracking until user accepts
  */
 
 interface TFConfig {
+    /**
+     * Base URL of your TrackFlow server, e.g. https://analytics.yourdomain.com/api/collect
+     * Defaults to the hosted TrackFlow service.
+     * Set via window.TF.endpoint before calling init(), or pass in config.
+     */
     endpoint: string;
     batchSize: number;
     batchInterval: number;
     trackClicks: boolean;
     trackScrolls: boolean;
+    /** Honour the browser Do-Not-Track header. Default: true */
     respectDoNotTrack: boolean;
+    /**
+     * Consent mode: when true, all tracking is paused until
+     * `TF('consent', 'granted')` is called (e.g. after cookie banner accepted).
+     * Default: false
+     */
+    requireConsent: boolean;
+    /**
+     * Max characters of click element text to capture.
+     * Set to 0 to disable text capture entirely (safest for GDPR).
+     * Default: 50
+     */
+    clickTextMaxLength: number;
 }
 
 interface TFEvent {
@@ -44,12 +63,14 @@ const SESSION_EXPIRY = 30 * 60 * 1000; // 30 minutes
 
 // Default configuration
 const defaultConfig: TFConfig = {
-    endpoint: 'http://localhost:3001/api/collect',
+    endpoint: 'https://api.trackflow.app/api/collect',
     batchSize: 10,
     batchInterval: 5000,
     trackClicks: true,
     trackScrolls: true,
-    respectDoNotTrack: true
+    respectDoNotTrack: true,
+    requireConsent: false,
+    clickTextMaxLength: 50,
 };
 
 class TrackFlowAnalytics {
@@ -59,6 +80,8 @@ class TrackFlowAnalytics {
     private batchTimer: number | null = null;
     private scrollDepth: number = 0;
     private initialized: boolean = false;
+    /** When requireConsent=true, tracking is paused until consent is granted */
+    private consentGranted: boolean = false;
 
     // Generate a random ID
     private generateId(): string {
@@ -115,8 +138,13 @@ class TrackFlowAnalytics {
         };
     }
 
-    // Check Do Not Track
+    // Check Do Not Track and consent
     private shouldTrack(): boolean {
+        // Respect consent mode — do not track until consent is explicitly granted
+        if (this.config.requireConsent && !this.consentGranted) {
+            return false;
+        }
+        // Respect browser Do-Not-Track header
         if (this.config.respectDoNotTrack) {
             const dnt = navigator.doNotTrack || (window as any).doNotTrack;
             if (dnt === '1' || dnt === 'yes') {
@@ -124,6 +152,24 @@ class TrackFlowAnalytics {
             }
         }
         return true;
+    }
+
+    // Grant consent (call after user accepts cookie banner)
+    public grantConsent(): void {
+        this.consentGranted = true;
+        // Flush any queued events that were held
+        if (this.eventQueue.length > 0) {
+            this.flush();
+        }
+        // Track the page view that was missed while waiting for consent
+        this.trackPageView();
+    }
+
+    // Revoke consent (e.g. user withdraws permission)
+    public revokeConsent(): void {
+        this.consentGranted = false;
+        // Clear any queued events
+        this.eventQueue = [];
     }
 
     // Create base event object
@@ -161,33 +207,49 @@ class TrackFlowAnalytics {
     // Send events to server
     private flush(): void {
         if (this.eventQueue.length === 0) return;
+        if (!this.shouldTrack()) return;
 
         const events = [...this.eventQueue];
         this.eventQueue = [];
 
-        const payload = {
-            trackingId: this.trackingId,
-            events
-        };
+        // Batch endpoint: POST /api/collect/:trackingId/batch
+        const batchUrl = `${this.config.endpoint}/${this.trackingId}/batch`;
+        const payload = { events };
 
-        // Use sendBeacon for reliable delivery
+        // Use sendBeacon for reliable delivery on page unload
         if (navigator.sendBeacon) {
             const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
-            navigator.sendBeacon(`${this.config.endpoint}/beacon`, blob);
+            const sent = navigator.sendBeacon(batchUrl, blob);
+            if (!sent) {
+                // sendBeacon queue is full — fall through to fetch
+                this.flushWithFetch(batchUrl, payload);
+            }
         } else {
-            // Fallback to fetch
-            fetch(this.config.endpoint, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
-                keepalive: true
-            }).catch(() => { });
+            this.flushWithFetch(batchUrl, payload);
         }
+    }
+
+    private flushWithFetch(url: string, payload: object): void {
+        fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+            keepalive: true,
+        }).catch(() => { /* silent — best-effort delivery */ });
     }
 
     // Track page view
     private trackPageView(): void {
         this.queueEvent(this.createEvent('pageview'));
+    }
+
+    // Sanitise element text — strips whitespace and caps length to avoid PII capture
+    private sanitiseText(raw: string | null | undefined): string | undefined {
+        if (!raw) return undefined;
+        const maxLen = this.config.clickTextMaxLength;
+        if (maxLen <= 0) return undefined; // text capture disabled
+        const cleaned = raw.replace(/\s+/g, ' ').trim();
+        return cleaned.slice(0, maxLen) || undefined;
     }
 
     // Track click
@@ -200,14 +262,24 @@ class TrackFlowAnalytics {
             y: e.clientY,
             tag: target.tagName.toLowerCase(),
             id: target.id || undefined,
-            className: target.className || undefined,
-            text: target.textContent?.slice(0, 100) || undefined
+            // Limit className to avoid leaking long dynamic class strings
+            className: typeof target.className === 'string'
+                ? target.className.slice(0, 100) || undefined
+                : undefined,
+            // Sanitised & capped text — set clickTextMaxLength:0 to disable entirely
+            text: this.sanitiseText(target.textContent),
         };
 
-        // Track if it's a link
+        // Track if it's a link — use pathname only to avoid leaking query params
         const link = target.closest('a');
         if (link) {
-            data.href = link.href;
+            try {
+                // Only capture the path+hash, never the full href with sensitive query params
+                const parsed = new URL(link.href);
+                data.href = parsed.origin + parsed.pathname + parsed.hash;
+            } catch {
+                data.href = link.getAttribute('href') || undefined;
+            }
         }
 
         this.queueEvent(this.createEvent('click', data));
@@ -274,15 +346,30 @@ class TrackFlowAnalytics {
     public init(config?: Partial<TFConfig>): void {
         if (this.initialized) return;
 
-        // Get tracking ID from global
-        this.trackingId = (window as any).TF?.id || '';
+        // Get tracking ID — set by the embed snippet (window.TF.id)
+        this.trackingId = (window as any).__TF_ID__ || '';
 
         if (!this.trackingId) {
-            console.warn('[TrackFlow] No tracking ID found');
+            // Silent in production; uncomment below during local debugging only:
+            // console.warn('[TrackFlow] No tracking ID found. Did you set window.__TF_ID__?');
             return;
         }
 
         this.config = { ...defaultConfig, ...config };
+
+        // If consent mode is on and consent has not yet been granted,
+        // we still set up listeners but will not send anything until grantConsent() is called.
+        if (this.config.requireConsent) {
+            // Check if consent was already stored in a previous session
+            try {
+                if (localStorage.getItem('_tf_consent') === 'granted') {
+                    this.consentGranted = true;
+                }
+            } catch { /* storage blocked */ }
+        } else {
+            this.consentGranted = true;
+        }
+
         this.initialized = true;
 
         // Setup listeners
@@ -291,10 +378,8 @@ class TrackFlowAnalytics {
         // Start batch timer
         this.batchTimer = window.setInterval(() => this.flush(), this.config.batchInterval);
 
-        // Track initial page view
+        // Track initial page view (noop if consent not yet granted)
         this.trackPageView();
-
-        console.log('[TrackFlow] Initialized with ID:', this.trackingId);
     }
 
     // Manual event tracking
@@ -303,6 +388,8 @@ class TrackFlowAnalytics {
     }
 
     // Identify user (for logged-in users)
+    // NOTE: Linking behaviour to a real userId is GDPR-sensitive.
+    // Only call this after the user has been informed and consented.
     public identify(userId: string, traits?: Record<string, unknown>): void {
         this.queueEvent(this.createEvent('custom', {
             event: 'identify',
@@ -312,32 +399,44 @@ class TrackFlowAnalytics {
     }
 }
 
+// ──────────────────────────────────────────────────────────────────────────
+// Bootstrap — runs after this script loads
+// The embed snippet sets window.__TF_ID__ and window.__TF_Q__ (queued calls)
+// before this script loads so nothing is lost.
+// ──────────────────────────────────────────────────────────────────────────
+
 // Create singleton instance
 const tf = new TrackFlowAnalytics();
 
-// Global API
-(window as any).TF = function (...args: unknown[]) {
-    const method = args[0] as string;
+// Capture queued calls BEFORE overwriting the global (order matters)
+const _priorQueue: unknown[][] = (window as any).__TF_Q__ || [];
 
+// Expose global API function
+function dispatchTF(...args: unknown[]): void {
+    const method = args[0] as string;
     if (method === 'init') {
         tf.init(args[1] as Partial<TFConfig>);
     } else if (method === 'track') {
         tf.track(args[1] as string, args[2] as Record<string, unknown>);
     } else if (method === 'identify') {
         tf.identify(args[1] as string, args[2] as Record<string, unknown>);
+    } else if (method === 'consent') {
+        const action = args[1] as string;
+        if (action === 'granted') {
+            try { localStorage.setItem('_tf_consent', 'granted'); } catch { /* blocked */ }
+            tf.grantConsent();
+        } else if (action === 'denied') {
+            try { localStorage.removeItem('_tf_consent'); } catch { /* blocked */ }
+            tf.revokeConsent();
+        }
     }
-};
-
-// Preserve tracking ID and queue
-const existingTF = (window as any).TF;
-if (existingTF && existingTF.id) {
-    (window as any).TF.id = existingTF.id;
 }
-if (existingTF && existingTF.q) {
-    // Process queued calls
-    for (const call of existingTF.q) {
-        (window as any).TF(...call);
-    }
+
+(window as any).TF = dispatchTF;
+
+// Replay any calls that were queued before the script loaded
+for (const call of _priorQueue) {
+    dispatchTF(...call);
 }
 
 export default tf;

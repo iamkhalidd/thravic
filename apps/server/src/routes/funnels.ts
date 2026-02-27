@@ -1,8 +1,12 @@
 import { Router, Response } from 'express';
 import { z } from 'zod';
 import { authenticate, AuthRequest } from '../middleware/auth';
+import { requireFeature } from '../middleware/featureGate';
 import * as domainService from '../services/domainService';
 import * as funnelService from '../services/funnelService';
+import { createLogger } from '../config/logger';
+
+const log = createLogger('Funnels');
 import * as eventService from '../services/eventService';
 import { createFunnelSchema, updateFunnelSchema } from '../validators/funnels';
 
@@ -11,7 +15,7 @@ const router = Router();
 
 
 // GET /api/funnels/:domainId - List funnels
-router.get('/:domainId', authenticate, async (req: AuthRequest, res: Response) => {
+router.get('/:domainId', authenticate, requireFeature('funnels'), async (req: AuthRequest, res: Response) => {
     try {
         const domain = await domainService.getById(req.params.domainId);
         if (!domain || domain.user_id !== req.userId) {
@@ -31,13 +35,13 @@ router.get('/:domainId', authenticate, async (req: AuthRequest, res: Response) =
             }))
         });
     } catch (error) {
-        console.error('List funnels error:', error);
+        log.error('List funnels error', error);
         res.status(500).json({ error: 'Failed to list funnels' });
     }
 });
 
 // POST /api/funnels/:domainId - Create funnel
-router.post('/:domainId', authenticate, async (req: AuthRequest, res: Response) => {
+router.post('/:domainId', authenticate, requireFeature('funnels'), async (req: AuthRequest, res: Response) => {
     try {
         const domain = await domainService.getById(req.params.domainId);
         if (!domain || domain.user_id !== req.userId) {
@@ -66,13 +70,13 @@ router.post('/:domainId', authenticate, async (req: AuthRequest, res: Response) 
         if (error instanceof z.ZodError) {
             return res.status(400).json({ error: error.errors[0].message });
         }
-        console.error('Create funnel error:', error);
+        log.error('Create funnel error', error);
         res.status(500).json({ error: 'Failed to create funnel' });
     }
 });
 
 // GET /api/funnels/:domainId/:funnelId - Get funnel with metrics
-router.get('/:domainId/:funnelId', authenticate, async (req: AuthRequest, res: Response) => {
+router.get('/:domainId/:funnelId', authenticate, requireFeature('funnels'), async (req: AuthRequest, res: Response) => {
     try {
         const domain = await domainService.getById(req.params.domainId);
         if (!domain || domain.user_id !== req.userId) {
@@ -139,13 +143,13 @@ router.get('/:domainId/:funnelId', authenticate, async (req: AuthRequest, res: R
             period: { start: startDate, end: endDate }
         });
     } catch (error) {
-        console.error('Get funnel error:', error);
+        log.error('Get funnel error', error);
         res.status(500).json({ error: 'Failed to get funnel' });
     }
 });
 
 // PUT /api/funnels/:domainId/:funnelId - Update funnel
-router.put('/:domainId/:funnelId', authenticate, async (req: AuthRequest, res: Response) => {
+router.put('/:domainId/:funnelId', authenticate, requireFeature('funnels'), async (req: AuthRequest, res: Response) => {
     try {
         const domain = await domainService.getById(req.params.domainId);
         if (!domain || domain.user_id !== req.userId) {
@@ -185,13 +189,13 @@ router.put('/:domainId/:funnelId', authenticate, async (req: AuthRequest, res: R
         if (error instanceof z.ZodError) {
             return res.status(400).json({ error: error.errors[0].message });
         }
-        console.error('Update funnel error:', error);
+        log.error('Update funnel error', error);
         res.status(500).json({ error: 'Failed to update funnel' });
     }
 });
 
 // DELETE /api/funnels/:domainId/:funnelId - Delete funnel
-router.delete('/:domainId/:funnelId', authenticate, async (req: AuthRequest, res: Response) => {
+router.delete('/:domainId/:funnelId', authenticate, requireFeature('funnels'), async (req: AuthRequest, res: Response) => {
     try {
         const domain = await domainService.getById(req.params.domainId);
         if (!domain || domain.user_id !== req.userId) {
@@ -206,7 +210,7 @@ router.delete('/:domainId/:funnelId', authenticate, async (req: AuthRequest, res
         await funnelService.remove(req.params.funnelId);
         res.json({ message: 'Funnel deleted successfully' });
     } catch (error) {
-        console.error('Delete funnel error:', error);
+        log.error('Delete funnel error', error);
         res.status(500).json({ error: 'Failed to delete funnel' });
     }
 });

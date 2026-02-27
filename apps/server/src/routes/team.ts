@@ -1,5 +1,6 @@
 import express from 'express';
 import { authenticate, AuthRequest } from '../middleware/auth';
+import { requireFeature } from '../middleware/featureGate';
 import { query, queryOne } from '../db';
 import { z } from 'zod';
 
@@ -31,7 +32,7 @@ const checkDomainAdmin = async (req: AuthRequest, res: express.Response, next: e
 };
 
 // GET /api/teams/:domainId/members
-router.get('/:domainId/members', authenticate, async (req: AuthRequest, res) => {
+router.get('/:domainId/members', authenticate, requireFeature('team'), async (req: AuthRequest, res) => {
     const { domainId } = req.params;
 
     // Check access (viewer or admin)
@@ -57,7 +58,7 @@ router.get('/:domainId/members', authenticate, async (req: AuthRequest, res) => 
 });
 
 // POST /api/teams/:domainId/invite
-router.post('/:domainId/invite', authenticate, checkDomainAdmin, async (req: AuthRequest, res) => {
+router.post('/:domainId/invite', authenticate, requireFeature('team'), checkDomainAdmin, async (req: AuthRequest, res) => {
     try {
         const { domainId } = req.params;
         const { email, role } = inviteSchema.parse(req.body);
@@ -88,7 +89,7 @@ router.post('/:domainId/invite', authenticate, checkDomainAdmin, async (req: Aut
 });
 
 // DELETE /api/teams/:domainId/members/:userId
-router.delete('/:domainId/members/:memberId', authenticate, checkDomainAdmin, async (req: AuthRequest, res) => {
+router.delete('/:domainId/members/:memberId', authenticate, requireFeature('team'), checkDomainAdmin, async (req: AuthRequest, res) => {
     const { domainId, memberId } = req.params;
 
     await query(

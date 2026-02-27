@@ -27,9 +27,18 @@ export async function createUser(
          RETURNING *`,
         [email, password, name]
     );
-    return rows[0];
+    return rows[0] ?? null;
 }
 
+export async function updatePassword(
+    userId: string,
+    hashedPassword: string
+): Promise<void> {
+    await query(
+        `UPDATE users SET password = $2, updated_at = NOW() WHERE id = $1`,
+        [userId, hashedPassword]
+    );
+}
 export async function findByEmail(email: string): Promise<UserRow | null> {
     return queryOne<UserRow>(
         `SELECT * FROM users WHERE email = $1`,

@@ -1,75 +1,60 @@
-// TrackFlow Analytics - Payment Routes (Stripe Integration)
-// Following MVP Spec: SaaS Pricing & Subscription Management
+// TrackFlow Analytics - Payment Routes (Paystack Integration)
+// Uses Paystack's transaction/initialize API for one-time plan upgrades.
+// Webhook fires on charge.success → upgrades user subscription in DB.
 
 import { Router, Request, Response } from 'express';
-import Stripe from 'stripe';
+import axios from 'axios';
+import crypto from 'crypto';
+import { createLogger } from '../config/logger';
+import { PLAN_LIMITS, PLAN_FEATURES, PlanName } from '../config/plans';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { query, queryOne } from '../db';
 
+const log = createLogger('Payments');
 const router = Router();
 
-// Initialize Stripe (only if STRIPE_SECRET_KEY is set)
-const stripe = process.env.STRIPE_SECRET_KEY
-    ? new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2023-10-16' })
-    : null;
+const PAYSTACK_SECRET = process.env.PAYSTACK_SECRET_KEY || '';
+const PAYSTACK_BASE  = 'https://api.paystack.co';
 
-// Pricing tiers from spec
-const PRICING_TIERS = {
-    free: {
-        name: 'Free',
-        eventsLimit: 10000,
-        domainsLimit: 1,
-        retentionDays: 7,
-        price: 0
-    },
-    growth: {
-        name: 'Growth',
-        eventsLimit: 250000,
-        domainsLimit: 5,
-        retentionDays: 90,
-        price: 39
-    },
-    pro: {
-        name: 'Pro',
-        eventsLimit: 2000000,
-        domainsLimit: 20,
-        retentionDays: 365,
-        price: 99
-    },
-    enterprise: {
-        name: 'Enterprise',
-        eventsLimit: -1, // Unlimited
-        domainsLimit: -1,
-        retentionDays: 365,
-        price: 299
-    }
+// Prices in the smallest currency unit (USD cents for Paystack).
+// Paystack supports USD — set your Paystack dashboard to a USD-enabled integration.
+const PLAN_PRICES_CENTS: Record<string, number> = {
+    growth:     39_00,    // $39 / month
+    pro:        99_00,    // $99 / month
+    enterprise: 299_00,   // $299 / month
 };
 
-// GET /api/payments/plans - Get available plans
-router.get('/plans', (req, res: Response) => {
-    res.json({
-        success: true,
-        plans: PRICING_TIERS
-    });
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/payments/plans
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/plans', (_req: Request, res: Response) => {
+    const plans = Object.entries(PLAN_LIMITS).map(([key, tier]) => ({
+        id: key,
+        ...tier,
+        features: PLAN_FEATURES[key as PlanName],
+    }));
+    res.json({ success: true, plans });
 });
 
-// GET /api/payments/current - Get current subscription
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/payments/current
+// ─────────────────────────────────────────────────────────────────────────────
 router.get('/current', authenticate, async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.userId;
 
-        // Check if database is available
         if (!process.env.DATABASE_URL) {
-            // Return mock data for in-memory mode
+            const tier = PLAN_LIMITS.free;
             return res.json({
                 success: true,
                 subscription: {
                     plan: 'free',
                     status: 'active',
                     eventsUsed: 0,
-                    eventsLimit: PRICING_TIERS.free.eventsLimit,
-                    domainsLimit: PRICING_TIERS.free.domainsLimit
-                }
+                    eventsLimit: tier.eventsLimit,
+                    domainsLimit: tier.domainsLimit,
+                    features: PLAN_FEATURES['free'],
+                },
             });
         }
 
@@ -78,8 +63,7 @@ router.get('/current', authenticate, async (req: AuthRequest, res: Response) => 
         `, [userId]);
 
         if (!subscription) {
-            // Create free subscription if none exists
-            const tier = PRICING_TIERS.free;
+            const tier = PLAN_LIMITS.free;
             await query(`
                 INSERT INTO subscriptions (user_id, plan, events_limit, domains_limit)
                 VALUES ($1, 'free', $2, $3)
@@ -92,8 +76,9 @@ router.get('/current', authenticate, async (req: AuthRequest, res: Response) => 
                     status: 'active',
                     eventsUsed: 0,
                     eventsLimit: tier.eventsLimit,
-                    domainsLimit: tier.domainsLimit
-                }
+                    domainsLimit: tier.domainsLimit,
+                    features: PLAN_FEATURES['free'],
+                },
             });
         }
 
@@ -105,253 +90,193 @@ router.get('/current', authenticate, async (req: AuthRequest, res: Response) => 
                 eventsUsed: subscription.events_used,
                 eventsLimit: subscription.events_limit,
                 domainsLimit: subscription.domains_limit,
-                currentPeriodEnd: subscription.current_period_end
-            }
+                currentPeriodEnd: subscription.current_period_end,
+                features: PLAN_FEATURES[subscription.plan as PlanName] ?? PLAN_FEATURES['free'],
+            },
         });
     } catch (error) {
-        console.error('Error getting subscription:', error);
+        log.error('Error getting subscription', error);
         res.status(500).json({ error: 'Failed to get subscription' });
     }
 });
 
-// POST /api/payments/checkout - Create Stripe Checkout Session
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/payments/checkout
+// Initialises a Paystack transaction. Returns { checkoutUrl } so the
+// frontend can redirect the user to Paystack's hosted payment page.
+// ─────────────────────────────────────────────────────────────────────────────
 router.post('/checkout', authenticate, async (req: AuthRequest, res: Response) => {
     try {
-        if (!stripe) {
-            return res.status(400).json({ error: 'Stripe not configured' });
+        if (!PAYSTACK_SECRET) {
+            return res.status(400).json({ error: 'Paystack not configured' });
         }
 
         const { plan } = req.body;
-        const userId = req.userId;
-        const userEmail = req.email;
+        const userId = req.userId!;
+        const userEmail = req.email!;
 
         if (!plan || !['growth', 'pro', 'enterprise'].includes(plan)) {
             return res.status(400).json({ error: 'Invalid plan' });
         }
 
-        // Get or create Stripe customer
-        let customerId: string;
-
-        if (process.env.DATABASE_URL) {
-            const user = await queryOne<{ stripe_customer_id: string }>(
-                'SELECT stripe_customer_id FROM users WHERE id = $1',
-                [userId]
-            );
-
-            if (user?.stripe_customer_id) {
-                customerId = user.stripe_customer_id;
-            } else {
-                const customer = await stripe.customers.create({
-                    email: userEmail,
-                    metadata: { userId: userId as string }
-                });
-                customerId = customer.id;
-
-                await query(
-                    'UPDATE users SET stripe_customer_id = $1 WHERE id = $2',
-                    [customerId, userId]
-                );
-            }
-        } else {
-            // In-memory mode: create customer without saving
-            const customer = await stripe.customers.create({
-                email: userEmail,
-                metadata: { userId: userId as string }
-            });
-            customerId = customer.id;
-        }
-
-        // Get price ID from environment
-        const priceId = process.env[`STRIPE_PRICE_${plan.toUpperCase()}`];
-        if (!priceId) {
+        const amountCents = PLAN_PRICES_CENTS[plan];
+        if (!amountCents) {
             return res.status(400).json({ error: `Price not configured for ${plan} plan` });
         }
 
-        // Create checkout session
-        const session = await stripe.checkout.sessions.create({
-            customer: customerId,
-            mode: 'subscription',
-            payment_method_types: ['card'],
-            line_items: [{
-                price: priceId,
-                quantity: 1
-            }],
-            success_url: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard/settings?payment=success`,
-            cancel_url: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard/settings?payment=canceled`,
-            metadata: {
-                userId: userId as string,
-                plan
-            }
-        });
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
 
-        res.json({
-            success: true,
-            checkoutUrl: session.url
-        });
-    } catch (error) {
-        console.error('Error creating checkout session:', error);
+        const paystackRes = await axios.post(
+            `${PAYSTACK_BASE}/transaction/initialize`,
+            {
+                email: userEmail,
+                amount: amountCents,
+                currency: 'USD',
+                callback_url: `${frontendUrl}/dashboard/settings?payment=success`,
+                metadata: {
+                    userId,
+                    plan,
+                    cancel_action: `${frontendUrl}/dashboard/settings?payment=canceled`,
+                },
+            },
+            {
+                headers: {
+                    Authorization: `Bearer ${PAYSTACK_SECRET}`,
+                    'Content-Type': 'application/json',
+                },
+            },
+        );
+
+        const { authorization_url, reference } = paystackRes.data.data;
+
+        log.info(`Paystack checkout initiated for user ${userId}, plan=${plan}, ref=${reference}`);
+
+        res.json({ success: true, checkoutUrl: authorization_url, reference });
+    } catch (error: any) {
+        log.error('Error creating Paystack checkout', error?.response?.data ?? error);
         res.status(500).json({ error: 'Failed to create checkout session' });
     }
 });
 
-// POST /api/payments/portal - Create Stripe Customer Portal Session
-router.post('/portal', authenticate, async (req: AuthRequest, res: Response) => {
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/payments/verify
+// Called by the frontend after Paystack redirects back (using ?reference=...)
+// to confirm the payment succeeded server-side before showing a success UI.
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/verify', authenticate, async (req: AuthRequest, res: Response) => {
     try {
-        if (!stripe) {
-            return res.status(400).json({ error: 'Stripe not configured' });
+        if (!PAYSTACK_SECRET) {
+            return res.status(400).json({ error: 'Paystack not configured' });
         }
 
-        const userId = req.userId;
-
-        if (!process.env.DATABASE_URL) {
-            return res.status(400).json({ error: 'Database required for billing portal' });
+        const { reference } = req.body;
+        if (!reference) {
+            return res.status(400).json({ error: 'Reference is required' });
         }
 
-        const user = await queryOne<{ stripe_customer_id: string }>(
-            'SELECT stripe_customer_id FROM users WHERE id = $1',
-            [userId]
+        const verifyRes = await axios.get(
+            `${PAYSTACK_BASE}/transaction/verify/${encodeURIComponent(reference)}`,
+            { headers: { Authorization: `Bearer ${PAYSTACK_SECRET}` } },
         );
 
-        if (!user?.stripe_customer_id) {
-            return res.status(400).json({ error: 'No billing account found' });
+        const txData = verifyRes.data.data;
+        if (txData.status !== 'success') {
+            return res.status(400).json({ error: 'Payment not successful', status: txData.status });
         }
 
-        const portalSession = await stripe.billingPortal.sessions.create({
-            customer: user.stripe_customer_id,
-            return_url: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard/settings`
-        });
+        const { userId, plan } = txData.metadata as { userId: string; plan: PlanName };
 
-        res.json({
-            success: true,
-            portalUrl: portalSession.url
-        });
-    } catch (error) {
-        console.error('Error creating portal session:', error);
-        res.status(500).json({ error: 'Failed to create portal session' });
+        if (userId && plan && process.env.DATABASE_URL) {
+            await upgradeSubscription(userId, plan, reference);
+        }
+
+        res.json({ success: true, plan });
+    } catch (error: any) {
+        log.error('Error verifying Paystack payment', error?.response?.data ?? error);
+        res.status(500).json({ error: 'Failed to verify payment' });
     }
 });
 
-// POST /api/payments/webhook - Stripe Webhook Handler
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/payments/webhook
+// Paystack sends HMAC-SHA512 signed events. We verify the signature and
+// handle charge.success to upgrade the user's subscription.
+// ─────────────────────────────────────────────────────────────────────────────
 router.post('/webhook', async (req: Request, res: Response) => {
     try {
-        if (!stripe) {
-            return res.status(400).json({ error: 'Stripe not configured' });
-        }
-
-        const sig = req.headers['stripe-signature'] as string;
-        const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-
-        if (!webhookSecret) {
-            console.warn('Stripe webhook secret not configured');
+        const secret = process.env.PAYSTACK_WEBHOOK_SECRET || PAYSTACK_SECRET;
+        if (!secret) {
+            log.warn('Paystack webhook secret not configured');
             return res.status(400).json({ error: 'Webhook not configured' });
         }
 
-        let event: Stripe.Event;
+        // Verify signature
+        const signature = req.headers['x-paystack-signature'] as string;
+        const hash = crypto
+            .createHmac('sha512', secret)
+            .update(JSON.stringify(req.body))
+            .digest('hex');
 
-        try {
-            event = stripe.webhooks.constructEvent(
-                req.body,
-                sig,
-                webhookSecret
-            );
-        } catch (err: any) {
-            console.error('Webhook signature verification failed:', err.message);
-            return res.status(400).json({ error: 'Invalid signature' });
+        if (hash !== signature) {
+            log.warn('Paystack webhook signature mismatch');
+            return res.status(401).json({ error: 'Invalid signature' });
         }
 
-        // Handle the event
-        switch (event.type) {
-            case 'checkout.session.completed': {
-                const session = event.data.object as Stripe.Checkout.Session;
-                const userId = session.metadata?.userId;
-                const plan = session.metadata?.plan;
+        const event = req.body as { event: string; data: any };
+        log.info(`Paystack webhook received: ${event.event}`);
+
+        switch (event.event) {
+            case 'charge.success': {
+                const { metadata, reference, customer } = event.data;
+                const userId: string | undefined = metadata?.userId;
+                const plan: PlanName | undefined = metadata?.plan;
 
                 if (userId && plan && process.env.DATABASE_URL) {
-                    const tier = PRICING_TIERS[plan as keyof typeof PRICING_TIERS];
+                    await upgradeSubscription(userId, plan, reference);
+                    log.info(`User ${userId} upgraded to ${plan} via webhook (ref: ${reference})`);
+                }
 
-                    // Update user subscription
+                // Save Paystack customer code if present
+                if (userId && customer?.customer_code && process.env.DATABASE_URL) {
                     await query(
-                        'UPDATE users SET subscription = $1, stripe_subscription_id = $2 WHERE id = $3',
-                        [plan, session.subscription, userId]
-                    );
-
-                    // Upsert subscription record
-                    await query(`
-                        INSERT INTO subscriptions (user_id, stripe_subscription_id, plan, status, events_limit, domains_limit)
-                        VALUES ($1, $2, $3, 'active', $4, $5)
-                        ON CONFLICT (user_id) DO UPDATE SET
-                            stripe_subscription_id = $2,
-                            plan = $3,
-                            status = 'active',
-                            events_limit = $4,
-                            domains_limit = $5,
-                            updated_at = NOW()
-                    `, [userId, session.subscription, plan, tier.eventsLimit, tier.domainsLimit]);
-
-                    console.log(`[Payment] User ${userId} upgraded to ${plan}`);
+                        'UPDATE users SET paystack_customer_code = $1 WHERE id = $2',
+                        [customer.customer_code, userId],
+                    ).catch(() => {/* column may not exist yet – safe to skip */});
                 }
                 break;
             }
 
-            case 'customer.subscription.updated': {
-                const subscription = event.data.object as Stripe.Subscription;
-                if (process.env.DATABASE_URL) {
+            case 'subscription.disable': {
+                // Paystack subscription disabled → downgrade to free
+                const subscriptionCode: string = event.data.subscription_code;
+                if (subscriptionCode && process.env.DATABASE_URL) {
+                    const freeTier = PLAN_LIMITS.free;
                     await query(`
-                        UPDATE subscriptions 
-                        SET status = $1, current_period_start = $2, current_period_end = $3, updated_at = NOW()
-                        WHERE stripe_subscription_id = $4
-                    `, [
-                        subscription.status,
-                        new Date(subscription.current_period_start * 1000),
-                        new Date(subscription.current_period_end * 1000),
-                        subscription.id
-                    ]);
-                }
-                break;
-            }
-
-            case 'customer.subscription.deleted': {
-                const subscription = event.data.object as Stripe.Subscription;
-                if (process.env.DATABASE_URL) {
-                    // Downgrade to free
-                    await query(`
-                        UPDATE subscriptions SET plan = 'free', status = 'canceled', events_limit = $1, domains_limit = $2, updated_at = NOW()
-                        WHERE stripe_subscription_id = $3
-                    `, [PRICING_TIERS.free.eventsLimit, PRICING_TIERS.free.domainsLimit, subscription.id]);
-
-                    await query(`
-                        UPDATE users SET subscription = 'free', stripe_subscription_id = NULL
-                        WHERE stripe_subscription_id = $1
-                    `, [subscription.id]);
-
-                    console.log(`[Payment] Subscription ${subscription.id} canceled, downgraded to free`);
-                }
-                break;
-            }
-
-            case 'invoice.payment_failed': {
-                const invoice = event.data.object as Stripe.Invoice;
-                if (process.env.DATABASE_URL && invoice.subscription) {
-                    await query(`
-                        UPDATE subscriptions SET status = 'past_due', updated_at = NOW()
-                        WHERE stripe_subscription_id = $1
-                    `, [invoice.subscription]);
+                        UPDATE subscriptions
+                        SET plan = 'free', status = 'canceled',
+                            events_limit = $1, domains_limit = $2, updated_at = NOW()
+                        WHERE paystack_subscription_code = $3
+                    `, [freeTier.eventsLimit, freeTier.domainsLimit, subscriptionCode]);
+                    log.info(`Subscription ${subscriptionCode} disabled — downgraded to free`);
                 }
                 break;
             }
 
             default:
-                console.log(`Unhandled event type: ${event.type}`);
+                log.debug(`Unhandled Paystack event: ${event.event}`);
         }
 
+        // Always respond 200 quickly — Paystack retries if it doesn't get a 2xx
         res.json({ received: true });
     } catch (error) {
-        console.error('Webhook error:', error);
+        log.error('Paystack webhook error', error);
         res.status(500).json({ error: 'Webhook handler failed' });
     }
 });
 
-// GET /api/payments/usage - Get current usage
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/payments/usage
+// ─────────────────────────────────────────────────────────────────────────────
 router.get('/usage', authenticate, async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.userId;
@@ -361,16 +286,15 @@ router.get('/usage', authenticate, async (req: AuthRequest, res: Response) => {
                 success: true,
                 usage: {
                     eventsThisMonth: 0,
-                    eventsLimit: PRICING_TIERS.free.eventsLimit,
-                    percentUsed: 0
-                }
+                    eventsLimit: PLAN_LIMITS.free.eventsLimit,
+                    percentUsed: 0,
+                },
             });
         }
 
-        // Get user's domains
         const domains = await query<{ id: string }>(
             'SELECT id FROM domains WHERE user_id = $1',
-            [userId]
+            [userId],
         );
 
         if (domains.length === 0) {
@@ -378,17 +302,14 @@ router.get('/usage', authenticate, async (req: AuthRequest, res: Response) => {
                 success: true,
                 usage: {
                     eventsThisMonth: 0,
-                    eventsLimit: PRICING_TIERS.free.eventsLimit,
-                    percentUsed: 0
-                }
+                    eventsLimit: PLAN_LIMITS.free.eventsLimit,
+                    percentUsed: 0,
+                },
             });
         }
 
         const domainIds = domains.map(d => d.id);
-
-        // Get current month usage
-        const now = new Date();
-        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 
         const usageResult = await queryOne<{ total: string }>(`
             SELECT COALESCE(SUM(events_count), 0) as total
@@ -399,24 +320,50 @@ router.get('/usage', authenticate, async (req: AuthRequest, res: Response) => {
         const eventsUsed = parseInt(usageResult?.total || '0');
         const subscription = await queryOne<{ events_limit: number }>(
             'SELECT events_limit FROM subscriptions WHERE user_id = $1',
-            [userId]
+            [userId],
         );
 
-        const eventsLimit = subscription?.events_limit || PRICING_TIERS.free.eventsLimit;
+        const eventsLimit = subscription?.events_limit ?? PLAN_LIMITS.free.eventsLimit;
         const percentUsed = eventsLimit > 0 ? Math.round((eventsUsed / eventsLimit) * 100) : 0;
 
         res.json({
             success: true,
-            usage: {
-                eventsThisMonth: eventsUsed,
-                eventsLimit,
-                percentUsed
-            }
+            usage: { eventsThisMonth: eventsUsed, eventsLimit, percentUsed },
         });
     } catch (error) {
-        console.error('Error getting usage:', error);
+        log.error('Error getting usage', error);
         res.status(500).json({ error: 'Failed to get usage' });
     }
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helper: upsert subscription in DB and set plan active for 30 days
+// ─────────────────────────────────────────────────────────────────────────────
+async function upgradeSubscription(userId: string, plan: PlanName, reference: string) {
+    const tier = PLAN_LIMITS[plan];
+    if (!tier) return;
+
+    const periodEnd = new Date();
+    periodEnd.setDate(periodEnd.getDate() + 30);
+
+    await query(
+        'UPDATE users SET subscription = $1, paystack_subscription_code = $2 WHERE id = $3',
+        [plan, reference, userId],
+    ).catch(() => {/* ignore if column missing, handled below */});
+
+    await query(`
+        INSERT INTO subscriptions
+            (user_id, paystack_subscription_code, plan, status, events_limit, domains_limit, current_period_end)
+        VALUES ($1, $2, $3, 'active', $4, $5, $6)
+        ON CONFLICT (user_id) DO UPDATE SET
+            paystack_subscription_code = $2,
+            plan                       = $3,
+            status                     = 'active',
+            events_limit               = $4,
+            domains_limit              = $5,
+            current_period_end         = $6,
+            updated_at                 = NOW()
+    `, [userId, reference, plan, tier.eventsLimit, tier.domainsLimit, periodEnd]);
+}
 
 export default router;

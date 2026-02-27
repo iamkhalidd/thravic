@@ -30,19 +30,25 @@ const plans = [
         id: 'free',
         name: 'Free',
         price: 0,
-        features: ['1 domain', '1,000 events/mo', '7-day history', 'Basic analytics']
+        features: ['1 domain', '10,000 events/mo', '7-day history', 'Basic analytics']
+    },
+    {
+        id: 'growth',
+        name: 'Growth',
+        price: 39,
+        features: ['5 domains', '250,000 events/mo', '90-day history', 'Heatmaps', 'AI Insights', 'CSV Export']
     },
     {
         id: 'pro',
         name: 'Pro',
-        price: 29,
-        features: ['5 domains', '50,000 events/mo', '30-day history', 'Heatmaps', 'Funnels', 'Session recordings']
+        price: 99,
+        features: ['20 domains', '2M events/mo', '1-year history', 'Funnels', 'Session recordings', 'A/B Experiments', 'Team members']
     },
     {
         id: 'enterprise',
         name: 'Enterprise',
-        price: 99,
-        features: ['Unlimited domains', 'Unlimited events', '1-year history', 'AI insights', 'Priority support', 'Custom integrations']
+        price: 299,
+        features: ['Unlimited domains', 'Unlimited events', '1-year history', 'Everything in Pro', 'Priority support', 'Custom integrations']
     }
 ];
 

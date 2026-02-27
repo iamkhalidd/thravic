@@ -2,6 +2,9 @@ import { Router, Response } from 'express';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import * as domainService from '../services/domainService';
 import * as eventService from '../services/eventService';
+import { createLogger } from '../config/logger';
+
+const log = createLogger('Sources');
 import * as sessionService from '../services/sessionService';
 
 const router = Router();
@@ -72,7 +75,7 @@ router.get('/:domainId/referrers', authenticate, async (req: AuthRequest, res: R
             }))
         });
     } catch (error) {
-        console.error('Referrers error:', error);
+        log.error('Referrers error', error);
         res.status(500).json({ error: 'Failed to get referrer data' });
     }
 });
@@ -114,7 +117,7 @@ router.get('/:domainId/social', authenticate, async (req: AuthRequest, res: Resp
             platforms
         });
     } catch (error) {
-        console.error('Social sources error:', error);
+        log.error('Social sources error', error);
         res.status(500).json({ error: 'Failed to get social data' });
     }
 });
@@ -160,7 +163,7 @@ router.get('/:domainId/search', authenticate, async (req: AuthRequest, res: Resp
             }))
         });
     } catch (error) {
-        console.error('Search sources error:', error);
+        log.error('Search sources error', error);
         res.status(500).json({ error: 'Failed to get search data' });
     }
 });
@@ -222,7 +225,7 @@ router.get('/:domainId/campaigns', authenticate, async (req: AuthRequest, res: R
             campaigns
         });
     } catch (error) {
-        console.error('Campaigns error:', error);
+        log.error('Campaigns error', error);
         res.status(500).json({ error: 'Failed to get campaign data' });
     }
 });
@@ -264,7 +267,7 @@ router.get('/:domainId/overview', authenticate, async (req: AuthRequest, res: Re
             }))
         });
     } catch (error) {
-        console.error('Sources overview error:', error);
+        log.error('Sources overview error', error);
         res.status(500).json({ error: 'Failed to get sources overview' });
     }
 });

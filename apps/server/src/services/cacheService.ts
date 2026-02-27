@@ -2,6 +2,9 @@
 // TrackFlow — Redis Cache Service
 // ──────────────────────────────────────────────
 import { createClient, RedisClientType } from 'redis';
+import { createLogger } from '../config/logger';
+
+const log = createLogger('Redis');
 
 let client: RedisClientType | null = null;
 let isConnected = false;
@@ -13,24 +16,33 @@ let isConnected = false;
 export async function initRedis(): Promise<void> {
     const url = process.env.REDIS_URL;
     if (!url) {
-        console.warn('⚠️  REDIS_URL not set — caching disabled');
+        log.warn('REDIS_URL not set — caching disabled');
         return;
     }
 
     try {
         client = createClient({ url }) as RedisClientType;
         client.on('error', (err) => {
-            console.error('[Redis]', err.message);
+            if (isConnected) {
+                log.error('Connection error', err);
+            }
             isConnected = false;
         });
         client.on('connect', () => {
             isConnected = true;
         });
 
-        await client.connect();
-        console.log('✅ Redis connected');
+        // Connect with a 5-second timeout so the server doesn't hang
+        await Promise.race([
+            client.connect(),
+            new Promise<void>((_, reject) =>
+                setTimeout(() => reject(new Error('Connection timeout (5s)')), 5000)
+            )
+        ]);
+        log.info('Redis connected');
     } catch (err) {
-        console.warn('⚠️  Redis connection failed — caching disabled:', (err as Error).message);
+        log.warn('Redis connection failed — caching disabled', { error: (err as Error).message });
+        try { await client?.disconnect(); } catch { }
         client = null;
     }
 }

@@ -1,7 +1,11 @@
 import express from 'express';
 import { authenticate, AuthRequest } from '../middleware/auth';
+import { requireFeature } from '../middleware/featureGate';
 import { query } from '../db';
 import { z } from 'zod';
+import { createLogger } from '../config/logger';
+
+const log = createLogger('Export');
 
 const router = express.Router();
 
@@ -14,7 +18,7 @@ const checkDomainOwnership = async (userId: string, domainId: string) => {
 };
 
 // GET /api/export/:domainId?type=sessions
-router.get('/:domainId', authenticate, async (req: AuthRequest, res) => {
+router.get('/:domainId', authenticate, requireFeature('export'), async (req: AuthRequest, res) => {
     try {
         const { domainId } = req.params;
         const { type = 'sessions' } = req.query; // sessions or events
@@ -87,7 +91,7 @@ router.get('/:domainId', authenticate, async (req: AuthRequest, res) => {
         res.end();
 
     } catch (error) {
-        console.error('Export error:', error);
+        log.error('Export error', error);
         res.status(500).json({ error: 'Failed to export data' });
     }
 });

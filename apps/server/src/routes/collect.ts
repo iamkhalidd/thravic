@@ -1,5 +1,6 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
+import rateLimit from 'express-rate-limit';
 import { checkIp } from '../services/geoService';
 import * as eventService from '../services/eventService';
 import * as sessionService from '../services/sessionService';
@@ -8,12 +9,44 @@ import * as domainService from '../services/domainService';
 
 import { eventSchema, batchSchema } from '../validators/collect';
 import { triggerWebhooks } from '../services/webhookService';
+import { createLogger } from '../config/logger';
+
+const log = createLogger('Collect');
 
 const router = Router();
 
+// ── Open CORS for collect endpoints ──────────────────────────────────────────
+// The collect route is intentionally open to ALL origins because customer
+// websites embed the tracking script and POST events from their own domains.
+// This is separate from the strict whitelist CORS applied to the rest of the API.
+// ─────────────────────────────────────────────────────────────────────────────
+const openCors = (req: Request, res: Response, next: NextFunction): void => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    // sendBeacon sends Content-Type: application/json — allow it
+    if (req.method === 'OPTIONS') {
+        res.setHeader('Access-Control-Max-Age', '600'); // cache preflight 10 min
+        res.status(204).end();
+        return;
+    }
+    next();
+};
+
+// Apply open CORS to all collect sub-routes
+router.use(openCors);
+
+// Rate limit: max 100 collect requests per IP per minute
+const collectLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 100,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many requests, slow down' },
+});
 
 // ── POST /api/collect/:trackingId ───────────
-router.post('/:trackingId', async (req: Request, res: Response) => {
+router.post('/:trackingId', collectLimiter, async (req: Request, res: Response) => {
     try {
         const { trackingId } = req.params;
 
@@ -86,14 +119,14 @@ router.post('/:trackingId', async (req: Request, res: Response) => {
         if (error instanceof z.ZodError) {
             return res.status(400).json({ error: 'Invalid event data', details: error.errors });
         }
-        console.error('Collect error:', error);
+        log.error('Collect error', error);
         res.status(500).json({ error: 'Failed to process event' });
     }
 });
 
 
 // ── POST /api/collect/:trackingId/batch ─────
-router.post('/:trackingId/batch', async (req: Request, res: Response) => {
+router.post('/:trackingId/batch', collectLimiter, async (req: Request, res: Response) => {
     try {
         const { trackingId } = req.params;
 
@@ -159,7 +192,7 @@ router.post('/:trackingId/batch', async (req: Request, res: Response) => {
         if (error instanceof z.ZodError) {
             return res.status(400).json({ error: 'Invalid batch data', details: error.errors });
         }
-        console.error('Batch collect error:', error);
+        log.error('Batch collect error', error);
         res.status(500).json({ error: 'Failed to process events' });
     }
 });
@@ -179,7 +212,7 @@ router.get('/realtime/:trackingId', async (req: Request, res: Response) => {
             trackingId: req.params.trackingId
         });
     } catch (error) {
-        console.error('Realtime error:', error);
+        log.error('Realtime error', error);
         res.status(500).json({ error: 'Failed to get realtime data' });
     }
 });

@@ -33,6 +33,8 @@ import { auth, domains } from '@/lib/api';
 import { DomainProvider, useDomain } from '@/contexts/DomainContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { DateRangeProvider, useDateRange, datePresets } from '@/contexts/DateRangeContext';
+import { AnnouncementBanner } from '@/components/AnnouncementBanner';
+import { ImpersonationBanner } from '@/components/ImpersonationBanner';
 
 // Hierarchical navigation structure per spec
 const navStructure = [
@@ -463,6 +465,10 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                 flexDirection: 'column',
                 minHeight: '100vh'
             }} className="main-content">
+                {/* System banners — shown above everything else */}
+                <ImpersonationBanner />
+                <AnnouncementBanner />
+
                 {/* Global Controls Bar */}
                 <header style={{
                     display: 'flex',

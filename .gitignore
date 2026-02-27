@@ -4,10 +4,14 @@ dist/
 .env
 .env.local
 .env.*.local
+.env.test
 *.log
 npm-debug.log*
 .DS_Store
 coverage/
 .turbo/
 .vercel
+tsconfig.tsbuildinfo
+lint-output.txt
+create-admin.js
 

@@ -1,5 +1,6 @@
 import express from 'express';
 import { authenticate, AuthRequest } from '../middleware/auth';
+import { requireFeature } from '../middleware/featureGate';
 import { query, queryOne } from '../db';
 import { z } from 'zod';
 
@@ -33,7 +34,7 @@ const checkDomainAccess = async (req: AuthRequest, res: express.Response, next: 
 };
 
 // GET /api/experiments/:domainId
-router.get('/:domainId', authenticate, checkDomainAccess, async (req, res) => {
+router.get('/:domainId', authenticate, requireFeature('experiments'), checkDomainAccess, async (req, res) => {
     const { domainId } = req.params;
     const experiments = await query(
         'SELECT * FROM experiments WHERE domain_id = $1 ORDER BY created_at DESC',
@@ -43,7 +44,7 @@ router.get('/:domainId', authenticate, checkDomainAccess, async (req, res) => {
 });
 
 // POST /api/experiments/:domainId
-router.post('/:domainId', authenticate, checkDomainAccess, async (req, res) => {
+router.post('/:domainId', authenticate, requireFeature('experiments'), checkDomainAccess, async (req, res) => {
     try {
         const { domainId } = req.params;
         const { name, status, variants, trafficAllocation } = experimentSchema.parse(req.body);
@@ -65,7 +66,7 @@ router.post('/:domainId', authenticate, checkDomainAccess, async (req, res) => {
 });
 
 // PUT /api/experiments/:domainId/:experimentId
-router.put('/:domainId/:experimentId', authenticate, checkDomainAccess, async (req, res) => {
+router.put('/:domainId/:experimentId', authenticate, requireFeature('experiments'), checkDomainAccess, async (req, res) => {
     try {
         const { domainId, experimentId } = req.params;
         const { name, status, variants, trafficAllocation } = experimentSchema.parse(req.body);

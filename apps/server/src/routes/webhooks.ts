@@ -1,5 +1,6 @@
 import express from 'express';
 import { authenticate, AuthRequest } from '../middleware/auth';
+import { requireFeature } from '../middleware/featureGate';
 import { query, queryOne } from '../db';
 import { z } from 'zod';
 
@@ -31,7 +32,7 @@ const checkDomainAccess = async (req: AuthRequest, res: express.Response, next: 
 };
 
 // GET /api/webhooks/:domainId
-router.get('/:domainId', authenticate, checkDomainAccess, async (req, res) => {
+router.get('/:domainId', authenticate, requireFeature('webhooks'), checkDomainAccess, async (req, res) => {
     const { domainId } = req.params;
     const webhooks = await query(
         'SELECT * FROM webhooks WHERE domain_id = $1 ORDER BY created_at DESC',
@@ -41,7 +42,7 @@ router.get('/:domainId', authenticate, checkDomainAccess, async (req, res) => {
 });
 
 // POST /api/webhooks/:domainId
-router.post('/:domainId', authenticate, checkDomainAccess, async (req, res) => {
+router.post('/:domainId', authenticate, requireFeature('webhooks'), checkDomainAccess, async (req, res) => {
     try {
         const { domainId } = req.params;
         const { url, events, secret, enabled } = webhookSchema.parse(req.body);
@@ -63,7 +64,7 @@ router.post('/:domainId', authenticate, checkDomainAccess, async (req, res) => {
 });
 
 // DELETE /api/webhooks/:domainId/:webhookId
-router.delete('/:domainId/:webhookId', authenticate, checkDomainAccess, async (req, res) => {
+router.delete('/:domainId/:webhookId', authenticate, requireFeature('webhooks'), checkDomainAccess, async (req, res) => {
     const { domainId, webhookId } = req.params;
     await query(
         'DELETE FROM webhooks WHERE id = $1 AND domain_id = $2',
