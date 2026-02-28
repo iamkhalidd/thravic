@@ -4,7 +4,7 @@
     "private": true,
     "scripts": {
         "dev": "tsx watch src/index.ts",
-        "build": "tsc",
+        "build": "tsc && node -e \"const fs=require('fs'),path=require('path');const src=path.join('src','db');const dst=path.join('dist','db');fs.readdirSync(src).filter(f=>f.endsWith('.sql')).forEach(f=>fs.copyFileSync(path.join(src,f),path.join(dst,f)));console.log('SQL files copied to dist/db')\"",
         "start": "node dist/index.js",
         "test": "jest"
     },
