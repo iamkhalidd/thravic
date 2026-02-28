@@ -77,7 +77,7 @@ export function ImpersonationBanner() {
             <ShieldAlert size={16} style={{ flexShrink: 0, color: '#f87171' }} />
             <span style={{ flex: 1 }}>
                 <strong style={{ color: '#fca5a5' }}>Admin Session</strong>
-                {' — '}Viewing as <strong>{impersonating}</strong>. Actions performed here affect this user's account.
+                {' — '}Viewing as <strong>{impersonating}</strong>. Actions performed here affect this user&apos;s account.
             </span>
             <button
                 onClick={handleExit}
