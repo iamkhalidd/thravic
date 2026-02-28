@@ -69,8 +69,8 @@ function ChangeIndicator({ value }: { value: number }) {
 // ── Overview ──
 export function OverviewView() {
     const statCards = [
-        { label: 'Total Pageviews', value: '28,450', icon: BarChart3, color: '#6366f1' },
-        { label: 'Unique Visitors', value: '8,730', icon: Users, color: '#8b5cf6' },
+        { label: 'Total Pageviews', value: '28,450', icon: BarChart3, color: '#F29F67' },
+        { label: 'Unique Visitors', value: '8,730', icon: Users, color: '#34B1AA' },
         { label: 'Bounce Rate', value: '38.2%', icon: MousePointer2, color: '#f59e0b' },
         { label: 'Avg. Session', value: '3m 24s', icon: Clock, color: '#10b981' },
     ];
@@ -104,8 +104,8 @@ export function OverviewView() {
                                 <XAxis dataKey="date" stroke="var(--color-text-muted)" fontSize={12} tickFormatter={v => new Date(v).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} tickLine={false} axisLine={false} />
                                 <YAxis stroke="var(--color-text-muted)" fontSize={12} tickLine={false} axisLine={false} />
                                 <Tooltip contentStyle={tooltipStyle} />
-                                <Line type="monotone" dataKey="pageviews" stroke="#6366f1" strokeWidth={2} dot={false} name="Pageviews" />
-                                <Line type="monotone" dataKey="visitors" stroke="#a855f7" strokeWidth={2} dot={false} name="Visitors" />
+                                <Line type="monotone" dataKey="pageviews" stroke="#F29F67" strokeWidth={2} dot={false} name="Pageviews" />
+                                <Line type="monotone" dataKey="visitors" stroke="#34B1AA" strokeWidth={2} dot={false} name="Visitors" />
                             </LineChart>
                         </ResponsiveContainer>
                     </div>
@@ -187,7 +187,7 @@ export function TrafficSourcesView() {
                                 <XAxis type="number" stroke="var(--color-text-muted)" fontSize={12} />
                                 <YAxis type="category" dataKey="source" stroke="var(--color-text-muted)" fontSize={12} width={120} />
                                 <Tooltip contentStyle={tooltipStyle} />
-                                <Bar dataKey="visitors" fill="#6366f1" radius={[0, 4, 4, 0]} />
+                                <Bar dataKey="visitors" fill="#F29F67" radius={[0, 4, 4, 0]} />
                             </BarChart>
                         </ResponsiveContainer>
                     </div>
@@ -226,7 +226,7 @@ export function TrafficSourcesView() {
                         {data.trafficSources.map((s, i) => (
                             <tr key={i}>
                                 <td style={{ ...tdStyle, fontWeight: 500 }}><div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><ExternalLink size={12} style={{ color: 'var(--color-primary)' }} />{s.source}</div></td>
-                                <td style={tdStyle}><span style={{ ...badgeStyle, background: 'rgba(99,102,241,0.1)', color: 'var(--color-primary)' }}>{s.type}</span></td>
+                                <td style={tdStyle}><span style={{ ...badgeStyle, background: 'rgba(242,159,103,0.1)', color: 'var(--color-primary)' }}>{s.type}</span></td>
                                 <td style={tdStyle}>{s.visitors.toLocaleString()}</td>
                                 <td style={tdStyle}>{s.pageviews.toLocaleString()}</td>
                                 <td style={tdStyle}>{s.bounceRate}%</td>
@@ -248,7 +248,7 @@ export function CampaignsView() {
             <h2 style={{ margin: '0 0 var(--space-lg)', fontSize: '1.25rem' }}>Campaigns</h2>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 'var(--space-md)', marginBottom: 'var(--space-xl)' }}>
                 {[
-                    { label: 'Total Visitors', value: '9,200', color: '#6366f1' },
+                    { label: 'Total Visitors', value: '9,200', color: '#F29F67' },
                     { label: 'Total Conversions', value: '667', color: '#10b981' },
                     { label: 'Avg. Conversion Rate', value: '7.7%', color: '#f59e0b' },
                 ].map((s, i) => (
@@ -315,8 +315,8 @@ export function TrendsView() {
                             <XAxis dataKey="date" stroke="var(--color-text-muted)" fontSize={12} tickFormatter={v => new Date(v).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} tickLine={false} axisLine={false} />
                             <YAxis stroke="var(--color-text-muted)" fontSize={12} tickLine={false} axisLine={false} />
                             <Tooltip contentStyle={tooltipStyle} />
-                            <Area type="monotone" dataKey="pageviews" stroke="#6366f1" fill="rgba(99,102,241,0.1)" strokeWidth={2} name="Pageviews" />
-                            <Area type="monotone" dataKey="visitors" stroke="#a855f7" fill="rgba(168,85,247,0.1)" strokeWidth={2} name="Visitors" />
+                            <Area type="monotone" dataKey="pageviews" stroke="#F29F67" fill="rgba(242,159,103,0.1)" strokeWidth={2} name="Pageviews" />
+                            <Area type="monotone" dataKey="visitors" stroke="#34B1AA" fill="rgba(52,177,170,0.1)" strokeWidth={2} name="Visitors" />
                         </AreaChart>
                     </ResponsiveContainer>
                 </div>
@@ -370,7 +370,7 @@ export function FunnelsView() {
             <h2 style={{ margin: '0 0 var(--space-lg)', fontSize: '1.25rem' }}>Funnels</h2>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 'var(--space-md)', marginBottom: 'var(--space-xl)' }}>
                 {[
-                    { label: 'Total Entries', value: '5,200', color: '#6366f1' },
+                    { label: 'Total Entries', value: '5,200', color: '#F29F67' },
                     { label: 'Completed', value: '524', color: '#10b981' },
                     { label: 'Overall Conversion', value: '10.1%', color: '#f59e0b' },
                 ].map((s, i) => (
@@ -398,7 +398,7 @@ export function FunnelsView() {
                                     </div>
                                 </div>
                                 <div style={{ height: '32px', background: 'var(--color-bg-tertiary)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
-                                    <div style={{ height: '100%', width: `${width}%`, background: `linear-gradient(90deg, #6366f1, #a855f7)`, borderRadius: 'var(--radius-md)', transition: 'width 0.8s ease', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: 'var(--space-sm)' }}>
+                                    <div style={{ height: '100%', width: `${width}%`, background: `linear-gradient(90deg, #F29F67, #E0B50F)`, borderRadius: 'var(--radius-md)', transition: 'width 0.8s ease', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: 'var(--space-sm)' }}>
                                         <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'white' }}>{step.rate}%</span>
                                     </div>
                                 </div>
@@ -422,7 +422,7 @@ export function HeatmapsView() {
                 ))}
                 <div style={{ marginLeft: 'auto', display: 'flex', gap: 'var(--space-sm)' }}>
                     {[{ icon: Monitor, label: 'Desktop' }, { icon: Tablet, label: 'Tablet' }, { icon: Smartphone, label: 'Mobile' }].map((d, i) => (
-                        <button key={d.label} style={{ padding: 'var(--space-xs) var(--space-sm)', background: i === 0 ? 'rgba(99,102,241,0.1)' : 'var(--color-bg-tertiary)', border: '1px solid ' + (i === 0 ? 'var(--color-primary)' : 'var(--color-border)'), borderRadius: 'var(--radius-md)', color: i === 0 ? 'var(--color-primary)' : 'var(--color-text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.8125rem' }}>
+                        <button key={d.label} style={{ padding: 'var(--space-xs) var(--space-sm)', background: i === 0 ? 'rgba(242,159,103,0.1)' : 'var(--color-bg-tertiary)', border: '1px solid ' + (i === 0 ? 'var(--color-primary)' : 'var(--color-border)'), borderRadius: 'var(--radius-md)', color: i === 0 ? 'var(--color-primary)' : 'var(--color-text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.8125rem' }}>
                             <d.icon size={14} /> {d.label}
                         </button>
                     ))}

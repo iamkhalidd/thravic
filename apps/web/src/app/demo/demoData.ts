@@ -18,12 +18,12 @@ export const trafficData = [
 ];
 
 export const sourceData = [
-    { name: 'Direct', value: 3240, color: '#6366f1' },
-    { name: 'Organic', value: 2180, color: '#8b5cf6' },
-    { name: 'Social', value: 1560, color: '#a855f7' },
-    { name: 'Referral', value: 890, color: '#d946ef' },
-    { name: 'Paid', value: 520, color: '#ec4899' },
-    { name: 'Email', value: 340, color: '#f43f5e' },
+    { name: 'Direct', value: 3240, color: '#F29F67' },
+    { name: 'Organic', value: 2180, color: '#E0B50F' },
+    { name: 'Social', value: 1560, color: '#34B1AA' },
+    { name: 'Referral', value: 890, color: '#3B8FF3' },
+    { name: 'Paid', value: 520, color: '#10b981' },
+    { name: 'Email', value: 340, color: '#f59e0b' },
 ];
 
 export const topPages = [

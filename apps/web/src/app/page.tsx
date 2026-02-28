@@ -17,48 +17,48 @@ const features = [
         icon: BarChart3,
         title: 'Traffic Analytics',
         description: 'Track every visitor, session, and traffic source in real time. Get full UTM parameter support, referrer tracking, and geo-location data to understand exactly where your audience comes from and how they find you.',
-        gradient: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-        color: '#6366f1',
+        gradient: 'linear-gradient(135deg, #F29F67, #E0B50F)',
+        color: '#F29F67',
         visual: 'chart'
     },
     {
         icon: Target,
         title: 'Conversion Funnels',
         description: 'Build custom conversion funnels with unlimited steps. Identify exactly where users drop off, compare funnel performance over time, and optimize each stage to maximize conversions.',
-        gradient: 'linear-gradient(135deg, #8b5cf6, #a855f7)',
-        color: '#8b5cf6',
+        gradient: 'linear-gradient(135deg, #E0B50F, #34B1AA)',
+        color: '#E0B50F',
         visual: 'funnel'
     },
     {
         icon: MousePointer2,
         title: 'Click & Scroll Heatmaps',
         description: 'See exactly where users click, tap, and scroll on every page. Identify dead zones, discover unexpected interaction patterns, and optimize your layouts based on real behavioral data.',
-        gradient: 'linear-gradient(135deg, #a855f7, #d946ef)',
-        color: '#a855f7',
+        gradient: 'linear-gradient(135deg, #34B1AA, #3B8FF3)',
+        color: '#34B1AA',
         visual: 'heatmap'
     },
     {
         icon: Video,
         title: 'Session Recordings',
         description: 'Watch privacy-safe replays of real user sessions. See every mouse movement, click, and scroll. Filter recordings by page, device, duration, or custom events to find exactly what you need.',
-        gradient: 'linear-gradient(135deg, #d946ef, #ec4899)',
-        color: '#d946ef',
+        gradient: 'linear-gradient(135deg, #3B8FF3, #F29F67)',
+        color: '#3B8FF3',
         visual: 'recording'
     },
     {
         icon: Sparkles,
         title: 'AI-Powered Insights',
         description: 'Let machine learning surface anomalies, predict trends, and suggest optimizations automatically. Get actionable recommendations delivered to your dashboard — no data science degree required.',
-        gradient: 'linear-gradient(135deg, #ec4899, #f43f5e)',
-        color: '#ec4899',
+        gradient: 'linear-gradient(135deg, #F29F67, #E0B50F)',
+        color: '#F29F67',
         visual: 'ai'
     },
     {
         icon: Globe,
         title: 'Multi-Domain Management',
         description: 'Manage all your websites from a single dashboard. Compare metrics across domains, share team access, and maintain separate tracking configurations — all from one account.',
-        gradient: 'linear-gradient(135deg, #f43f5e, #6366f1)',
-        color: '#f43f5e',
+        gradient: 'linear-gradient(135deg, #E0B50F, #34B1AA)',
+        color: '#E0B50F',
         visual: 'domains'
     }
 ];
@@ -111,7 +111,7 @@ function MiniChart() {
             {bars.map((h, i) => (
                 <div key={i} style={{
                     flex: 1, height: `${h}%`,
-                    background: `linear-gradient(180deg, #6366f1, #a855f7)`,
+                    background: `linear-gradient(180deg, #F29F67, #E0B50F)`,
                     borderRadius: '4px 4px 0 0', opacity: 0.7 + (i / bars.length) * 0.3,
                     animation: `barGrow 0.6s ease ${i * 0.08}s both`,
                     transformOrigin: 'bottom'
@@ -122,7 +122,7 @@ function MiniChart() {
 }
 
 function MiniFunnel() {
-    const steps = [{ w: 100, c: '#6366f1' }, { w: 72, c: '#8b5cf6' }, { w: 45, c: '#a855f7' }, { w: 28, c: '#d946ef' }];
+    const steps = [{ w: 100, c: '#F29F67' }, { w: 72, c: '#E0B50F' }, { w: 45, c: '#34B1AA' }, { w: 28, c: '#3B8FF3' }];
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', padding: 'var(--space-md)', alignItems: 'center' }}>
             {steps.map((s, i) => (
@@ -166,9 +166,9 @@ function MiniRecording() {
     return (
         <div style={{ padding: 'var(--space-sm)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', background: 'var(--color-bg-tertiary)', borderRadius: 'var(--radius-md)' }}>
-                <Play size={14} style={{ color: '#d946ef' }} />
+                <Play size={14} style={{ color: '#3B8FF3' }} />
                 <div style={{ flex: 1, height: '4px', background: 'var(--color-bg-secondary)', borderRadius: '2px', overflow: 'hidden' }}>
-                    <div style={{ width: '65%', height: '100%', background: '#d946ef', borderRadius: '2px' }} />
+                    <div style={{ width: '65%', height: '100%', background: '#3B8FF3', borderRadius: '2px' }} />
                 </div>
                 <span style={{ fontSize: '0.7rem', color: 'var(--color-text-tertiary)' }}>2:34</span>
             </div>
@@ -187,7 +187,7 @@ function MiniAI() {
     const items = [
         { label: 'Traffic surge +42%', color: '#22c55e', icon: '📈' },
         { label: 'Bounce spike on /pricing', color: '#ef4444', icon: '⚠️' },
-        { label: 'Opportunity: Product Hunt', color: '#6366f1', icon: '💡' },
+        { label: 'Opportunity: Product Hunt', color: '#F29F67', icon: '💡' },
     ];
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: 'var(--space-sm)' }}>
@@ -215,7 +215,7 @@ function MiniDomains() {
                     background: 'var(--color-bg-tertiary)', borderRadius: 'var(--radius-md)',
                     animation: `fadeInRight 0.4s ease ${i * 0.1}s both`
                 }}>
-                    <Globe size={14} style={{ color: '#f43f5e' }} />
+                    <Globe size={14} style={{ color: '#E0B50F' }} />
                     <span style={{ fontSize: '0.8rem', fontWeight: 500 }}>{d}</span>
                     <span style={{ marginLeft: 'auto', fontSize: '0.7rem', color: 'var(--color-text-tertiary)' }}>{['12.4k', '8.2k', '5.1k'][i]} visits</span>
                 </div>
@@ -385,17 +385,17 @@ export default function HomePage() {
                 <div style={{
                     position: 'absolute', top: '-20%', left: '50%', transform: 'translateX(-50%)',
                     width: '140%', height: '80%',
-                    background: 'radial-gradient(ellipse at center, rgba(99, 102, 241, 0.15), transparent 70%)',
+                    background: 'radial-gradient(ellipse at center, rgba(242, 159, 103, 0.12), transparent 70%)',
                     pointerEvents: 'none'
                 }} />
                 <div style={{
                     position: 'absolute', top: '20%', left: '5%', width: '300px', height: '300px',
-                    background: 'radial-gradient(circle, rgba(168, 85, 247, 0.08), transparent 70%)',
+                    background: 'radial-gradient(circle, rgba(52, 177, 170, 0.08), transparent 70%)',
                     borderRadius: '50%', animation: 'float 8s ease-in-out infinite', pointerEvents: 'none'
                 }} />
                 <div style={{
                     position: 'absolute', bottom: '20%', right: '5%', width: '250px', height: '250px',
-                    background: 'radial-gradient(circle, rgba(236, 72, 153, 0.08), transparent 70%)',
+                    background: 'radial-gradient(circle, rgba(224, 181, 15, 0.08), transparent 70%)',
                     borderRadius: '50%', animation: 'float 10s ease-in-out 2s infinite', pointerEvents: 'none'
                 }} />
 
@@ -424,7 +424,7 @@ export default function HomePage() {
                         Understand Your Traffic.
                         <br />
                         <span style={{
-                            background: 'linear-gradient(135deg, #6366f1, #a855f7, #ec4899, #6366f1)',
+                            background: 'linear-gradient(135deg, #F29F67, #E0B50F, #34B1AA, #F29F67)',
                             backgroundSize: '200% auto',
                             WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
                             backgroundClip: 'text',
@@ -454,7 +454,7 @@ export default function HomePage() {
                             padding: '1rem 2rem', background: 'var(--gradient-primary)', color: 'white',
                             textDecoration: 'none', borderRadius: 'var(--radius-lg)', fontSize: '1rem',
                             fontWeight: 600, display: 'flex', alignItems: 'center', gap: 'var(--space-sm)',
-                            boxShadow: '0 4px 20px rgba(99, 102, 241, 0.4)', transition: 'transform 0.2s, box-shadow 0.2s'
+                            boxShadow: '0 4px 20px rgba(242, 159, 103, 0.4)', transition: 'transform 0.2s, box-shadow 0.2s'
                         }}>Start Free <ArrowRight size={18} /></Link>
                         <Link href="/demo" style={{
                             padding: '1rem 2rem', background: 'rgba(255, 255, 255, 0.05)',
@@ -469,9 +469,9 @@ export default function HomePage() {
                     <div style={{
                         animation: 'slideInFromBottom 1s ease 0.5s both',
                         padding: '3px',
-                        background: 'linear-gradient(135deg, #6366f1, #a855f7, #ec4899)',
+                        background: 'linear-gradient(135deg, #F29F67, #E0B50F, #34B1AA)',
                         borderRadius: 'var(--radius-xl)',
-                        boxShadow: '0 25px 80px -20px rgba(99, 102, 241, 0.5)',
+                        boxShadow: '0 25px 80px -20px rgba(242, 159, 103, 0.5)',
                         maxWidth: '1000px', margin: '0 auto'
                     }}>
                         <div style={{
@@ -526,7 +526,7 @@ export default function HomePage() {
                                     return (
                                         <div key={i} style={{
                                             flex: 1, height: `${height}%`,
-                                            background: 'linear-gradient(180deg, #6366f1, #a855f7)',
+                                            background: 'linear-gradient(180deg, #F29F67, #E0B50F)',
                                             borderRadius: '2px', opacity: 0.6 + (i / 30) * 0.4,
                                             animation: `barGrow 0.8s ease ${0.6 + i * 0.03}s both`,
                                             transformOrigin: 'bottom'
@@ -635,7 +635,7 @@ export default function HomePage() {
                         {/* Connector Line */}
                         <div style={{
                             position: 'absolute', top: '60px', left: '20%', right: '20%', height: '2px',
-                            background: 'linear-gradient(90deg, var(--color-primary), #a855f7, #ec4899)',
+                            background: 'linear-gradient(90deg, #F29F67, #E0B50F, #34B1AA)',
                             opacity: 0.3, zIndex: 0
                         }} />
                         {howItWorks.map((step, i) => {
@@ -648,7 +648,7 @@ export default function HomePage() {
                                             background: 'var(--gradient-primary)',
                                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                                             margin: '0 auto var(--space-lg)',
-                                            boxShadow: '0 8px 25px rgba(99, 102, 241, 0.3)',
+                                            boxShadow: '0 8px 25px rgba(242, 159, 103, 0.3)',
                                             fontSize: '1.5rem', fontWeight: 800, color: 'white'
                                         }}>
                                             <Icon size={28} />
@@ -681,12 +681,12 @@ export default function HomePage() {
                                 color: 'var(--color-text-secondary)', whiteSpace: 'pre-wrap', margin: 0, lineHeight: 1.8
                             }}>
                                 <span style={{ color: 'var(--color-text-tertiary)' }}>&lt;</span>
-                                <span style={{ color: '#ec4899' }}>script</span>
-                                <span style={{ color: '#6366f1' }}> src</span>
+                                <span style={{ color: '#F29F67' }}>script</span>
+                                <span style={{ color: '#3B8FF3' }}> src</span>
                                 <span style={{ color: 'var(--color-text-tertiary)' }}>=</span>
                                 <span style={{ color: '#22c55e' }}>&quot;https://cdn.trackflow.io/t.js&quot;</span>
                                 <span style={{ color: 'var(--color-text-tertiary)' }}>&gt;&lt;/</span>
-                                <span style={{ color: '#ec4899' }}>script</span>
+                                <span style={{ color: '#F29F67' }}>script</span>
                                 <span style={{ color: 'var(--color-text-tertiary)' }}>&gt;</span>
                             </pre>
                         </div>
@@ -770,7 +770,7 @@ export default function HomePage() {
                                     background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-xl)',
                                     border: tier.highlighted ? '2px solid var(--color-primary)' : '1px solid var(--color-border)',
                                     padding: 'var(--space-xl)', position: 'relative',
-                                    boxShadow: tier.highlighted ? '0 20px 40px rgba(99, 102, 241, 0.2)' : 'none',
+                                    boxShadow: tier.highlighted ? '0 20px 40px rgba(242, 159, 103, 0.2)' : 'none',
                                     transition: 'transform 0.3s, box-shadow 0.3s'
                                 }}>
                                     {tier.highlighted && (

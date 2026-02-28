@@ -13,7 +13,7 @@ interface Announcement {
 const DISMISS_KEY = 'tf_announcement_dismissed';
 
 const SEVERITY_STYLES: Record<Severity, { bg: string; border: string; color: string; icon: typeof Info }> = {
-    info:     { bg: 'rgba(99,102,241,0.12)',  border: '#6366f1', color: '#a5b4fc', icon: Info          },
+    info:     { bg: 'rgba(59,143,243,0.12)',  border: '#3B8FF3', color: '#93c5fd', icon: Info          },
     warning:  { bg: 'rgba(245,158,11,0.12)',  border: '#f59e0b', color: '#fcd34d', icon: AlertTriangle  },
     critical: { bg: 'rgba(239,68,68,0.12)',   border: '#ef4444', color: '#fca5a5', icon: AlertCircle   },
 };

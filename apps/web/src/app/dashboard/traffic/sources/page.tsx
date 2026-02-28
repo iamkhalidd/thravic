@@ -16,12 +16,12 @@ import { useDomain } from '@/contexts/DomainContext';
 
 // Channel icons and colors
 const channels = {
-    direct: { label: 'Direct', color: '#6366f1' },
+    direct: { label: 'Direct', color: '#F29F67' },
     organic: { label: 'Organic Search', color: '#22c55e' },
     paid: { label: 'Paid Search', color: '#f59e0b' },
-    social: { label: 'Social', color: '#ec4899' },
-    referral: { label: 'Referral', color: '#8b5cf6' },
-    email: { label: 'Email', color: '#06b6d4' }
+    social: { label: 'Social', color: '#34B1AA' },
+    referral: { label: 'Referral', color: '#3B8FF3' },
+    email: { label: 'Email', color: '#E0B50F' }
 };
 
 export default function TrafficSourcesPage() {

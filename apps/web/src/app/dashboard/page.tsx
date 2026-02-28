@@ -27,7 +27,7 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, 
 import { analytics, domains } from '@/lib/api';
 import type { Metrics, TopPage, TimeseriesData, RealtimeData, Domain } from '@/types';
 
-const sourceColors = ['#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899', '#f43f5e'];
+const sourceColors = ['#F29F67', '#E0B50F', '#34B1AA', '#3B8FF3', '#10b981', '#ef4444'];
 
 export default function DashboardPage() {
     const [domainList, setDomainList] = useState<Domain[]>([]);
@@ -207,8 +207,8 @@ export default function DashboardPage() {
     }
 
     const statCards = [
-        { label: 'Total Pageviews', value: metrics?.pageviews.toLocaleString() || '0', icon: BarChart3, color: '#6366f1' },
-        { label: 'Unique Visitors', value: metrics?.uniqueVisitors.toLocaleString() || '0', icon: Users, color: '#8b5cf6' },
+        { label: 'Total Pageviews', value: metrics?.pageviews.toLocaleString() || '0', icon: BarChart3, color: '#F29F67' },
+        { label: 'Unique Visitors', value: metrics?.uniqueVisitors.toLocaleString() || '0', icon: Users, color: '#34B1AA' },
         { label: 'Bounce Rate', value: `${metrics?.bounceRate || 0}%`, icon: MousePointer2, color: '#f59e0b' },
         { label: 'Avg. Session', value: formatDuration(metrics?.avgSessionDuration || 0), icon: Clock, color: '#10b981' }
     ];
@@ -399,8 +399,8 @@ export default function DashboardPage() {
                                             borderRadius: 'var(--radius-md)'
                                         }}
                                     />
-                                    <Line type="monotone" dataKey="pageviews" stroke="#6366f1" strokeWidth={2} dot={false} name="Pageviews" />
-                                    <Line type="monotone" dataKey="visitors" stroke="#a855f7" strokeWidth={2} dot={false} name="Visitors" />
+                                    <Line type="monotone" dataKey="pageviews" stroke="#F29F67" strokeWidth={2} dot={false} name="Pageviews" />
+                                    <Line type="monotone" dataKey="visitors" stroke="#34B1AA" strokeWidth={2} dot={false} name="Visitors" />
                                 </LineChart>
                             </ResponsiveContainer>
                         ) : (

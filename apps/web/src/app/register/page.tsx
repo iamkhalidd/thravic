@@ -39,7 +39,7 @@ export default function RegisterPage() {
             alignItems: 'center',
             justifyContent: 'center',
             background: `
-        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(99, 102, 241, 0.15), transparent),
+        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(242, 159, 103, 0.15), transparent),
         var(--color-bg-primary)
       `
         }}>
