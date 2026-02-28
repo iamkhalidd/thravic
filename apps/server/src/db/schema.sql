@@ -284,8 +284,9 @@ END $$;
 -- Default system settings
 -- ═══════════════════════════════════════════════
 INSERT INTO system_settings (key, value) VALUES
-    ('registration_enabled', 'true'::jsonb),
-    ('maintenance_mode', 'false'::jsonb),
+    ('registration.enabled', 'true'::jsonb),
+    ('maintenance.enabled', 'false'::jsonb),
+    ('tracking.enabled', 'true'::jsonb),
     ('require_email_verification', 'false'::jsonb),
     ('feature_flags', '{"ai_insights": true, "recordings": true, "heatmaps": true, "experiments": true}'::jsonb)
 ON CONFLICT (key) DO NOTHING;
