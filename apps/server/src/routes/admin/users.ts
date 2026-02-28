@@ -137,6 +137,24 @@ router.patch('/:id', adminAuth, async (req: AuthRequest, res: Response) => {
             params
         );
 
+        // Sync the subscriptions table when plan changes
+        if (subscription && user) {
+            const PLAN_LIMITS: Record<string, { events: number; domains: number }> = {
+                free:       { events: 10_000,     domains: 1  },
+                growth:     { events: 250_000,    domains: 5  },
+                pro:        { events: 2_000_000,  domains: 20 },
+                enterprise: { events: -1,         domains: -1 },
+            };
+            const limits = PLAN_LIMITS[subscription] ?? PLAN_LIMITS.free;
+            await query(
+                `INSERT INTO subscriptions (user_id, plan, status, events_limit, domains_limit)
+                 VALUES ($1, $2, 'active', $3, $4)
+                 ON CONFLICT (user_id) DO UPDATE
+                   SET plan = $2, events_limit = $3, domains_limit = $4, updated_at = NOW()`,
+                [req.params.id, subscription, limits.events, limits.domains]
+            );
+        }
+
         await logAction({
             adminId: req.userId!,
             action: 'user.update',
