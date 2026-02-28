@@ -5,7 +5,7 @@ import { api } from '@/lib/api';
 import { Server, Database, Cpu, HardDrive, RefreshCw } from 'lucide-react';
 
 interface HealthData {
-    server: { uptime: number; uptimeFormatted: string; nodeVersion: string; platform: string; pid: number; env: string };
+    server: { uptime: number; uptimeFormatted: string; restartedAt: string; nodeVersion: string; platform: string; pid: number; env: string };
     memory: { rss: string; heapUsed: string; heapTotal: string; external: string };
     database: { pool: { totalCount: number; idleCount: number; waitingCount: number }; size: string; connected: boolean };
 }
