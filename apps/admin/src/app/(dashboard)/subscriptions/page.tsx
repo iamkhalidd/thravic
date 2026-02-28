@@ -86,19 +86,25 @@ export default function SubscriptionsPage() {
 
                 <div className="card">
                     <div className="card-title" style={{ marginBottom: 'var(--space-sm)' }}>Plan Distribution</div>
-                    <ResponsiveContainer width="100%" height={120}>
-                        <PieChart>
-                            <Pie data={pieData.map(r => ({ name: r.plan, value: parseInt(r.count) }))} cx="50%" cy="50%" innerRadius={35} outerRadius={50} dataKey="value">
-                                {pieData.map((r, i) => <Cell key={i} fill={PLAN_COLORS[r.plan] || '#666'} />)}
-                            </Pie>
-                            <Tooltip contentStyle={{ background: 'var(--color-bg-tertiary)', border: '1px solid var(--color-border)', borderRadius: '8px', color: 'var(--color-text-primary)' }} />
-                        </PieChart>
-                    </ResponsiveContainer>
+                    {pieData.length === 0 ? (
+                        <div style={{ height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-muted)', fontSize: '13px' }}>No paid subscribers yet</div>
+                    ) : (
+                        <ResponsiveContainer width="100%" height={120}>
+                            <PieChart>
+                                <Pie data={pieData.map(r => ({ name: r.plan, value: parseInt(r.count) }))} cx="50%" cy="50%" innerRadius={35} outerRadius={50} dataKey="value">
+                                    {pieData.map((r, i) => <Cell key={i} fill={PLAN_COLORS[r.plan] || '#666'} />)}
+                                </Pie>
+                                <Tooltip contentStyle={{ background: 'var(--color-bg-tertiary)', border: '1px solid var(--color-border)', borderRadius: '8px', color: 'var(--color-text-primary)' }} />
+                            </PieChart>
+                        </ResponsiveContainer>
+                    )}
                 </div>
 
                 <div className="card">
                     <div className="card-title" style={{ marginBottom: 'var(--space-sm)' }}>Revenue by Plan</div>
-                    {revenue.map(r => (
+                    {revenue.length === 0 ? (
+                        <div style={{ height: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-muted)', fontSize: '13px' }}>No revenue data yet</div>
+                    ) : revenue.map(r => (
                         <div key={r.plan} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontSize: '14px' }}>
                             <span><span className={`badge badge-${r.plan}`}>{r.plan}</span></span>
                             <span style={{ color: 'var(--color-text-primary)' }}>{r.count} subs — ${parseFloat(r.revenue || '0').toLocaleString()}</span>

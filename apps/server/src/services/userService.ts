@@ -27,7 +27,19 @@ export async function createUser(
          RETURNING *`,
         [email, password, name]
     );
-    return rows[0] ?? null;
+    const user = rows[0] ?? null;
+
+    // Auto-create a free subscription row so billing/admin pages show the user
+    if (user) {
+        await query(
+            `INSERT INTO subscriptions (user_id, plan, status, events_limit, domains_limit)
+             VALUES ($1, 'free', 'active', 10000, 1)
+             ON CONFLICT (user_id) DO NOTHING`,
+            [user.id]
+        ).catch(() => { /* non-fatal — subscription can be created later */ });
+    }
+
+    return user;
 }
 
 export async function updatePassword(
