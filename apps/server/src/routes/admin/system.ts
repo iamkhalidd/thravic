@@ -14,6 +14,13 @@ router.get('/health', adminAuth, async (req: AuthRequest, res: Response) => {
         const memoryUsage = process.memoryUsage();
         const uptime = process.uptime();
 
+        // Real DB connectivity check
+        let dbConnected = false;
+        try {
+            await pool.query('SELECT 1');
+            dbConnected = true;
+        } catch { dbConnected = false; }
+
         // DB connection pool stats
         const poolStats = {
             totalCount: pool.totalCount,
@@ -26,10 +33,13 @@ router.get('/health', adminAuth, async (req: AuthRequest, res: Response) => {
             `SELECT pg_size_pretty(pg_database_size(current_database())) as size`
         );
 
+        const restartedAt = new Date(Date.now() - uptime * 1000).toISOString();
+
         res.json({
             server: {
                 uptime: Math.floor(uptime),
                 uptimeFormatted: formatUptime(uptime),
+                restartedAt,
                 nodeVersion: process.version,
                 platform: process.platform,
                 pid: process.pid,
@@ -44,7 +54,7 @@ router.get('/health', adminAuth, async (req: AuthRequest, res: Response) => {
             database: {
                 pool: poolStats,
                 size: dbSize?.size || 'unknown',
-                connected: pool.totalCount > 0
+                connected: dbConnected
             }
         });
     } catch (error) {

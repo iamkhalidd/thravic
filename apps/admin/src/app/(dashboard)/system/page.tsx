@@ -73,8 +73,10 @@ export default function SystemPage() {
                         ['Platform', health?.server.platform],
                         ['Environment', health?.server.env],
                         ['PID', health?.server.pid],
+                        ['Last Restarted', health?.server.restartedAt ? new Date(health.server.restartedAt).toLocaleString() : '—'],
                         ['RSS Memory', health?.memory.rss],
                         ['External Memory', health?.memory.external],
+                        ['DB Connected', health?.database.connected ? '✅ Yes' : '❌ No'],
                     ].map(([label, value]) => (
                         <div key={String(label)} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--color-border)', fontSize: '14px' }}>
                             <span style={{ color: 'var(--color-text-secondary)' }}>{label}</span>
