@@ -472,32 +472,35 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                 {/* Top Header */}
                 <header style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    padding: '0 20px', height: '52px',
+                    padding: '0 16px', height: '52px',
                     background: 'var(--color-bg-card)',
                     borderBottom: '1px solid var(--color-border)',
                     position: 'sticky', top: 0, zIndex: 40,
+                    gap: '8px',
                 }}>
-                    {/* Mobile hamburger */}
-                    <button
-                        className="dash-hamburger"
-                        onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}
-                        title="Toggle menu"
-                    >
-                        <Menu size={18} />
-                    </button>
-                    {/* Left: date controls */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        {/* Date Range */}
+                    {/* Left: hamburger (mobile) + date controls */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1, minWidth: 0 }}>
+                        {/* Mobile hamburger */}
+                        <button
+                            className="dash-hamburger"
+                            onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}
+                            title="Toggle menu"
+                        >
+                            <Menu size={18} />
+                        </button>
+
+                        {/* Date Range — always visible */}
                         <div style={{ position: 'relative' }}>
                             <button
                                 onClick={() => setDateDropdownOpen(!dateDropdownOpen)}
                                 style={{
-                                    display: 'flex', alignItems: 'center', gap: '6px',
-                                    padding: '6px 10px',
+                                    display: 'flex', alignItems: 'center', gap: '5px',
+                                    padding: '5px 10px',
                                     background: 'var(--color-bg-primary)',
                                     border: '1px solid var(--color-border)',
                                     borderRadius: '6px', cursor: 'pointer',
                                     fontSize: '0.8125rem', color: 'var(--color-text-primary)',
+                                    whiteSpace: 'nowrap',
                                 }}
                             >
                                 <Calendar size={13} />
@@ -528,12 +531,13 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                             )}
                         </div>
 
-                        {/* Compare toggle */}
+                        {/* Compare — desktop only */}
                         <button
+                            className="desktop-only"
                             onClick={toggleComparison}
                             style={{
-                                display: 'flex', alignItems: 'center', gap: '6px',
-                                padding: '6px 10px',
+                                alignItems: 'center', gap: '6px',
+                                padding: '5px 10px',
                                 background: comparisonEnabled ? 'rgba(242,159,103,0.1)' : 'var(--color-bg-primary)',
                                 border: `1px solid ${comparisonEnabled ? '#f29f67' : 'var(--color-border)'}`,
                                 borderRadius: '6px', cursor: 'pointer',
@@ -546,13 +550,15 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                         </button>
                     </div>
 
-                    {/* Right: actions */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {/* Right: actions — Live and Export desktop only, theme always */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                        {/* Live — desktop only */}
                         <button
+                            className="desktop-only"
                             onClick={() => setRealTimeEnabled(!realTimeEnabled)}
                             style={{
-                                display: 'flex', alignItems: 'center', gap: '6px',
-                                padding: '6px 10px',
+                                alignItems: 'center', gap: '6px',
+                                padding: '5px 10px',
                                 background: realTimeEnabled ? 'rgba(16,185,129,0.1)' : 'var(--color-bg-primary)',
                                 border: `1px solid ${realTimeEnabled ? '#10b981' : 'var(--color-border)'}`,
                                 borderRadius: '6px', cursor: 'pointer',
@@ -564,17 +570,24 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                             <span>Live</span>
                         </button>
 
-                        <button style={{
-                            display: 'flex', alignItems: 'center', gap: '6px',
-                            padding: '6px 10px',
-                            background: 'var(--color-bg-primary)',
-                            border: '1px solid var(--color-border)',
-                            borderRadius: '6px', cursor: 'pointer',
-                            fontSize: '0.8125rem', color: 'var(--color-text-secondary)',
-                        }}>
+                        {/* Export — desktop only */}
+                        <button
+                            className="desktop-only"
+                            style={{
+                                alignItems: 'center', gap: '6px',
+                                padding: '5px 10px',
+                                background: 'var(--color-bg-primary)',
+                                border: '1px solid var(--color-border)',
+                                borderRadius: '6px', cursor: 'pointer',
+                                fontSize: '0.8125rem', color: 'var(--color-text-secondary)',
+                            }}
+                        >
                             <Download size={13} />
                             <span>Export</span>
                         </button>
+
+                        {/* Theme toggle — always visible */}
+                        <ThemeToggleButton />
                     </div>
                 </header>
 

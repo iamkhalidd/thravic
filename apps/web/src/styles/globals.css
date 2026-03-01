@@ -535,6 +535,7 @@ a:hover {
   }
 }
 
+
 /* Mobile: < 640px */
 @media (max-width: 640px) {
   h1 { font-size: 1.875rem; }
@@ -560,4 +561,14 @@ a:hover {
   .lp-grid-footer { grid-template-columns: 1fr; }
   .lp-grid-3 { grid-template-columns: 1fr; }
 }
+
+/* ── Visibility Utilities ── */
+/* Elements that should only appear on desktop (hide on mobile) */
+.desktop-only {
+  display: none;
+}
+@media (min-width: 641px) {
+  .desktop-only { display: flex; }
+}
+
 
