@@ -327,8 +327,8 @@ export default function HomePage() {
                 borderBottom: '1px solid var(--color-border)',
             }}>
                 <div style={{
-                    maxWidth: '1200px', margin: '0 auto', padding: '0 var(--space-lg)',
-                    height: '72px', display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+                    maxWidth: '1200px', margin: '0 auto', padding: '0 16px',
+                    height: '60px', display: 'flex', alignItems: 'center', justifyContent: 'space-between'
                 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
                         <div style={{
@@ -350,10 +350,10 @@ export default function HomePage() {
                         ))}
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <button onClick={toggleTheme} title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
                             style={{
-                                padding: 'var(--space-sm)', background: 'var(--color-bg-tertiary)',
+                                padding: '6px', background: 'var(--color-bg-tertiary)',
                                 border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)',
                                 color: 'var(--color-text-secondary)', cursor: 'pointer',
                                 display: 'flex', alignItems: 'center', justifyContent: 'center'
@@ -361,14 +361,15 @@ export default function HomePage() {
                             {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
                         </button>
                         <Link href="/login" style={{
-                            padding: 'var(--space-sm) var(--space-md)', color: 'var(--color-text-secondary)',
+                            padding: '6px 12px', color: 'var(--color-text-secondary)',
                             textDecoration: 'none', fontSize: '0.875rem', fontWeight: 500
                         }}>Login</Link>
-                        <Link href="/register" style={{
-                            padding: 'var(--space-sm) var(--space-lg)', background: '#f29f67',
+                        {/* Hide Get Started in nav on mobile — hero already has the CTA */}
+                        <Link href="/register" className="desktop-only" style={{
+                            padding: '7px 16px', background: '#f29f67',
                             color: 'white', textDecoration: 'none', borderRadius: 'var(--radius-md)',
-                            fontSize: '0.875rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 'var(--space-xs)'
-                        }}>Get Started <ArrowRight size={16} /></Link>
+                            fontSize: '0.875rem', fontWeight: 600, alignItems: 'center', gap: '4px'
+                        }}>Get Started <ArrowRight size={14} /></Link>
                     </div>
                 </div>
             </nav>
@@ -376,7 +377,7 @@ export default function HomePage() {
             {/* ═══ HERO ═══ */}
             <section style={{
                 minHeight: '100vh', display: 'flex', alignItems: 'center',
-                paddingTop: '72px', position: 'relative', overflow: 'hidden'
+                paddingTop: '60px', position: 'relative', overflow: 'hidden'
             }}>
                 {/* No gradient background orbs — flat design */}
 
