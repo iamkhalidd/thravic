@@ -73,7 +73,7 @@ export default function SubscriptionsPage() {
     return (
         <div>
             {/* Revenue overview */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-md)', marginBottom: 'var(--space-xl)' }}>
+            <div className="admin-grid-3">
                 <div className="stat-card">
                     <div className="stat-icon" style={{ background: 'rgba(255,170,0,0.12)' }}>
                         <DollarSign size={22} color="#ffaa00" />
@@ -126,8 +126,9 @@ export default function SubscriptionsPage() {
             </div>
 
             {/* Table */}
-            <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-                <table className="data-table">
+            <div className="table-scroll">
+                <div className="card" style={{ padding: 0, overflow: 'hidden', minWidth: '700px' }}>
+                    <table className="data-table">
                     <thead>
                         <tr>
                             <th>User</th>
@@ -158,7 +159,8 @@ export default function SubscriptionsPage() {
                             </tr>
                         ))}
                     </tbody>
-                </table>
+                    </table>
+                </div>
             </div>
 
             {/* Edit modal */}

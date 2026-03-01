@@ -87,7 +87,7 @@ export default function RetentionPage() {
                             </button>
                         </div>
 
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--space-md)' }}>
+                        <div className="admin-grid-4" style={{ marginBottom: 0 }}>
                             {['events_days', 'sessions_days', 'recordings_days', 'heatmaps_days'].map(field => (
                                 <div key={field}>
                                     <label style={{ display: 'block', fontSize: '12px', color: 'var(--color-text-muted)', marginBottom: '4px', textTransform: 'capitalize' }}>

@@ -144,7 +144,7 @@ export default function AdminDashboard() {
             </div>
 
             {/* Charts row */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-md)', marginBottom: 'var(--space-xl)' }}>
+            <div className="admin-grid-2">
                 {/* Events chart */}
                 <div className="card">
                     <div className="card-header">
@@ -183,7 +183,7 @@ export default function AdminDashboard() {
             </div>
 
             {/* Tables row */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-md)' }}>
+            <div className="admin-grid-2">
                 {/* Top domains */}
                 <div className="card">
                     <div className="card-header">

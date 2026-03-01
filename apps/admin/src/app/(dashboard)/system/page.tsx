@@ -45,7 +45,7 @@ export default function SystemPage() {
             </div>
 
             {/* Server & Memory */}
-            <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+            <div className="admin-grid-4">
                 <div className="stat-card">
                     <div className="stat-icon" style={{ background: 'rgba(108,92,231,0.12)' }}><Server size={22} color="#6c5ce7" /></div>
                     <div><div className="stat-value" style={{ fontSize: '18px' }}>{health?.server.uptimeFormatted}</div><div className="stat-label">Uptime</div></div>
@@ -65,7 +65,7 @@ export default function SystemPage() {
             </div>
 
             {/* Server info */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-md)', marginBottom: 'var(--space-xl)' }}>
+            <div className="admin-grid-2">
                 <div className="card">
                     <div className="card-title" style={{ marginBottom: 'var(--space-md)' }}>Server Info</div>
                     {[

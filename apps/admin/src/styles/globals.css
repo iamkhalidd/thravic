@@ -589,3 +589,48 @@ a {
     }
 }
 
+/* ── Responsive Grid Helpers ── */
+/* Use these classes instead of inline gridTemplateColumns */
+.admin-grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-md);
+    margin-bottom: var(--space-xl);
+}
+
+.admin-grid-3 {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: var(--space-md);
+    margin-bottom: var(--space-xl);
+}
+
+.admin-grid-4 {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--space-md);
+    margin-bottom: var(--space-xl);
+}
+
+@media (max-width: 1023px) {
+    .admin-grid-4 { grid-template-columns: 1fr 1fr; }
+    .admin-grid-3 { grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 640px) {
+    .admin-grid-4,
+    .admin-grid-3,
+    .admin-grid-2 { grid-template-columns: 1fr; }
+}
+
+/* ── Responsive Tables ── */
+/* Make data tables scroll horizontally on small screens */
+.table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.data-table {
+    min-width: 600px; /* prevent collapse below readable width */
+}
+
