@@ -37,10 +37,7 @@ export default function LoginPage() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            background: `
-        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(242, 159, 103, 0.15), transparent),
-        var(--color-bg-primary)
-      `
+        background: 'var(--color-bg-primary)'
         }}>
             <div style={{
                 width: '100%',

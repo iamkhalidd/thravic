@@ -17,7 +17,7 @@ const features = [
         icon: BarChart3,
         title: 'Traffic Analytics',
         description: 'Track every visitor, session, and traffic source in real time. Get full UTM parameter support, referrer tracking, and geo-location data to understand exactly where your audience comes from and how they find you.',
-        gradient: 'linear-gradient(135deg, #F29F67, #E0B50F)',
+        gradient: '#F29F67',
         color: '#F29F67',
         visual: 'chart'
     },
@@ -25,7 +25,7 @@ const features = [
         icon: Target,
         title: 'Conversion Funnels',
         description: 'Build custom conversion funnels with unlimited steps. Identify exactly where users drop off, compare funnel performance over time, and optimize each stage to maximize conversions.',
-        gradient: 'linear-gradient(135deg, #E0B50F, #34B1AA)',
+        gradient: '#E0B50F',
         color: '#E0B50F',
         visual: 'funnel'
     },
@@ -33,7 +33,7 @@ const features = [
         icon: MousePointer2,
         title: 'Click & Scroll Heatmaps',
         description: 'See exactly where users click, tap, and scroll on every page. Identify dead zones, discover unexpected interaction patterns, and optimize your layouts based on real behavioral data.',
-        gradient: 'linear-gradient(135deg, #34B1AA, #3B8FF3)',
+        gradient: '#34B1AA',
         color: '#34B1AA',
         visual: 'heatmap'
     },
@@ -41,7 +41,7 @@ const features = [
         icon: Video,
         title: 'Session Recordings',
         description: 'Watch privacy-safe replays of real user sessions. See every mouse movement, click, and scroll. Filter recordings by page, device, duration, or custom events to find exactly what you need.',
-        gradient: 'linear-gradient(135deg, #3B8FF3, #F29F67)',
+        gradient: '#3B8FF3',
         color: '#3B8FF3',
         visual: 'recording'
     },
@@ -49,7 +49,7 @@ const features = [
         icon: Sparkles,
         title: 'AI-Powered Insights',
         description: 'Let machine learning surface anomalies, predict trends, and suggest optimizations automatically. Get actionable recommendations delivered to your dashboard — no data science degree required.',
-        gradient: 'linear-gradient(135deg, #F29F67, #E0B50F)',
+        gradient: '#F29F67',
         color: '#F29F67',
         visual: 'ai'
     },
@@ -57,7 +57,7 @@ const features = [
         icon: Globe,
         title: 'Multi-Domain Management',
         description: 'Manage all your websites from a single dashboard. Compare metrics across domains, share team access, and maintain separate tracking configurations — all from one account.',
-        gradient: 'linear-gradient(135deg, #E0B50F, #34B1AA)',
+        gradient: '#E0B50F',
         color: '#E0B50F',
         visual: 'domains'
     }
@@ -111,8 +111,8 @@ function MiniChart() {
             {bars.map((h, i) => (
                 <div key={i} style={{
                     flex: 1, height: `${h}%`,
-                    background: `linear-gradient(180deg, #F29F67, #E0B50F)`,
-                    borderRadius: '4px 4px 0 0', opacity: 0.7 + (i / bars.length) * 0.3,
+                    background: '#F29F67',
+                    borderRadius: '4px 4px 0 0', opacity: 0.6 + (i / bars.length) * 0.4,
                     animation: `barGrow 0.6s ease ${i * 0.08}s both`,
                     transformOrigin: 'bottom'
                 }} />
@@ -296,8 +296,7 @@ function AnimatedStat({ stat }: { stat: typeof stats[0] }) {
         <div ref={ref} style={{ textAlign: 'center' }}>
             <div style={{
                 fontSize: 'clamp(2rem, 4vw, 3rem)', fontWeight: 800,
-                background: 'var(--gradient-primary)', WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+                color: '#f29f67',
                 marginBottom: 'var(--space-xs)'
             }}>
                 {started ? formatValue() : stat.display}
@@ -324,10 +323,8 @@ export default function HomePage() {
             {/* ═══ NAVIGATION ═══ */}
             <nav style={{
                 position: 'fixed', top: 0, left: 0, right: 0, zIndex: 50,
-                background: scrolled ? 'rgba(var(--color-bg-primary-rgb, 10, 10, 15), 0.9)' : 'transparent',
-                backdropFilter: scrolled ? 'blur(20px)' : 'none',
-                borderBottom: scrolled ? '1px solid var(--color-border)' : '1px solid transparent',
-                transition: 'all 0.3s ease'
+                background: 'var(--color-bg-card)',
+                borderBottom: '1px solid var(--color-border)',
             }}>
                 <div style={{
                     maxWidth: '1200px', margin: '0 auto', padding: '0 var(--space-lg)',
@@ -335,8 +332,8 @@ export default function HomePage() {
                 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
                         <div style={{
-                            width: '36px', height: '36px', borderRadius: 'var(--radius-md)',
-                            background: 'var(--gradient-primary)', display: 'flex',
+                            width: '36px', height: '36px', borderRadius: '6px',
+                            background: '#f29f67', display: 'flex',
                             alignItems: 'center', justifyContent: 'center'
                         }}>
                             <BarChart3 size={20} color="white" />
@@ -344,11 +341,11 @@ export default function HomePage() {
                         <span style={{ fontSize: '1.25rem', fontWeight: 700 }}>TrackFlow</span>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-lg)' }}>
+                    <div className="lp-nav-links">
                         {[{ label: 'Features', href: '#features' }, { label: 'Pricing', href: '#pricing' }, { label: 'Demo', href: '/demo' }].map(link => (
                             <Link key={link.label} href={link.href} style={{
                                 color: 'var(--color-text-secondary)', textDecoration: 'none',
-                                fontSize: '0.875rem', fontWeight: 500, transition: 'color 0.2s'
+                                fontSize: '0.875rem', fontWeight: 500,
                             }}>{link.label}</Link>
                         ))}
                     </div>
@@ -368,7 +365,7 @@ export default function HomePage() {
                             textDecoration: 'none', fontSize: '0.875rem', fontWeight: 500
                         }}>Login</Link>
                         <Link href="/register" style={{
-                            padding: 'var(--space-sm) var(--space-lg)', background: 'var(--gradient-primary)',
+                            padding: 'var(--space-sm) var(--space-lg)', background: '#f29f67',
                             color: 'white', textDecoration: 'none', borderRadius: 'var(--radius-md)',
                             fontSize: '0.875rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 'var(--space-xs)'
                         }}>Get Started <ArrowRight size={16} /></Link>
@@ -381,23 +378,7 @@ export default function HomePage() {
                 minHeight: '100vh', display: 'flex', alignItems: 'center',
                 paddingTop: '72px', position: 'relative', overflow: 'hidden'
             }}>
-                {/* Animated Background */}
-                <div style={{
-                    position: 'absolute', top: '-20%', left: '50%', transform: 'translateX(-50%)',
-                    width: '140%', height: '80%',
-                    background: 'radial-gradient(ellipse at center, rgba(242, 159, 103, 0.12), transparent 70%)',
-                    pointerEvents: 'none'
-                }} />
-                <div style={{
-                    position: 'absolute', top: '20%', left: '5%', width: '300px', height: '300px',
-                    background: 'radial-gradient(circle, rgba(52, 177, 170, 0.08), transparent 70%)',
-                    borderRadius: '50%', animation: 'float 8s ease-in-out infinite', pointerEvents: 'none'
-                }} />
-                <div style={{
-                    position: 'absolute', bottom: '20%', right: '5%', width: '250px', height: '250px',
-                    background: 'radial-gradient(circle, rgba(224, 181, 15, 0.08), transparent 70%)',
-                    borderRadius: '50%', animation: 'float 10s ease-in-out 2s infinite', pointerEvents: 'none'
-                }} />
+                {/* No gradient background orbs — flat design */}
 
                 <div style={{
                     maxWidth: '1200px', margin: '0 auto', padding: '0 var(--space-lg)',
@@ -423,13 +404,7 @@ export default function HomePage() {
                     }}>
                         Understand Your Traffic.
                         <br />
-                        <span style={{
-                            background: 'linear-gradient(135deg, #F29F67, #E0B50F, #34B1AA, #F29F67)',
-                            backgroundSize: '200% auto',
-                            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-                            backgroundClip: 'text',
-                            animation: 'gradientShift 4s linear infinite'
-                        }}>
+                        <span style={{ color: '#f29f67' }}>
                             Grow Your Business.
                         </span>
                     </h1>
@@ -445,38 +420,32 @@ export default function HomePage() {
                     </p>
 
                     {/* CTA Buttons */}
-                    <div style={{
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        gap: 'var(--space-md)', marginBottom: 'var(--space-2xl)',
-                        animation: 'fadeInUp 0.7s ease 0.3s both'
-                    }}>
+                    <div className="lp-cta-buttons" style={{ marginBottom: 'var(--space-2xl)', animation: 'fadeInUp 0.7s ease 0.3s both' }}>
                         <Link href="/register" style={{
-                            padding: '1rem 2rem', background: 'var(--gradient-primary)', color: 'white',
-                            textDecoration: 'none', borderRadius: 'var(--radius-lg)', fontSize: '1rem',
+                            padding: '1rem 2rem', background: '#f29f67', color: 'white',
+                            textDecoration: 'none', borderRadius: 'var(--radius-md)', fontSize: '1rem',
                             fontWeight: 600, display: 'flex', alignItems: 'center', gap: 'var(--space-sm)',
-                            boxShadow: '0 4px 20px rgba(242, 159, 103, 0.4)', transition: 'transform 0.2s, box-shadow 0.2s'
+                            transition: 'background 0.2s'
                         }}>Start Free <ArrowRight size={18} /></Link>
                         <Link href="/demo" style={{
-                            padding: '1rem 2rem', background: 'rgba(255, 255, 255, 0.05)',
+                            padding: '1rem 2rem', background: 'var(--color-bg-card)',
                             border: '1px solid var(--color-border)', color: 'var(--color-text-primary)',
-                            textDecoration: 'none', borderRadius: 'var(--radius-lg)', fontSize: '1rem',
+                            textDecoration: 'none', borderRadius: 'var(--radius-md)', fontSize: '1rem',
                             fontWeight: 500, display: 'flex', alignItems: 'center', gap: 'var(--space-sm)',
-                            transition: 'background 0.2s, border-color 0.2s'
                         }}><Play size={18} /> View Live Demo</Link>
                     </div>
 
                     {/* Dashboard Preview */}
                     <div style={{
-                        animation: 'slideInFromBottom 1s ease 0.5s both',
-                        padding: '3px',
-                        background: 'linear-gradient(135deg, #F29F67, #E0B50F, #34B1AA)',
+                        animation: 'fadeInUp 0.8s ease 0.5s both',
+                        border: '1px solid var(--color-border)',
                         borderRadius: 'var(--radius-xl)',
-                        boxShadow: '0 25px 80px -20px rgba(242, 159, 103, 0.5)',
-                        maxWidth: '1000px', margin: '0 auto'
+                        boxShadow: 'var(--shadow-md)',
+                        maxWidth: '1000px', margin: '0 auto', overflow: 'hidden'
                     }}>
                         <div style={{
-                            background: 'var(--color-bg-secondary)',
-                            borderRadius: 'calc(var(--radius-xl) - 2px)',
+                            background: 'var(--color-bg-card)',
+                            borderRadius: 'var(--radius-xl)',
                             padding: 'var(--space-md)', minHeight: '420px', display: 'flex', flexDirection: 'column'
                         }}>
                             {/* Window Chrome */}
@@ -495,7 +464,7 @@ export default function HomePage() {
                             </div>
 
                             {/* Stat Cards */}
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--space-md)', marginBottom: 'var(--space-lg)' }}>
+                            <div className="lp-grid-4-stat" style={{ marginBottom: 'var(--space-lg)' }}>
                                 {[
                                     { label: 'Visitors', value: '12,485', change: '+12%', icon: Users },
                                     { label: 'Pageviews', value: '48,320', change: '+8%', icon: BarChart3 },
@@ -526,8 +495,8 @@ export default function HomePage() {
                                     return (
                                         <div key={i} style={{
                                             flex: 1, height: `${height}%`,
-                                            background: 'linear-gradient(180deg, #F29F67, #E0B50F)',
-                                            borderRadius: '2px', opacity: 0.6 + (i / 30) * 0.4,
+                                            background: '#f29f67',
+                                            borderRadius: '2px', opacity: 0.5 + (i / 30) * 0.5,
                                             animation: `barGrow 0.8s ease ${0.6 + i * 0.03}s both`,
                                             transformOrigin: 'bottom'
                                         }} />
@@ -576,16 +545,12 @@ export default function HomePage() {
                             const isReversed = i % 2 === 1;
                             return (
                                 <Reveal key={i} className={isReversed ? 'reveal-right' : 'reveal-left'}>
-                                    <div style={{
-                                        display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2xl)',
-                                        alignItems: 'center', direction: isReversed ? 'rtl' : 'ltr'
-                                    }}>
+                                    <div className="lp-grid-features" style={{ direction: isReversed ? 'rtl' : 'ltr' }}>
                                         <div style={{ direction: 'ltr' }}>
                                             <div style={{
-                                                width: '56px', height: '56px', borderRadius: 'var(--radius-lg)',
+                                                width: '48px', height: '48px', borderRadius: '8px',
                                                 background: feature.gradient, display: 'flex', alignItems: 'center',
                                                 justifyContent: 'center', marginBottom: 'var(--space-lg)',
-                                                boxShadow: `0 8px 20px ${feature.color}33`
                                             }}>
                                                 <Icon size={28} color="white" />
                                             </div>
@@ -631,12 +596,11 @@ export default function HomePage() {
                         </h2>
                     </Reveal>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 'var(--space-xl)', position: 'relative' }}>
+                    <div className="lp-grid-3" style={{ position: 'relative' }}>
                         {/* Connector Line */}
                         <div style={{
-                            position: 'absolute', top: '60px', left: '20%', right: '20%', height: '2px',
-                            background: 'linear-gradient(90deg, #F29F67, #E0B50F, #34B1AA)',
-                            opacity: 0.3, zIndex: 0
+                            position: 'absolute', top: '52px', left: '20%', right: '20%', height: '1px',
+                            background: 'var(--color-border)', zIndex: 0
                         }} />
                         {howItWorks.map((step, i) => {
                             const Icon = step.icon;
@@ -644,12 +608,10 @@ export default function HomePage() {
                                 <Reveal key={i} style={{ position: 'relative', zIndex: 1 }}>
                                     <div style={{ textAlign: 'center' }}>
                                         <div style={{
-                                            width: '72px', height: '72px', borderRadius: '50%',
-                                            background: 'var(--gradient-primary)',
+                                            width: '64px', height: '64px', borderRadius: '50%',
+                                            background: '#f29f67',
                                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                                             margin: '0 auto var(--space-lg)',
-                                            boxShadow: '0 8px 25px rgba(242, 159, 103, 0.3)',
-                                            fontSize: '1.5rem', fontWeight: 800, color: 'white'
                                         }}>
                                             <Icon size={28} />
                                         </div>
@@ -697,7 +659,7 @@ export default function HomePage() {
             {/* ═══ STATS ═══ */}
             <section style={{ padding: 'var(--space-3xl) 0', borderBottom: '1px solid var(--color-border)' }}>
                 <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 var(--space-lg)' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--space-xl)' }}>
+                    <div className="lp-grid-3" style={{ maxWidth: '900px', margin: '0 auto' }}>
                         {stats.map((stat, i) => <AnimatedStat key={i} stat={stat} />)}
                     </div>
                 </div>
@@ -713,7 +675,7 @@ export default function HomePage() {
                         </h2>
                     </Reveal>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 'var(--space-lg)' }}>
+                    <div className="lp-grid-3">
                         {testimonials.map((t, i) => (
                             <Reveal key={i}>
                                 <div style={{
@@ -734,7 +696,7 @@ export default function HomePage() {
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
                                         <div style={{
                                             width: '44px', height: '44px', borderRadius: '50%',
-                                            background: 'var(--gradient-primary)', display: 'flex',
+                                            background: '#f29f67', display: 'flex',
                                             alignItems: 'center', justifyContent: 'center',
                                             fontWeight: 600, fontSize: '0.875rem', color: 'white'
                                         }}>{t.avatar}</div>
@@ -763,20 +725,19 @@ export default function HomePage() {
                         </p>
                     </Reveal>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 'var(--space-lg)', maxWidth: '1000px', margin: '0 auto' }}>
+                    <div className="lp-grid-3" style={{ maxWidth: '1000px', margin: '0 auto' }}>
                         {pricingTiers.map((tier, i) => (
                             <Reveal key={i}>
                                 <div style={{
-                                    background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-xl)',
-                                    border: tier.highlighted ? '2px solid var(--color-primary)' : '1px solid var(--color-border)',
+                                    background: 'var(--color-bg-card)', borderRadius: 'var(--radius-lg)',
+                                    border: tier.highlighted ? '2px solid #f29f67' : '1px solid var(--color-border)',
                                     padding: 'var(--space-xl)', position: 'relative',
-                                    boxShadow: tier.highlighted ? '0 20px 40px rgba(242, 159, 103, 0.2)' : 'none',
                                     transition: 'transform 0.3s, box-shadow 0.3s'
                                 }}>
                                     {tier.highlighted && (
                                         <div style={{
                                             position: 'absolute', top: '-12px', left: '50%', transform: 'translateX(-50%)',
-                                            background: 'var(--gradient-primary)', padding: '4px 16px',
+                                            background: '#f29f67', padding: '4px 16px',
                                             borderRadius: 'var(--radius-full)', fontSize: '0.75rem', fontWeight: 600, color: 'white'
                                         }}>Most Popular</div>
                                     )}
@@ -795,11 +756,10 @@ export default function HomePage() {
                                     </ul>
                                     <Link href="/register" style={{
                                         display: 'block', textAlign: 'center', padding: 'var(--space-md)',
-                                        background: tier.highlighted ? 'var(--gradient-primary)' : 'transparent',
+                                        background: tier.highlighted ? '#f29f67' : 'transparent',
                                         border: tier.highlighted ? 'none' : '1px solid var(--color-border)',
                                         borderRadius: 'var(--radius-md)', color: tier.highlighted ? 'white' : 'var(--color-text-primary)',
                                         textDecoration: 'none', fontWeight: 600, fontSize: '0.875rem',
-                                        transition: 'transform 0.2s, box-shadow 0.2s'
                                     }}>{tier.cta}</Link>
                                 </div>
                             </Reveal>
@@ -810,15 +770,10 @@ export default function HomePage() {
 
             {/* ═══ FINAL CTA ═══ */}
             <section style={{
-                padding: 'var(--space-3xl) 0', position: 'relative', overflow: 'hidden',
-                background: 'linear-gradient(180deg, var(--color-bg-secondary), var(--color-bg-primary))'
+                padding: 'var(--space-3xl) 0',
+                background: 'var(--color-bg-secondary)',
+                borderTop: '1px solid var(--color-border)'
             }}>
-                <div style={{
-                    position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
-                    width: '600px', height: '600px',
-                    background: 'radial-gradient(circle, rgba(99, 102, 241, 0.08), transparent 70%)',
-                    borderRadius: '50%', animation: 'float 10s ease-in-out infinite', pointerEvents: 'none'
-                }} />
                 <div style={{ maxWidth: '800px', margin: '0 auto', padding: '0 var(--space-lg)', textAlign: 'center', position: 'relative', zIndex: 1 }}>
                     <Reveal>
                         <h2 style={{ fontSize: 'clamp(1.75rem, 4vw, 2.5rem)', fontWeight: 700, marginBottom: 'var(--space-md)' }}>
@@ -830,9 +785,9 @@ export default function HomePage() {
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--space-md)' }}>
                             <Link href="/register" style={{
                                 display: 'inline-flex', alignItems: 'center', gap: 'var(--space-sm)',
-                                padding: '1rem 2.5rem', background: 'var(--gradient-primary)', color: 'white',
-                                textDecoration: 'none', borderRadius: 'var(--radius-lg)', fontSize: '1.125rem',
-                                fontWeight: 600, boxShadow: '0 8px 30px rgba(99, 102, 241, 0.4)'
+                                padding: '1rem 2.5rem', background: '#f29f67', color: 'white',
+                                textDecoration: 'none', borderRadius: 'var(--radius-md)', fontSize: '1.125rem',
+                                fontWeight: 600,
                             }}>Get Started Free <ArrowRight size={20} /></Link>
                         </div>
                         <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-tertiary)', marginTop: 'var(--space-md)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--space-sm)' }}>
@@ -845,13 +800,13 @@ export default function HomePage() {
             {/* ═══ FOOTER ═══ */}
             <footer style={{ padding: 'var(--space-2xl) 0', borderTop: '1px solid var(--color-border)' }}>
                 <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 var(--space-lg)' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 'var(--space-2xl)', marginBottom: 'var(--space-2xl)' }}>
+                    <div className="lp-grid-footer" style={{ marginBottom: 'var(--space-2xl)' }}>
                         {/* Brand */}
                         <div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', marginBottom: 'var(--space-md)' }}>
                                 <div style={{
-                                    width: '32px', height: '32px', borderRadius: 'var(--radius-md)',
-                                    background: 'var(--gradient-primary)', display: 'flex',
+                                    width: '32px', height: '32px', borderRadius: '6px',
+                                    background: '#f29f67', display: 'flex',
                                     alignItems: 'center', justifyContent: 'center'
                                 }}>
                                     <BarChart3 size={18} color="white" />
