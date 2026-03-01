@@ -190,18 +190,37 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
     const [dateDropdownOpen, setDateDropdownOpen] = useState(false);
     const [realTimeEnabled, setRealTimeEnabled] = useState(false);
 
-    const SIDEBAR_WIDTH = sidebarCollapsed ? 56 : 240;
+    const [isMobile, setIsMobile] = useState(false);
 
-    // Persist collapse state
+    // Detect mobile — must be in useEffect to avoid SSR mismatch
+    useEffect(() => {
+        const check = () => setIsMobile(window.innerWidth < 1024);
+        check();
+        window.addEventListener('resize', check);
+        return () => window.removeEventListener('resize', check);
+    }, []);
+
+    // On mobile: sidebar is always 240px overlay, collapse state is ignored
+    // On desktop: sidebar collapses to 56px or expands to 240px
+    const sidebarVisualWidth = isMobile ? 240 : (sidebarCollapsed ? 56 : 240);
+    const mainMarginLeft = isMobile ? 0 : (sidebarCollapsed ? 56 : 240);
+
+    // Persist collapse state (desktop only)
     useEffect(() => {
         const saved = localStorage.getItem('tf_sidebar_collapsed');
         if (saved === 'true') setSidebarCollapsed(true);
     }, []);
 
     const toggleSidebar = () => {
-        const next = !sidebarCollapsed;
-        setSidebarCollapsed(next);
-        localStorage.setItem('tf_sidebar_collapsed', String(next));
+        if (isMobile) {
+            // On mobile: hamburger toggles overlay
+            setMobileSidebarOpen(prev => !prev);
+        } else {
+            // On desktop: collapse/expand
+            const next = !sidebarCollapsed;
+            setSidebarCollapsed(next);
+            localStorage.setItem('tf_sidebar_collapsed', String(next));
+        }
     };
 
     useEffect(() => {
@@ -234,19 +253,19 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
             {/* ── Sidebar ── */}
             <aside
                 className={`dash-sidebar${mobileSidebarOpen ? ' mobile-open' : ''}`}
-                style={{ width: `${SIDEBAR_WIDTH}px` }}
+                style={{ width: `${sidebarVisualWidth}px` }}
             >
                 {/* Logo + Collapse toggle */}
                 <div style={{
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: sidebarCollapsed ? 'center' : 'space-between',
-                    padding: sidebarCollapsed ? '16px 0' : '0 12px 0 16px',
+                    justifyContent: (sidebarCollapsed && !isMobile) ? 'center' : 'space-between',
+                    padding: (sidebarCollapsed && !isMobile) ? '16px 0' : '0 12px 0 16px',
                     height: '56px',
                     borderBottom: '1px solid var(--color-sidebar-border)',
                     flexShrink: 0,
                 }}>
-                    {!sidebarCollapsed && (
+                    {(!sidebarCollapsed || isMobile) && (
                         <Link href="/dashboard" style={{
                             display: 'flex', alignItems: 'center', gap: '8px',
                             textDecoration: 'none', color: 'var(--color-text-primary)',
@@ -261,7 +280,7 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                             <span style={{ fontWeight: 700, fontSize: '1rem', whiteSpace: 'nowrap' }}>TrackFlow</span>
                         </Link>
                     )}
-                    {sidebarCollapsed && (
+                    {sidebarCollapsed && !isMobile && (
                         <div style={{
                             width: '28px', height: '28px', background: '#f29f67',
                             borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -350,7 +369,7 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                 {/* Navigation */}
                 <nav style={{
                     flex: 1, overflowY: 'auto', overflowX: 'hidden',
-                    padding: sidebarCollapsed ? '8px 4px' : '8px 0',
+                    padding: (sidebarCollapsed && !isMobile) ? '8px 4px' : '8px 0',
                 }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                         {navStructure.map((item, idx) => (
@@ -360,7 +379,7 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                                 pathname={pathname}
                                 expandedSections={expandedSections}
                                 toggleSection={toggleSection}
-                                collapsed={sidebarCollapsed}
+                                collapsed={sidebarCollapsed && !isMobile}
                             />
                         ))}
                     </div>
@@ -369,36 +388,36 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                 {/* Bottom — Settings + User */}
                 <div style={{
                     borderTop: '1px solid var(--color-sidebar-border)',
-                    padding: sidebarCollapsed ? '8px 4px' : '8px 0',
+                    padding: (sidebarCollapsed && !isMobile) ? '8px 4px' : '8px 0',
                     flexShrink: 0,
                 }}>
                     {/* Settings link */}
                     <Link
                         href="/dashboard/settings"
-                        title={sidebarCollapsed ? 'Settings' : undefined}
+                        title={(sidebarCollapsed && !isMobile) ? 'Settings' : undefined}
                         style={{
                             display: 'flex', alignItems: 'center',
-                            gap: sidebarCollapsed ? '0' : '10px',
-                            padding: sidebarCollapsed ? '10px 0' : '8px 12px',
-                            justifyContent: sidebarCollapsed ? 'center' : 'flex-start',
+                            gap: (sidebarCollapsed && !isMobile) ? '0' : '10px',
+                            padding: (sidebarCollapsed && !isMobile) ? '10px 0' : '8px 12px',
+                            justifyContent: (sidebarCollapsed && !isMobile) ? 'center' : 'flex-start',
                             color: pathname.startsWith('/dashboard/settings') ? '#f29f67' : 'var(--color-text-secondary)',
                             textDecoration: 'none', fontSize: '0.875rem',
                             background: pathname.startsWith('/dashboard/settings') ? 'rgba(242,159,103,0.1)' : 'transparent',
-                            borderLeft: !sidebarCollapsed && pathname.startsWith('/dashboard/settings') ? '3px solid #f29f67' : !sidebarCollapsed ? '3px solid transparent' : 'none',
+                            borderLeft: !(sidebarCollapsed && !isMobile) && pathname.startsWith('/dashboard/settings') ? '3px solid #f29f67' : !(sidebarCollapsed && !isMobile) ? '3px solid transparent' : 'none',
                             whiteSpace: 'nowrap', overflow: 'hidden',
                         }}
                     >
                         <Settings size={18} style={{ flexShrink: 0 }} />
-                        {!sidebarCollapsed && <span>Settings</span>}
+                        {!(sidebarCollapsed && !isMobile) && <span>Settings</span>}
                     </Link>
 
                     {/* User row */}
                     {user && (
                         <div style={{
                             display: 'flex', alignItems: 'center',
-                            gap: sidebarCollapsed ? '0' : '8px',
-                            padding: sidebarCollapsed ? '8px 0' : '8px 12px',
-                            justifyContent: sidebarCollapsed ? 'center' : 'flex-start',
+                            gap: (sidebarCollapsed && !isMobile) ? '0' : '8px',
+                            padding: (sidebarCollapsed && !isMobile) ? '8px 0' : '8px 12px',
+                            justifyContent: (sidebarCollapsed && !isMobile) ? 'center' : 'flex-start',
                             marginTop: '4px',
                         }}>
                             <div style={{
@@ -409,7 +428,7 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                             }}>
                                 {user.name.charAt(0).toUpperCase()}
                             </div>
-                            {!sidebarCollapsed && (
+                            {!(sidebarCollapsed && !isMobile) && (
                                 <>
                                     <div style={{ flex: 1, minWidth: 0 }}>
                                         <div style={{
@@ -445,7 +464,7 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
             {/* ── Main Content ── */}
             <main
                 className="dash-main"
-                style={{ marginLeft: `${SIDEBAR_WIDTH}px` }}
+                style={{ marginLeft: `${mainMarginLeft}px` }}
             >
                 <ImpersonationBanner />
                 <AnnouncementBanner />
