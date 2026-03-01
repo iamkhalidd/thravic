@@ -6,8 +6,8 @@ import { useEffect, useState } from 'react';
 import { getAccessToken, clearTokens } from '@/lib/api';
 import {
     LayoutDashboard, Users, Globe, CreditCard, Activity,
-    Server, FileText, Settings, Database, Download,
-    LogOut, Shield
+    Server, FileText, Settings, Database, Menu,
+    LogOut, Shield, X
 } from 'lucide-react';
 
 const navItems = [
@@ -38,6 +38,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     const pathname = usePathname();
     const router = useRouter();
     const [mounted, setMounted] = useState(false);
+    const [sidebarOpen, setSidebarOpen] = useState(false);
 
     useEffect(() => {
         const token = getAccessToken();
@@ -47,6 +48,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         }
         setMounted(true);
     }, [router]);
+
+    // Close sidebar when route changes (mobile nav)
+    useEffect(() => {
+        setSidebarOpen(false);
+    }, [pathname]);
 
     if (!mounted) {
         return (
@@ -67,12 +73,27 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
     return (
         <div className="admin-layout">
+            {/* Dark overlay — closes sidebar on mobile tap */}
+            <div
+                className={`admin-overlay${sidebarOpen ? ' active' : ''}`}
+                onClick={() => setSidebarOpen(false)}
+            />
+
             {/* Sidebar */}
-            <aside className="admin-sidebar">
+            <aside className={`admin-sidebar${sidebarOpen ? ' open' : ''}`}>
                 <div className="sidebar-header">
                     <Shield size={22} color="var(--color-accent)" />
                     <span className="sidebar-logo">TrackFlow</span>
                     <span className="sidebar-badge">Admin</span>
+                    {/* Close button — mobile only */}
+                    <button
+                        className="admin-hamburger"
+                        onClick={() => setSidebarOpen(false)}
+                        title="Close menu"
+                        style={{ marginLeft: 'auto' }}
+                    >
+                        <X size={18} />
+                    </button>
                 </div>
 
                 <nav className="sidebar-nav">
@@ -108,6 +129,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             {/* Main content */}
             <main className="admin-main">
                 <div className="admin-topbar">
+                    {/* Hamburger — visible on mobile only */}
+                    <button
+                        className="admin-hamburger"
+                        onClick={() => setSidebarOpen(true)}
+                        title="Open menu"
+                    >
+                        <Menu size={20} />
+                    </button>
                     <h1>{currentPage?.label || 'Admin'}</h1>
                 </div>
                 <div className="admin-content">

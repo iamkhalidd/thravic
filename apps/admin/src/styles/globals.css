@@ -522,3 +522,70 @@ a {
     transform: translateX(20px);
     background: var(--color-accent);
 }
+
+/* ── Mobile Responsiveness ── */
+
+/* Hamburger button — hidden on desktop */
+.admin-hamburger {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 6px;
+    background: transparent;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    color: var(--color-text-secondary);
+    cursor: pointer;
+}
+
+/* Mobile overlay backdrop */
+.admin-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 90;
+}
+.admin-overlay.active {
+    display: block;
+}
+
+@media (max-width: 1023px) {
+    /* Sidebar hides off-screen, slides in when .open */
+    .admin-sidebar {
+        transform: translateX(-100%);
+        box-shadow: 4px 0 24px rgba(0, 0, 0, 0.4);
+    }
+    .admin-sidebar.open {
+        transform: translateX(0);
+    }
+
+    /* Main content takes full width */
+    .admin-main {
+        margin-left: 0;
+    }
+
+    /* Topbar: show hamburger */
+    .admin-topbar {
+        padding: var(--space-md);
+        gap: var(--space-md);
+    }
+    .admin-hamburger {
+        display: flex;
+    }
+
+    /* Content padding reduced */
+    .admin-content {
+        padding: var(--space-md);
+    }
+}
+
+@media (max-width: 640px) {
+    .admin-topbar h1 {
+        font-size: 16px;
+    }
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
