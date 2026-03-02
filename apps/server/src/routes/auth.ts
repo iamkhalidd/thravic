@@ -9,7 +9,12 @@ import * as userService from '../services/userService';
 import { getJwtSecret, getJwtRefreshSecret } from '../config/security';
 import * as tokenStore from '../services/tokenStore';
 import * as cache from '../services/cacheService';
-import { sendEmail } from '../services/emailService';
+import {
+    sendWelcomeEmail,
+    sendLoginAlertEmail,
+    sendPasswordResetEmail,
+    sendPasswordChangedEmail,
+} from '../services/emailService';
 import { createLogger } from '../config/logger';
 
 const log = createLogger('Auth');
@@ -89,6 +94,11 @@ router.post('/register', async (req: Request, res: Response) => {
         const user = await userService.createUser(email, hashedPassword, name);
         const tokens = await generateTokens(user.id, user.email);
 
+        // Send welcome email (non-blocking — don't fail registration if email fails)
+        sendWelcomeEmail(user.email, user.name).catch(err =>
+            log.warn('Welcome email failed', err)
+        );
+
         res.status(201).json({
             user: {
                 id: user.id,
@@ -123,6 +133,13 @@ router.post('/login', async (req: Request, res: Response) => {
         }
 
         const tokens = await generateTokens(user.id, user.email);
+
+        // Send login alert (non-blocking)
+        const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip || 'Unknown';
+        const ua = req.headers['user-agent'] || 'Unknown';
+        sendLoginAlertEmail(user.email, user.name, ip, ua, new Date()).catch(err =>
+            log.warn('Login alert email failed', err)
+        );
 
         res.json({
             user: {
@@ -216,17 +233,8 @@ router.post('/forgot-password', async (req: Request, res: Response) => {
         const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
         const resetLink = `${frontendUrl}/reset-password?token=${resetToken}`;
 
-        // Send email
-        await sendEmail({
-            to: user.email,
-            subject: 'TrackFlow — Password Reset',
-            text: `You requested a password reset. Click the link below to set a new password:\n\n${resetLink}\n\nThis link expires in 1 hour. If you didn't request this, you can safely ignore this email.`,
-            html: `
-                <p>You requested a password reset.</p>
-                <p><a href="${resetLink}">Click here to reset your password</a></p>
-                <p>This link expires in 1 hour. If you didn't request this, you can safely ignore this email.</p>
-            `,
-        });
+        // Send password reset email
+        await sendPasswordResetEmail(user.email, resetLink);
 
         log.info(`Password reset email sent to ${normalizedEmail}`);
         res.json(genericResponse);
@@ -266,6 +274,15 @@ router.post('/reset-password', async (req: Request, res: Response) => {
         // Invalidate the token so it can't be reused
         await cache.del(tokenKey);
         memoryResetTokens.delete(token);
+
+        // Notify the user their password was changed
+        const user = await userService.findById(userId);
+        if (user) {
+            const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip || 'Unknown';
+            sendPasswordChangedEmail(user.email, user.name, ip).catch(err =>
+                log.warn('Password changed email failed', err)
+            );
+        }
 
         log.info(`Password reset completed for user ${userId}`);
         res.json({ message: 'Password has been reset successfully' });

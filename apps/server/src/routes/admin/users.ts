@@ -6,6 +6,7 @@ import { query, queryOne } from '../../db';
 import { logAction } from '../../services/auditService';
 import { createLogger } from '../../config/logger';
 import { updateUserSchema, adminResetPasswordSchema } from '../../validators/admin';
+import { sendAccountSuspendedEmail, sendAccountReactivatedEmail } from '../../services/emailService';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
@@ -177,8 +178,8 @@ router.patch('/:id', adminAuth, async (req: AuthRequest, res: Response) => {
 // POST /api/admin/users/:id/suspend — toggle suspension
 router.post('/:id/suspend', adminAuth, async (req: AuthRequest, res: Response) => {
     try {
-        const user = await queryOne<{ role: string }>(
-            'SELECT role FROM users WHERE id = $1',
+        const user = await queryOne<{ role: string; email: string; name: string }>(
+            'SELECT role, email, name FROM users WHERE id = $1',
             [req.params.id]
         );
 
@@ -198,6 +199,17 @@ router.post('/:id/suspend', adminAuth, async (req: AuthRequest, res: Response) =
             targetId: req.params.id,
             ipAddress: req.ip
         });
+
+        // Notify the user by email (non-blocking)
+        if (newRole === 'suspended') {
+            sendAccountSuspendedEmail(user.email, user.name).catch(err =>
+                log.warn('Suspend email failed', err)
+            );
+        } else {
+            sendAccountReactivatedEmail(user.email, user.name).catch(err =>
+                log.warn('Reactivate email failed', err)
+            );
+        }
 
         res.json({ message: `User ${newRole === 'suspended' ? 'suspended' : 'activated'}` });
     } catch (error) {

@@ -9,6 +9,7 @@ import { createLogger } from '../config/logger';
 import { PLAN_LIMITS, PLAN_FEATURES, PlanName } from '../config/plans';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { query, queryOne } from '../db';
+import { sendPaymentReceiptEmail } from '../services/emailService';
 
 const log = createLogger('Payments');
 const router = Router();
@@ -364,6 +365,23 @@ async function upgradeSubscription(userId: string, plan: PlanName, reference: st
             current_period_end         = $6,
             updated_at                 = NOW()
     `, [userId, reference, plan, tier.eventsLimit, tier.domainsLimit, periodEnd]);
+
+    // Send payment receipt email (non-blocking)
+    const user = await queryOne<{ email: string; name: string }>(
+        'SELECT email, name FROM users WHERE id = $1',
+        [userId],
+    ).catch(() => null);
+
+    if (user) {
+        const planPrices: Record<string, number> = { growth: 39, pro: 99, enterprise: 299 };
+        sendPaymentReceiptEmail(
+            user.email,
+            user.name,
+            plan,
+            planPrices[plan] ?? 0,
+            reference,
+        ).catch(err => log.warn('Payment receipt email failed', err));
+    }
 }
 
 export default router;
