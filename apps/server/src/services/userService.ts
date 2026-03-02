@@ -9,8 +9,8 @@ export interface UserRow {
     password: string;
     name: string;
     subscription: string;
-    stripe_customer_id: string | null;
-    stripe_subscription_id: string | null;
+    paystack_customer_code: string | null;
+    paystack_subscription_code: string | null;
     preferences: Record<string, any>;
     created_at: Date;
     updated_at: Date;
@@ -68,18 +68,18 @@ export async function findById(id: string): Promise<UserRow | null> {
 export async function updateSubscription(
     userId: string,
     subscription: string,
-    stripeCustomerId?: string,
-    stripeSubscriptionId?: string
+    paystackCustomerCode?: string,
+    paystackSubscriptionCode?: string
 ): Promise<UserRow | null> {
     return queryOne<UserRow>(
         `UPDATE users
          SET subscription = $2,
-             stripe_customer_id = COALESCE($3, stripe_customer_id),
-             stripe_subscription_id = COALESCE($4, stripe_subscription_id),
+             paystack_customer_code = COALESCE($3, paystack_customer_code),
+             paystack_subscription_code = COALESCE($4, paystack_subscription_code),
              updated_at = NOW()
          WHERE id = $1
          RETURNING *`,
-        [userId, subscription, stripeCustomerId || null, stripeSubscriptionId || null]
+        [userId, subscription, paystackCustomerCode || null, paystackSubscriptionCode || null]
     );
 }
 

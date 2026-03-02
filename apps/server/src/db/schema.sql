@@ -10,8 +10,8 @@ CREATE TABLE IF NOT EXISTS users (
     password VARCHAR(255) NOT NULL,
     name VARCHAR(255) NOT NULL,
     subscription VARCHAR(50) DEFAULT 'free' CHECK (subscription IN ('free', 'growth', 'pro', 'enterprise')),
-    stripe_customer_id VARCHAR(255),
-    stripe_subscription_id VARCHAR(255),
+    paystack_customer_code VARCHAR(255),
+    paystack_subscription_code VARCHAR(255),
     preferences JSONB DEFAULT '{}',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -183,7 +183,7 @@ CREATE TABLE IF NOT EXISTS session_recordings (
 CREATE TABLE IF NOT EXISTS subscriptions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    stripe_subscription_id VARCHAR(255),
+    paystack_subscription_code VARCHAR(255),
     plan VARCHAR(50) NOT NULL CHECK (plan IN ('free', 'growth', 'pro', 'enterprise')),
     status VARCHAR(50) DEFAULT 'active' CHECK (status IN ('active', 'canceled', 'past_due', 'trialing')),
     events_limit INTEGER NOT NULL,

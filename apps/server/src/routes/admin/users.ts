@@ -82,7 +82,7 @@ router.get('/', adminAuth, async (req: AuthRequest, res: Response) => {
 router.get('/:id', adminAuth, async (req: AuthRequest, res: Response) => {
     try {
         const user = await queryOne(
-            `SELECT id, name, email, subscription, role, stripe_customer_id, 
+            `SELECT id, name, email, subscription, role, paystack_customer_code,
                     preferences, created_at, updated_at
              FROM users WHERE id = $1`,
             [req.params.id]

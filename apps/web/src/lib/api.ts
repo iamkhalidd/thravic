@@ -547,3 +547,46 @@ export const insights = {
         }>(`/api/insights${query}`);
     }
 };
+
+// Payments API (Paystack)
+export const payments = {
+    /** Initialise a Paystack checkout session. On success, redirect to checkoutUrl. */
+    async checkout(plan: string): Promise<{ checkoutUrl: string; reference: string } | null> {
+        const result = await apiRequest<{ success: boolean; checkoutUrl: string; reference: string }>(
+            '/api/payments/checkout',
+            { method: 'POST', body: JSON.stringify({ plan }) }
+        );
+        if (result.data?.success) {
+            return { checkoutUrl: result.data.checkoutUrl, reference: result.data.reference };
+        }
+        return null;
+    },
+
+    /** Verify a completed Paystack payment by reference. Returns the upgraded plan name. */
+    async verify(reference: string): Promise<{ plan: string } | null> {
+        const result = await apiRequest<{ success: boolean; plan: string }>(
+            '/api/payments/verify',
+            { method: 'POST', body: JSON.stringify({ reference }) }
+        );
+        if (result.data?.success) {
+            return { plan: result.data.plan };
+        }
+        return null;
+    },
+
+    /** Fetch the current subscription from the server. */
+    async getCurrent() {
+        return apiRequest<{
+            subscription: {
+                plan: string;
+                status: string;
+                eventsUsed: number;
+                eventsLimit: number;
+                domainsLimit: number;
+                currentPeriodEnd?: string;
+                features: string[];
+            };
+        }>('/api/payments/current');
+    },
+};
+
