@@ -217,10 +217,72 @@ app.use('/api/experiments', experimentRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/announcements', announcementRoutes);
 
+// ── TrackFlow Client Tracker Script ────────────────────────────────────────
+// Serves the analytics tracking script. Customer sites load this via <script>.
+// Uses a function wrapper + minified IIFE pattern, no external dependencies.
+app.get(['/tf.js', '/v.js'], (req, res) => {
+    const apiUrl = process.env.SERVER_URL || process.env.API_URL || '';
+    res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, max-age=3600'); // 1-hour CDN cache
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.send(`
+/* TrackFlow Analytics Tracker v1.0 */
+(function(){
+  'use strict';
+  var API='${apiUrl}/api/collect';
+  // Resolve tracking ID: prefer window.TF.id (set by loader snippet), else data attribute
+  function getId(){
+    if(window.TF&&window.TF.id) return window.TF.id;
+    var s=document.currentScript||document.querySelector('script[data-tracking-id]');
+    return s?s.getAttribute('data-tracking-id'):null;
+  }
+  var tid=getId();
+  if(!tid){console.warn('[TrackFlow] No tracking ID found. Set window.TF.id or data-tracking-id on the script tag.');return;}
+  // Generate visitor/session IDs
+  function uid(){return'xxxxxxxx'.replace(/x/g,function(){return(Math.random()*16|0).toString(16)});}
+  var vid=localStorage.getItem('_tf_vid')||(function(){var id=uid();localStorage.setItem('_tf_vid',id);return id;})();
+  var sid=sessionStorage.getItem('_tf_sid')||(function(){var id=uid();sessionStorage.setItem('_tf_sid',id);return id;})();
+  // Send an event
+  function send(type,extra){
+    var payload={
+      type:type,
+      url:location.href,
+      referrer:document.referrer||null,
+      visitorId:vid,
+      sessionId:sid,
+      screenWidth:screen.width,
+      screenHeight:screen.height,
+      language:navigator.language||null,
+      utmSource:(new URLSearchParams(location.search)).get('utm_source')||null,
+      utmMedium:(new URLSearchParams(location.search)).get('utm_medium')||null,
+      utmCampaign:(new URLSearchParams(location.search)).get('utm_campaign')||null,
+      utmTerm:(new URLSearchParams(location.search)).get('utm_term')||null,
+      utmContent:(new URLSearchParams(location.search)).get('utm_content')||null,
+      data:extra||{}
+    };
+    var url=API+'/'+tid;
+    if(navigator.sendBeacon){navigator.sendBeacon(url,JSON.stringify(payload));}
+    else{fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),keepalive:true}).catch(function(){});}
+  }
+  // Track SPA navigation (history.pushState)
+  var origPush=history.pushState.bind(history);
+  history.pushState=function(){origPush.apply(this,arguments);setTimeout(function(){send('pageview');},0);};
+  window.addEventListener('popstate',function(){send('pageview');});
+  // Initial pageview (defer slightly so DOM is ready)
+  if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',function(){send('pageview');});}
+  else{send('pageview');}
+  // Expose TF.track() for custom events
+  window.TF=window.TF||{};
+  window.TF.track=function(name,data){send('custom',Object.assign({name:name},data||{}));};
+})();
+`.trim());
+});
+
 // 404 handler
 app.use((req, res) => {
     res.status(404).json({ error: 'Not found', code: 'NOT_FOUND' });
 });
+
 
 // Centralized error handler (must be AFTER all routes)
 app.use(errorHandler);

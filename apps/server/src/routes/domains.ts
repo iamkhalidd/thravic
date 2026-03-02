@@ -1,5 +1,7 @@
 import { Router, Response } from 'express';
 import crypto from 'crypto';
+import https from 'https';
+import http from 'http';
 import { z } from 'zod';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import * as domainService from '../services/domainService';
@@ -101,21 +103,13 @@ router.get('/:id/script', authenticate, async (req: AuthRequest, res: Response) 
             return res.status(404).json({ error: 'Domain not found' });
         }
 
-        const apiUrl = process.env.SERVER_URL || process.env.API_URL || 'http://localhost:3001';
+        const apiUrl = process.env.SERVER_URL || process.env.API_URL || '';
+        if (!apiUrl) {
+            log.warn('SERVER_URL and API_URL env vars are not set — tracking script will have an empty src URL. Set SERVER_URL to your production backend URL.');
+        }
 
         const script = `<!-- TrackFlow Analytics -->
-<script>
-(function(w,d,s,t){
-  w.TF=w.TF||function(){(w.TF.q=w.TF.q||[]).push(arguments)};
-  w.TF.id="${domain.tracking_id}";
-  var f=d.getElementsByTagName(s)[0],
-      j=d.createElement(s);
-  j.async=true;
-  j.src="${apiUrl}/v.js";
-  f.parentNode.insertBefore(j,f);
-})(window,document,"script");
-TF("init");
-</script>
+<script async src="${apiUrl}/tf.js" data-tracking-id="${domain.tracking_id}"></script>
 <!-- End TrackFlow Analytics -->`;
 
         res.json({
@@ -134,6 +128,31 @@ TF("init");
     }
 });
 
+// Helper: fetch a URL and return the body as a string (follows one redirect)
+function fetchHtml(url: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const lib = url.startsWith('https') ? https : http;
+        const req = lib.get(url, { timeout: 8000, headers: { 'User-Agent': 'TrackFlow-Verifier/1.0' } }, (res) => {
+            // Follow a single redirect
+            if ((res.statusCode === 301 || res.statusCode === 302) && res.headers.location) {
+                fetchHtml(res.headers.location).then(resolve).catch(reject);
+                return;
+            }
+            let body = '';
+            res.setEncoding('utf8');
+            res.on('data', (chunk: string) => {
+                body += chunk;
+                // Stop reading after 500KB — we only need the <head>
+                if (body.length > 512000) res.destroy();
+            });
+            res.on('end', () => resolve(body));
+            res.on('error', reject);
+        });
+        req.on('error', reject);
+        req.on('timeout', () => { req.destroy(); reject(new Error('Request timed out')); });
+    });
+}
+
 // POST /api/domains/:id/verify - Verify domain installation
 router.post('/:id/verify', authenticate, async (req: AuthRequest, res: Response) => {
     try {
@@ -143,7 +162,35 @@ router.post('/:id/verify', authenticate, async (req: AuthRequest, res: Response)
             return res.status(404).json({ error: 'Domain not found' });
         }
 
+        // Normalise domain → URL
+        const rawDomain = domain.domain.trim();
+        const siteUrl = rawDomain.startsWith('http') ? rawDomain : `https://${rawDomain}`;
+
+        log.info(`Verifying tracking script on ${siteUrl} for tracking ID ${domain.tracking_id}`);
+
+        let html = '';
+        try {
+            html = await fetchHtml(siteUrl);
+        } catch (fetchErr: any) {
+            log.warn(`Could not fetch ${siteUrl}: ${fetchErr.message}`);
+            return res.json({
+                verified: false,
+                message: `Could not reach your site at ${siteUrl}. Make sure it is publicly accessible, then try again.`
+            });
+        }
+
+        const scriptFound = html.includes(domain.tracking_id);
+
+        if (!scriptFound) {
+            log.info(`Tracking ID ${domain.tracking_id} NOT found on ${siteUrl}`);
+            return res.json({
+                verified: false,
+                message: `Script not detected on ${rawDomain}. Make sure you pasted the full snippet inside the <head> tag and redeployed your site.`
+            });
+        }
+
         await domainService.verify(domain.id);
+        log.info(`Tracking ID ${domain.tracking_id} verified on ${siteUrl}`);
 
         res.json({
             verified: true,

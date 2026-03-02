@@ -9,11 +9,96 @@ import {
     Check,
     ExternalLink,
     CheckCircle2,
-    Loader2
+    Loader2,
+    AlertCircle,
+    RefreshCw,
 } from 'lucide-react';
 import { domains } from '@/lib/api';
 
 type Step = 'add' | 'script' | 'verify';
+type Platform = 'html' | 'wordpress' | 'shopify' | 'webflow' | 'nextjs';
+
+const PLATFORM_TABS: { id: Platform; label: string; emoji: string }[] = [
+    { id: 'html', label: 'HTML', emoji: '🌐' },
+    { id: 'wordpress', label: 'WordPress', emoji: '🔵' },
+    { id: 'shopify', label: 'Shopify', emoji: '🛍️' },
+    { id: 'webflow', label: 'Webflow', emoji: '⚡' },
+    { id: 'nextjs', label: 'Next.js / React', emoji: '⚛️' },
+];
+
+function getPlatformInstructions(platform: Platform, script: string) {
+    switch (platform) {
+        case 'html':
+            return {
+                snippet: script,
+                steps: [
+                    'Copy the snippet above.',
+                    'Open your website\'s HTML file (usually index.html).',
+                    'Paste it just before the closing </head> tag.',
+                    'Save and re-deploy your site.',
+                    'Click "Verify Installation" below.',
+                ],
+            };
+        case 'wordpress':
+            return {
+                snippet: script,
+                steps: [
+                    'Copy the snippet above.',
+                    'In your WordPress admin go to Appearance → Theme File Editor.',
+                    'Select header.php from the list on the right.',
+                    'Paste the snippet just before the closing </head> tag.',
+                    'Click Update File.',
+                    'Alternatively, install the "Insert Headers and Footers" plugin and paste the snippet in the Header field.',
+                    'Click "Verify Installation" below.',
+                ],
+            };
+        case 'shopify':
+            return {
+                snippet: script,
+                steps: [
+                    'Copy the snippet above.',
+                    'In your Shopify admin go to Online Store → Themes.',
+                    'Click the "..." menu next to your current theme and choose Edit code.',
+                    'Open Layout → theme.liquid.',
+                    'Paste the snippet just before the closing </head> tag.',
+                    'Click Save.',
+                    'Click "Verify Installation" below.',
+                ],
+            };
+        case 'webflow':
+            return {
+                snippet: script,
+                steps: [
+                    'Copy the snippet above.',
+                    'Open your Webflow project and go to Project Settings.',
+                    'Click the "Custom Code" tab.',
+                    'Paste the snippet in the "Head Code" section.',
+                    'Click Save Changes, then Publish your site.',
+                    'Click "Verify Installation" below.',
+                ],
+            };
+        case 'nextjs':
+            return {
+                snippet: `// In your app/layout.tsx or pages/_app.tsx
+import Script from 'next/script';
+
+// Add inside your root layout <head> or component:
+<Script
+  id="trackflow"
+  strategy="afterInteractive"
+  dangerouslySetInnerHTML={{
+    __html: \`${script.replace(/`/g, '\\`')}\`
+  }}
+/>`,
+                steps: [
+                    'Install the snippet in your root layout file (app/layout.tsx) or pages/_app.tsx.',
+                    'Use the Next.js <Script> component with strategy="afterInteractive" as shown above.',
+                    'Commit and deploy your changes.',
+                    'Click "Verify Installation" below.',
+                ],
+            };
+    }
+}
 
 export default function NewDomainPage() {
     const router = useRouter();
@@ -22,11 +107,12 @@ export default function NewDomainPage() {
     const [name, setName] = useState('');
     const [domainId, setDomainId] = useState<string | null>(null);
     const [script, setScript] = useState('');
-    const [instructions, setInstructions] = useState<string[]>([]);
     const [copied, setCopied] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [verified, setVerified] = useState(false);
+    const [verifyMessage, setVerifyMessage] = useState('');
+    const [platform, setPlatform] = useState<Platform>('html');
 
     const handleAddDomain = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -44,11 +130,9 @@ export default function NewDomainPage() {
         if (result.data) {
             setDomainId(result.data.id);
 
-            // Get script
             const scriptResult = await domains.getScript(result.data.id);
             if (scriptResult.data) {
                 setScript(scriptResult.data.script);
-                setInstructions(scriptResult.data.instructions);
             }
 
             setStep('script');
@@ -57,8 +141,8 @@ export default function NewDomainPage() {
         setLoading(false);
     };
 
-    const handleCopyScript = () => {
-        navigator.clipboard.writeText(script);
+    const handleCopyScript = (text: string) => {
+        navigator.clipboard.writeText(text);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
     };
@@ -67,20 +151,27 @@ export default function NewDomainPage() {
         if (!domainId) return;
 
         setLoading(true);
+        setError('');
+        setVerifyMessage('');
+
         const result = await domains.verify(domainId);
 
         if (result.data?.verified) {
             setVerified(true);
             setStep('verify');
         } else {
-            setError('Could not verify installation. Please make sure the script is installed correctly.');
+            // Show the message from the server (script not found / unreachable)
+            const msg = (result.data as any)?.message || result.error || 'Could not verify installation. Please make sure the script is installed correctly.';
+            setVerifyMessage(msg);
         }
 
         setLoading(false);
     };
 
+    const platformInfo = getPlatformInstructions(platform, script);
+
     return (
-        <div style={{ maxWidth: '600px', margin: '0 auto' }}>
+        <div style={{ maxWidth: '640px', margin: '0 auto' }}>
             <h1 style={{ marginBottom: 'var(--space-lg)' }}>Add New Domain</h1>
 
             {/* Progress Steps */}
@@ -143,7 +234,7 @@ export default function NewDomainPage() {
                     </div>
 
                     <h2 style={{ textAlign: 'center', marginBottom: 'var(--space-sm)' }}>Add your website</h2>
-                    <p style={{ textAlign: 'center', marginBottom: 'var(--space-xl)', fontSize: '0.875rem' }}>
+                    <p style={{ textAlign: 'center', marginBottom: 'var(--space-xl)', fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
                         Enter your domain to generate a tracking script
                     </p>
 
@@ -188,7 +279,7 @@ export default function NewDomainPage() {
                                 fontSize: '0.875rem',
                                 color: 'var(--color-text-secondary)'
                             }}>
-                                Name (optional)
+                                Name <span style={{ color: 'var(--color-text-muted)' }}>(optional)</span>
                             </label>
                             <input
                                 type="text"
@@ -215,53 +306,97 @@ export default function NewDomainPage() {
             {/* Step 2: Install Script */}
             {step === 'script' && (
                 <div className="card" style={{ padding: 'var(--space-xl)' }}>
-                    <h2 style={{ marginBottom: 'var(--space-md)' }}>Install tracking script</h2>
-                    <p style={{ marginBottom: 'var(--space-lg)', fontSize: '0.875rem' }}>
-                        Copy and paste this script into the <code>&lt;head&gt;</code> section of your website.
+                    <h2 style={{ marginBottom: 'var(--space-xs)' }}>Install tracking script</h2>
+                    <p style={{ marginBottom: 'var(--space-lg)', fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
+                        Select your platform below and follow the steps to install TrackFlow.
                     </p>
 
-                    {/* Script Block */}
+                    {/* Platform Tabs */}
                     <div style={{
-                        position: 'relative',
-                        marginBottom: 'var(--space-lg)'
+                        display: 'flex',
+                        gap: '6px',
+                        flexWrap: 'wrap',
+                        marginBottom: 'var(--space-lg)',
+                        padding: 'var(--space-xs)',
+                        background: 'var(--color-bg-tertiary)',
+                        borderRadius: 'var(--radius-md)',
                     }}>
+                        {PLATFORM_TABS.map(tab => (
+                            <button
+                                key={tab.id}
+                                onClick={() => setPlatform(tab.id)}
+                                style={{
+                                    flex: '1 1 auto',
+                                    padding: 'var(--space-xs) var(--space-sm)',
+                                    background: platform === tab.id ? 'var(--color-bg-card)' : 'transparent',
+                                    border: platform === tab.id ? '1px solid var(--color-border)' : '1px solid transparent',
+                                    borderRadius: 'var(--radius-sm)',
+                                    color: platform === tab.id ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
+                                    cursor: 'pointer',
+                                    fontSize: '0.8125rem',
+                                    fontWeight: platform === tab.id ? 600 : 400,
+                                    transition: 'all 0.15s',
+                                    whiteSpace: 'nowrap',
+                                }}
+                            >
+                                {tab.emoji} {tab.label}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Snippet */}
+                    <div style={{ position: 'relative', marginBottom: 'var(--space-lg)' }}>
                         <pre style={{
                             background: 'var(--color-bg-primary)',
                             border: '1px solid var(--color-border)',
                             borderRadius: 'var(--radius-md)',
                             padding: 'var(--space-md)',
+                            paddingRight: '80px',
                             overflow: 'auto',
-                            fontSize: '0.75rem',
+                            fontSize: '0.72rem',
                             fontFamily: 'var(--font-mono)',
-                            color: 'var(--color-text-secondary)'
+                            color: 'var(--color-text-secondary)',
+                            maxHeight: '240px',
+                            whiteSpace: 'pre-wrap',
+                            wordBreak: 'break-all',
                         }}>
-                            {script}
+                            {platformInfo.snippet}
                         </pre>
                         <button
-                            onClick={handleCopyScript}
+                            onClick={() => handleCopyScript(platformInfo.snippet)}
                             className="btn btn-secondary"
                             style={{
                                 position: 'absolute',
                                 top: 'var(--space-sm)',
                                 right: 'var(--space-sm)',
-                                padding: 'var(--space-xs) var(--space-sm)'
+                                padding: 'var(--space-xs) var(--space-sm)',
+                                fontSize: '0.8rem',
                             }}
                         >
-                            {copied ? <Check size={16} /> : <Copy size={16} />}
+                            {copied ? <Check size={14} /> : <Copy size={14} />}
                             {copied ? 'Copied!' : 'Copy'}
                         </button>
                     </div>
 
-                    {/* Instructions */}
-                    <div style={{ marginBottom: 'var(--space-lg)' }}>
-                        <h4 style={{ marginBottom: 'var(--space-sm)', fontSize: '0.875rem' }}>Instructions</h4>
+                    {/* Step-by-step instructions */}
+                    <div style={{
+                        marginBottom: 'var(--space-lg)',
+                        padding: 'var(--space-md)',
+                        background: 'var(--color-bg-secondary)',
+                        borderRadius: 'var(--radius-md)',
+                        border: '1px solid var(--color-border)',
+                    }}>
+                        <h4 style={{ marginBottom: 'var(--space-sm)', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            📋 Step-by-step instructions
+                        </h4>
                         <ol style={{
                             paddingLeft: 'var(--space-lg)',
                             display: 'flex',
                             flexDirection: 'column',
-                            gap: 'var(--space-xs)'
+                            gap: 'var(--space-xs)',
+                            margin: 0,
                         }}>
-                            {instructions.map((instruction, i) => (
+                            {platformInfo.steps.map((instruction, i) => (
                                 <li key={i} style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
                                     {instruction}
                                 </li>
@@ -269,20 +404,26 @@ export default function NewDomainPage() {
                         </ol>
                     </div>
 
-                    {error && (
+                    {/* Error / Verify message */}
+                    {verifyMessage && (
                         <div style={{
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            gap: 'var(--space-sm)',
                             padding: 'var(--space-md)',
-                            background: 'rgba(239, 68, 68, 0.1)',
-                            border: '1px solid var(--color-error)',
+                            background: 'rgba(239, 68, 68, 0.08)',
+                            border: '1px solid rgba(239, 68, 68, 0.3)',
                             borderRadius: 'var(--radius-md)',
                             color: 'var(--color-error)',
                             fontSize: '0.875rem',
-                            marginBottom: 'var(--space-lg)'
+                            marginBottom: 'var(--space-lg)',
                         }}>
-                            {error}
+                            <AlertCircle size={16} style={{ flexShrink: 0, marginTop: '2px' }} />
+                            <span>{verifyMessage}</span>
                         </div>
                     )}
 
+                    {/* Actions */}
                     <div className="flex gap-md">
                         <button
                             onClick={handleVerify}
@@ -290,17 +431,37 @@ export default function NewDomainPage() {
                             disabled={loading}
                             style={{ flex: 1 }}
                         >
-                            {loading ? <Loader2 size={18} className="animate-spin" /> : 'Verify Installation'}
+                            {loading
+                                ? <><Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> Checking...</>
+                                : verifyMessage
+                                    ? <><RefreshCw size={16} /> Try Again</>
+                                    : 'Verify Installation'
+                            }
                         </button>
                         <a
                             href={`https://${domain}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="btn btn-secondary"
+                            title="Open your site"
                         >
                             <ExternalLink size={18} />
                         </a>
                     </div>
+
+                    {/* Skip option */}
+                    <p style={{ textAlign: 'center', marginTop: 'var(--space-md)', fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>
+                        Site behind auth or not deployed yet?{' '}
+                        <button
+                            onClick={() => router.push('/dashboard')}
+                            style={{ background: 'none', border: 'none', color: 'var(--color-accent-primary)', cursor: 'pointer', fontSize: 'inherit', textDecoration: 'underline' }}
+                        >
+                            Skip for now
+                        </button>
+                    </p>
+
+                    {/* Spin keyframe */}
+                    <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
                 </div>
             )}
 
@@ -308,26 +469,31 @@ export default function NewDomainPage() {
             {step === 'verify' && verified && (
                 <div className="card" style={{ padding: 'var(--space-xl)', textAlign: 'center' }}>
                     <div style={{
-                        width: '64px',
-                        height: '64px',
+                        width: '72px',
+                        height: '72px',
                         borderRadius: 'var(--radius-full)',
-                        background: 'rgba(16, 185, 129, 0.1)',
+                        background: 'rgba(16, 185, 129, 0.12)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        margin: '0 auto var(--space-lg)'
+                        margin: '0 auto var(--space-lg)',
+                        border: '2px solid rgba(16, 185, 129, 0.3)',
                     }}>
-                        <CheckCircle2 size={32} style={{ color: 'var(--color-success)' }} />
+                        <CheckCircle2 size={36} style={{ color: 'var(--color-success)' }} />
                     </div>
 
-                    <h2 style={{ marginBottom: 'var(--space-sm)' }}>You&apos;re all set!</h2>
-                    <p style={{ marginBottom: 'var(--space-xl)', fontSize: '0.875rem' }}>
-                        Your tracking script is installed and working. Data will start appearing in your dashboard shortly.
+                    <h2 style={{ marginBottom: 'var(--space-sm)' }}>You&apos;re all set! 🎉</h2>
+                    <p style={{ marginBottom: 'var(--space-xs)', fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
+                        Your tracking script is installed and verified.
+                    </p>
+                    <p style={{ marginBottom: 'var(--space-xl)', fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>
+                        Data will start appearing in your dashboard within a few minutes of your first visitor.
                     </p>
 
                     <button
                         onClick={() => router.push('/dashboard')}
                         className="btn btn-primary"
+                        style={{ padding: 'var(--space-md) var(--space-xl)' }}
                     >
                         Go to Dashboard
                         <ArrowRight size={18} />

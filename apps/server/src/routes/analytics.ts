@@ -78,7 +78,7 @@ router.get('/:domainId/sources', authenticate, async (req: AuthRequest, res: Res
 
         res.json({
             period: { start: startDate, end: endDate },
-            sourceTypes: breakdown,
+            byType: breakdown,
             topSources: topReferrers.map(r => ({
                 source: r.referrer,
                 visits: r.sessions,
