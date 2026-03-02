@@ -101,7 +101,7 @@ router.get('/:id/script', authenticate, async (req: AuthRequest, res: Response) 
             return res.status(404).json({ error: 'Domain not found' });
         }
 
-        const apiUrl = process.env.API_URL || 'http://localhost:3001';
+        const apiUrl = process.env.SERVER_URL || process.env.API_URL || 'http://localhost:3001';
 
         const script = `<!-- TrackFlow Analytics -->
 <script>
