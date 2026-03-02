@@ -1,6 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
-import rateLimit from 'express-rate-limit';
 import { checkIp } from '../services/geoService';
 import * as eventService from '../services/eventService';
 import * as sessionService from '../services/sessionService';
@@ -36,17 +35,9 @@ const openCors = (req: Request, res: Response, next: NextFunction): void => {
 // Apply open CORS to all collect sub-routes
 router.use(openCors);
 
-// Rate limit: max 100 collect requests per IP per minute
-const collectLimiter = rateLimit({
-    windowMs: 60 * 1000,
-    max: 100,
-    standardHeaders: true,
-    legacyHeaders: false,
-    message: { error: 'Too many requests, slow down' },
-});
 
 // ── POST /api/collect/:trackingId ───────────
-router.post('/:trackingId', collectLimiter, async (req: Request, res: Response) => {
+router.post('/:trackingId', async (req: Request, res: Response) => {
     try {
         const { trackingId } = req.params;
 
@@ -126,7 +117,7 @@ router.post('/:trackingId', collectLimiter, async (req: Request, res: Response) 
 
 
 // ── POST /api/collect/:trackingId/batch ─────
-router.post('/:trackingId/batch', collectLimiter, async (req: Request, res: Response) => {
+router.post('/:trackingId/batch', async (req: Request, res: Response) => {
     try {
         const { trackingId } = req.params;
 

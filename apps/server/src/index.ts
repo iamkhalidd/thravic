@@ -124,25 +124,55 @@ app.use((_req, res, next) => {
 // Redirect guard — validates all res.redirect() calls against CORS_ORIGIN allowlist
 app.use(redirectGuard());
 
-// Rate limiting — API general (100 req / 15 min)
+// ── Rate Limiters ─────────────────────────────────────────────────────────────
+// NOTE: counters are in-memory. Add REDIS_URL (Upstash) to make them
+// persistent across Render restarts and scale to multiple instances.
+
+// 1. Global API — 50 req / 15 min per IP (covers all routes as a baseline)
 const apiLimiter = rateLimit({
-    windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000'),
-    max: parseInt(process.env.RATE_LIMIT_MAX || '100'),
+    windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000'), // 15 min
+    max: parseInt(process.env.RATE_LIMIT_MAX || '50'),
     message: { error: 'Too many requests, please try again later.' },
     standardHeaders: true,
     legacyHeaders: false,
+    skip: (req) => req.path.startsWith('/api/collect'), // collect has its own limiter
 });
 app.use('/api/', apiLimiter);
 
-// Rate limiting — Collect endpoint (5000 req / 15 min — looser for event ingestion)
-const collectLimiter = rateLimit({
+// 2. Auth routes — 10 req / 15 min per IP (stops brute-force login & register spam)
+// Applies BEFORE the global limiter counts against auth headers.
+const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 5000,
-    message: { error: 'Event rate limit exceeded' },
+    max: 10,
+    message: { error: 'Too many auth attempts, please try again in 15 minutes.' },
     standardHeaders: true,
     legacyHeaders: false,
 });
-app.use('/api/collect', collectLimiter);
+app.use('/api/auth/login', authLimiter);
+app.use('/api/auth/register', authLimiter);
+app.use('/api/auth/forgot-password', authLimiter);
+
+// 3. Event collection — 60 events / min per IP
+// A real browser page fires ~3-5 events/min. 60 is generous but stops scrapers.
+// This replaces the conflicting 5000/15min limiter that was previously here.
+const collectRateLimiter = rateLimit({
+    windowMs: 60 * 1000,  // 1 min
+    max: 60,
+    message: { error: 'Event rate limit exceeded, slow down.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+app.use('/api/collect', collectRateLimiter);
+
+// 4. Admin panel — 30 req / 15 min per IP (admin actions should never be high-volume)
+const adminLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 30,
+    message: { error: 'Too many admin requests, please slow down.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+app.use('/api/admin', adminLimiter);
 
 // Body parsing
 app.use(express.json({ limit: '10mb' }));
