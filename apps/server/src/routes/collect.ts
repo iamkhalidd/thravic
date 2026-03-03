@@ -9,6 +9,7 @@ import * as domainService from '../services/domainService';
 import { eventSchema, batchSchema } from '../validators/collect';
 import { triggerWebhooks } from '../services/webhookService';
 import { createLogger } from '../config/logger';
+import redisClient from '../db/redis';
 
 const log = createLogger('Collect');
 
@@ -61,30 +62,13 @@ router.post('/:trackingId', async (req: Request, res: Response) => {
             event.utmMedium || null
         );
 
-        // Upsert session
-        await sessionService.upsert({
-            sessionId: event.sessionId,
-            domainId: domain.id,
-            visitorId: event.visitorId,
-            source: event.utmSource || event.referrer || null,
-            sourceType,
-            referrer: event.referrer || null,
-            utmSource: event.utmSource || null,
-            utmMedium: event.utmMedium || null,
-            utmCampaign: event.utmCampaign || null,
-            utmTerm: event.utmTerm || null,
-            utmContent: event.utmContent || null,
-            userAgent,
-            screenWidth: event.screenWidth || null,
-            screenHeight: event.screenHeight || null,
-            language: event.language || null,
-            country: location?.country || null,
-            region: location?.region || null,
-            city: location?.city || null,
-        });
+        // Guard against massive JSON payloads consuming DB storage
+        if (event.data && JSON.stringify(event.data).length > 2048) {
+            return res.status(413).json({ error: 'Payload too large - custom event data limited to 2KB' });
+        }
 
-        // Insert event
-        await eventService.insertEvent({
+        // Push event to Redis queue for background batch insertion
+        const queuedEvent = {
             domainId: domain.id,
             sessionId: event.sessionId,
             visitorId: event.visitorId,
@@ -94,8 +78,21 @@ router.post('/:trackingId', async (req: Request, res: Response) => {
             utmSource: event.utmSource || null,
             utmMedium: event.utmMedium || null,
             utmCampaign: event.utmCampaign || null,
+            utmTerm: event.utmTerm || null,
+            utmContent: event.utmContent || null,
             data: event.data || {},
-        });
+            userAgent,
+            screenWidth: event.screenWidth || null,
+            screenHeight: event.screenHeight || null,
+            language: event.language || null,
+            country: location?.country || null,
+            region: location?.region || null,
+            city: location?.city || null,
+            sourceType,
+            receivedAt: new Date().toISOString()
+        };
+
+        await redisClient.lpush('trackflow:events_queue', JSON.stringify(queuedEvent));
 
         // Trigger Webhooks (async)
         triggerWebhooks(domain.id, event.type, {

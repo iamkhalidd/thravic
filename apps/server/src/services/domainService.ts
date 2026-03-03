@@ -2,6 +2,7 @@
 // TrackFlow — Domain Service
 // ──────────────────────────────────────────────
 import { query, queryOne } from '../db';
+import redisClient from '../db/redis';
 
 export interface DomainRow {
     id: string;
@@ -43,10 +44,28 @@ export async function getById(id: string): Promise<DomainRow | null> {
 }
 
 export async function getByTrackingId(trackingId: string): Promise<DomainRow | null> {
-    return queryOne<DomainRow>(
+    const cacheKey = `domain:tracking:${trackingId}`;
+    try {
+        const cached = await redisClient.get(cacheKey);
+        if (cached) return JSON.parse(cached) as DomainRow;
+    } catch (e) {
+        /* ignore cache read error */
+    }
+
+    const domain = await queryOne<DomainRow>(
         `SELECT * FROM domains WHERE tracking_id = $1`,
         [trackingId]
     );
+
+    if (domain) {
+        try {
+            await redisClient.setex(cacheKey, 300, JSON.stringify(domain)); // 5 min TTL
+        } catch (e) {
+            /* ignore cache write error */
+        }
+    }
+
+    return domain;
 }
 
 export async function verify(id: string): Promise<DomainRow | null> {

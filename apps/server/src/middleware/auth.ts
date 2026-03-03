@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { getJwtSecret } from '../config/security';
-
+import redisClient from '../db/redis';
 
 export interface AuthRequest extends Request {
     userId?: string;
@@ -13,7 +13,7 @@ export interface JwtPayload {
     email: string;
 }
 
-export const authenticate = (req: AuthRequest, res: Response, next: NextFunction) => {
+export const authenticate = async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
         const authHeader = req.headers.authorization;
 
@@ -22,8 +22,14 @@ export const authenticate = (req: AuthRequest, res: Response, next: NextFunction
         }
 
         const token = authHeader.split(' ')[1];
-        const secret = getJwtSecret();
 
+        // Check Redis blacklist for revoked tokens (e.g. from logout)
+        const isBlacklisted = await redisClient.get(`bl:${token}`);
+        if (isBlacklisted) {
+            return res.status(401).json({ error: 'Token revoked' });
+        }
+
+        const secret = getJwtSecret();
         const decoded = jwt.verify(token, secret) as JwtPayload;
 
         req.userId = decoded.userId;
@@ -35,16 +41,20 @@ export const authenticate = (req: AuthRequest, res: Response, next: NextFunction
     }
 };
 
-export const optionalAuth = (req: AuthRequest, res: Response, next: NextFunction) => {
+export const optionalAuth = async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
         const authHeader = req.headers.authorization;
 
         if (authHeader && authHeader.startsWith('Bearer ')) {
             const token = authHeader.split(' ')[1];
-            const secret = getJwtSecret();
-            const decoded = jwt.verify(token, secret) as JwtPayload;
-            req.userId = decoded.userId;
-            req.email = decoded.email;
+            
+            const isBlacklisted = await redisClient.get(`bl:${token}`);
+            if (!isBlacklisted) {
+                const secret = getJwtSecret();
+                const decoded = jwt.verify(token, secret) as JwtPayload;
+                req.userId = decoded.userId;
+                req.email = decoded.email;
+            }
         }
 
         next();

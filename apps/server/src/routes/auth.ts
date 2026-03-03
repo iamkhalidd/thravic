@@ -186,9 +186,27 @@ router.post('/refresh', async (req: Request, res: Response) => {
 // POST /api/auth/logout
 router.post('/logout', async (req: Request, res: Response) => {
     const { refreshToken } = req.body;
+    const authHeader = req.headers.authorization;
 
     if (refreshToken) {
         await tokenStore.removeRefreshToken(refreshToken);
+    }
+    
+    // Blacklist current access token
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+        const token = authHeader.split(' ')[1];
+        try {
+            const decoded = jwt.decode(token) as { exp?: number };
+            if (decoded && decoded.exp) {
+                const ttl = decoded.exp - Math.floor(Date.now() / 1000);
+                if (ttl > 0) {
+                    // Import the same redis instance cacheService uses
+                    await cache.set(`bl:${token}`, '1', ttl);
+                }
+            }
+        } catch (e) {
+            // ignore decode error on logout
+        }
     }
 
     res.json({ message: 'Logged out successfully' });

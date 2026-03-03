@@ -14,10 +14,14 @@ const log = createLogger('Server');
 // Load environment variables
 dotenv.config();
 
+import RedisStore from 'rate-limit-redis';
+import redisClient from './db/redis';
+
 // Import database and cache
 import { initDatabase, closeDatabase } from './db';
 import { initRedis, closeRedis } from './services/cacheService';
 import { initJobs } from './jobs';
+import { startEventWorker, stopEventWorker } from './jobs/eventWorker';
 
 
 // Import routes
@@ -132,6 +136,10 @@ app.use(redirectGuard());
 // Dashboard pages each trigger 4-8 parallel API calls, so 50 was way too tight.
 // Auth and collect have their own dedicated stricter limiters below.
 const apiLimiter = rateLimit({
+    store: new RedisStore({
+        // @ts-expect-error - ioredis types don't exactly match what rate-limit-redis expects
+        sendCommand: (...args: string[]) => redisClient.call(...args) as any,
+    }),
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000'), // 15 min
     max: parseInt(process.env.RATE_LIMIT_MAX || '300'),
     message: { error: 'Too many requests, please try again later.' },
@@ -144,6 +152,10 @@ app.use('/api/', apiLimiter);
 // 2. Auth routes — 10 req / 15 min per IP (stops brute-force login & register spam)
 // Applies BEFORE the global limiter counts against auth headers.
 const authLimiter = rateLimit({
+    store: new RedisStore({
+        // @ts-expect-error - ioredis types don't exactly match what rate-limit-redis expects
+        sendCommand: (...args: string[]) => redisClient.call(...args) as any,
+    }),
     windowMs: 15 * 60 * 1000,
     max: 10,
     message: { error: 'Too many auth attempts, please try again in 15 minutes.' },
@@ -158,6 +170,10 @@ app.use('/api/auth/forgot-password', authLimiter);
 // A real browser page fires ~3-5 events/min. 60 is generous but stops scrapers.
 // This replaces the conflicting 5000/15min limiter that was previously here.
 const collectRateLimiter = rateLimit({
+    store: new RedisStore({
+        // @ts-expect-error - ioredis types don't exactly match what rate-limit-redis expects
+        sendCommand: (...args: string[]) => redisClient.call(...args) as any,
+    }),
     windowMs: 60 * 1000,  // 1 min
     max: 60,
     message: { error: 'Event rate limit exceeded, slow down.' },
@@ -305,6 +321,9 @@ async function start() {
         } else {
             log.warn('DATABASE_URL not set — API routes will fail without a PostgreSQL connection. Set DATABASE_URL=postgresql://user:pass@localhost:5432/trackflow');
         }
+        
+        // Start background queue processors
+        startEventWorker();
 
         // Initialize Redis cache (optional — graceful degradation)
         await initRedis();
@@ -322,6 +341,7 @@ async function start() {
 // Graceful shutdown
 process.on('SIGTERM', async () => {
     log.info('SIGTERM received, shutting down gracefully');
+    stopEventWorker();
     await closeRedis();
     await closeDatabase();
     process.exit(0);
