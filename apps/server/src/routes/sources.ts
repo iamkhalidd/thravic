@@ -240,11 +240,15 @@ router.get('/:domainId/overview', authenticate, async (req: AuthRequest, res: Re
 
         const { startDate, endDate } = getDateRange(req.query.start as string, req.query.end as string);
 
-        const [sourceTypes, topReferrers] = await Promise.all([
+        // Fetch data
+        const [sourceTypes, topReferrersRaw, sessions, events] = await Promise.all([
             sessionService.getSourceTypeBreakdown(domain.id, startDate, endDate),
-            sessionService.getTopReferrers(domain.id, startDate, endDate, 10),
+            sessionService.getTopReferrers(domain.id, startDate, endDate, 5),
+            sessionService.queryByDomain(domain.id, startDate, endDate),
+            eventService.queryByDomain(domain.id, startDate, endDate)
         ]);
 
+        // 1. Base Breakdown
         const breakdown: Record<string, number> = {
             direct: 0, organic: 0, paid: 0, social: 0, referral: 0, email: 0
         };
@@ -253,18 +257,55 @@ router.get('/:domainId/overview', authenticate, async (req: AuthRequest, res: Re
         }
         const total = Object.values(breakdown).reduce((a, b) => a + b, 0);
 
+        const buildType = (key: string) => ({
+            count: breakdown[key] || 0,
+            percentage: total > 0 ? Math.round(((breakdown[key] || 0) / total) * 100) : 0
+        });
+
+        // 2. Top Social Platforms
+        const platformMap: Record<string, number> = {};
+        for (const session of sessions) {
+            const platform = identifyPlatform(session.referrer, SOCIAL_PLATFORMS);
+            if (platform) {
+                platformMap[platform] = (platformMap[platform] || 0) + 1;
+            }
+        }
+        const topSocial = Object.entries(platformMap)
+            .map(([platform, sessions]) => ({ platform, sessions }))
+            .sort((a, b) => b.sessions - a.sessions)
+            .slice(0, 5);
+
+        // 3. Top Campaigns
+        const campaignMap: Record<string, number> = {};
+        for (const event of events) {
+            if (event.utm_campaign) {
+                campaignMap[event.utm_campaign] = (campaignMap[event.utm_campaign] || 0) + 1;
+            }
+        }
+        const topCampaigns = Object.entries(campaignMap)
+            .map(([campaign, events]) => ({ campaign, events }))
+            .sort((a, b) => b.events - a.events)
+            .slice(0, 5);
+
+        // Assemble Final Structure matching Frontend exactly
         res.json({
-            period: { start: startDate, end: endDate },
-            total,
-            breakdown,
-            percentages: Object.fromEntries(
-                Object.entries(breakdown).map(([k, v]) => [k, total > 0 ? Math.round((v / total) * 100) : 0])
-            ),
-            topReferrers: topReferrers.map(r => ({
-                domain: extractDomain(r.referrer) || r.referrer,
-                sessions: r.sessions,
-                visitors: r.visitors,
-            }))
+            summary: {
+                totalSessions: total,
+                byType: {
+                    direct: buildType('direct'),
+                    organic: buildType('organic'),
+                    social: buildType('social'),
+                    referral: buildType('referral'),
+                    paid: buildType('paid'),
+                    email: buildType('email'),
+                }
+            },
+            topReferrers: topReferrersRaw.map(r => ({
+                site: extractDomain(r.referrer) || r.referrer,
+                sessions: r.sessions
+            })),
+            topSocial,
+            topCampaigns
         });
     } catch (error) {
         log.error('Sources overview error', error);

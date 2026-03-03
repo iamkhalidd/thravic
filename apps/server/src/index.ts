@@ -49,6 +49,9 @@ import { maintenanceModeGate, registrationGate, trackingGate } from './middlewar
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// Trust the reverse proxy (Render/Vercel) so rate limiters see the real client IP.
+app.set('trust proxy', 1);
+
 // ── CORS Origin Whitelist ─────────────────────
 // Parsed once at startup, shared by Helmet CSP & CORS middleware
 const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:3000,http://localhost:3002')
