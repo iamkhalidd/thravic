@@ -21,11 +21,13 @@ import {
     Sparkles,
     CreditCard,
     Code,
-    ExternalLink
+    ExternalLink,
+    X
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { analytics, domains } from '@/lib/api';
 import type { Metrics, TopPage, TimeseriesData, RealtimeData, Domain } from '@/types';
+import { ScriptInstallation } from '@/components/ScriptInstallation';
 
 const sourceColors = ['#F29F67', '#E0B50F', '#34B1AA', '#3B8FF3', '#10b981', '#ef4444'];
 
@@ -42,6 +44,7 @@ export default function DashboardPage() {
     const [dateRange, setDateRange] = useState('7d');
     const [copied, setCopied] = useState(false);
     const [trackingScript, setTrackingScript] = useState('');
+    const [showInstructions, setShowInstructions] = useState(false);
 
     useEffect(() => {
         domains.list().then(result => {
@@ -311,11 +314,81 @@ export default function DashboardPage() {
                             </div>
 
                             <div className="flex gap-sm">
-                                <Link href="/dashboard/domains/new" className="btn btn-primary">
+                                <button onClick={() => setShowInstructions(true)} className="btn btn-primary">
                                     <ExternalLink size={16} />
                                     View Full Instructions
-                                </Link>
+                                </button>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Instruction Modal */}
+            {showInstructions && selectedDomain && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                    backdropFilter: 'blur(4px)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 100,
+                    padding: 'var(--space-md)'
+                }}>
+                    <div className="card" style={{
+                        width: '100%',
+                        maxWidth: '700px',
+                        maxHeight: '90vh',
+                        overflowY: 'auto',
+                        position: 'relative',
+                        padding: 'var(--space-xl)'
+                    }}>
+                        <button
+                            onClick={() => setShowInstructions(false)}
+                            style={{
+                                position: 'absolute',
+                                top: 'var(--space-md)',
+                                right: 'var(--space-md)',
+                                background: 'transparent',
+                                border: 'none',
+                                cursor: 'pointer',
+                                color: 'var(--color-text-muted)'
+                            }}
+                        >
+                            <X size={20} />
+                        </button>
+
+                        <h2 style={{ marginBottom: 'var(--space-xs)' }}>Install tracking script</h2>
+                        <p style={{ marginBottom: 'var(--space-lg)', fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
+                            Select your platform below and follow the steps to install TrackFlow.
+                        </p>
+
+                        <ScriptInstallation script={trackingScript || `<script async src="https://trackflow-api.onrender.com/tf.js" data-tracking-id="${selectedDomain.trackingId}"></script>`} />
+
+                        <div style={{ marginTop: 'var(--space-xl)', display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-sm)' }}>
+                            <button onClick={() => setShowInstructions(false)} className="btn btn-secondary">
+                                Close
+                            </button>
+                            <button
+                                onClick={async () => {
+                                    // Trigger a fresh domain verify check
+                                    const result = await domains.verify(selectedDomain.id);
+                                    if (result.data?.verified) {
+                                        setShowInstructions(false);
+                                        window.location.reload();
+                                    } else {
+                                        alert((result.data as any)?.message || 'Script not detected. Please verify your installation.');
+                                    }
+                                }}
+                                className="btn btn-primary"
+                            >
+                                <RefreshCw size={16} /> Verify Installation
+                            </button>
                         </div>
                     </div>
                 </div>
