@@ -234,13 +234,15 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
     }, []);
 
     // ── Refresh data when user returns to the tab ──────────────────────────
-    // Next.js App Router caches route segments. When a user leaves and comes
-    // back, the page doesn't re-fetch. This fixes that by calling router.refresh()
-    // which triggers a server-side re-render without a full page reload.
+    // Next.js App Router caches route segments and client state. When a user leaves and comes
+    // back, the page doesn't re-fetch. This fixes that by incrementing a key that forces
+    // a remount of the main content area, triggering all useEffect data fetches again.
+    const [refreshKey, setRefreshKey] = useState(0);
     useEffect(() => {
         const handleVisibility = () => {
             if (document.visibilityState === 'visible') {
                 router.refresh();
+                setRefreshKey(prev => prev + 1);
             }
         };
         document.addEventListener('visibilitychange', handleVisibility);
@@ -606,7 +608,7 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                 </header>
 
                 {/* Page Content */}
-                <div style={{ flex: 1, padding: '20px 24px' }}>
+                <div key={refreshKey} style={{ flex: 1, padding: '20px 24px' }}>
                     {children}
                 </div>
             </main>

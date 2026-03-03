@@ -333,10 +333,26 @@ export const analytics = {
             browsers: Array<{ name: string; sessions: number; percentage: number }>;
             operatingSystems: Array<{ name: string; sessions: number; percentage: number }>;
         }>(`/api/analytics/${domainId}/devices${query}`);
+    },
+
+    // Get sequential user paths
+    async getPaths(domainId: string, start?: string, end?: string) {
+        const params = new URLSearchParams();
+        if (start) params.set('start', start);
+        if (end) params.set('end', end);
+        const query = params.toString() ? `?${params}` : '';
+
+        return apiRequest<{
+            period: { start: string; end: string };
+            flows: Array<{ from: string; to: string; count: number; percentage: number }>;
+            entries: Array<{ path: string; count: number }>;
+            exits: Array<{ path: string; count: number }>;
+        }>(`/api/analytics/${domainId}/paths${query}`);
     }
 };
 
 // Sources API (detailed traffic source analytics)
+
 export const sources = {
     async getOverview(domainId: string, start?: string, end?: string) {
         const params = new URLSearchParams();

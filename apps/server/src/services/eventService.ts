@@ -264,3 +264,77 @@ export async function getSourceBreakdown(
         [domainId, startDate, endDate]
     );
 }
+
+/**
+ * Get sequential user paths (flow from one page to the next).
+ */
+export async function getUserPaths(
+    domainId: string,
+    startDate: Date,
+    endDate: Date,
+    limit: number = 10
+): Promise<{ source_url: string; target_url: string; count: number }[]> {
+    return query<{ source_url: string; target_url: string; count: number }>(
+        `WITH numbered_events AS (
+            SELECT
+                url as source_url,
+                LEAD(url) OVER (PARTITION BY session_id ORDER BY created_at) as target_url
+            FROM events
+            WHERE domain_id = $1
+              AND created_at >= $2
+              AND created_at <= $3
+              AND type = 'pageview'
+        )
+        SELECT source_url, target_url, COUNT(*)::int as count
+        FROM numbered_events
+        WHERE target_url IS NOT NULL 
+          AND source_url != target_url
+        GROUP BY source_url, target_url
+        ORDER BY count DESC
+        LIMIT $4`,
+        [domainId, startDate, endDate, limit]
+    );
+}
+
+/**
+ * Get top entry point pages (first page in session) and exit point pages (last page)
+ */
+export async function getEntriesAndExits(
+    domainId: string,
+    startDate: Date,
+    endDate: Date,
+    limit: number = 10
+): Promise<{ url: string; is_entry: boolean; is_exit: boolean; count: number }[]> {
+    return query<{ url: string; is_entry: boolean; is_exit: boolean; count: number }>(
+        `WITH session_edges AS (
+            SELECT
+                session_id,
+                FIRST_VALUE(url) OVER w AS entry_url,
+                LAST_VALUE(url) OVER w AS exit_url
+            FROM events
+            WHERE domain_id = $1
+              AND created_at >= $2
+              AND created_at <= $3
+              AND type = 'pageview'
+            WINDOW w AS (PARTITION BY session_id ORDER BY created_at ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)
+        ),
+        distinct_edges AS (
+            SELECT DISTINCT session_id, entry_url, exit_url FROM session_edges
+        ),
+        entries AS (
+            SELECT entry_url as url, true as is_entry, false as is_exit, COUNT(*)::int as count
+            FROM distinct_edges
+            GROUP BY entry_url
+        ),
+        exits AS (
+            SELECT exit_url as url, false as is_entry, true as is_exit, COUNT(*)::int as count
+            FROM distinct_edges
+            GROUP BY exit_url
+        )
+        SELECT * FROM entries
+        UNION ALL
+        SELECT * FROM exits
+        ORDER BY count DESC`,
+        [domainId, startDate, endDate]
+    );
+}

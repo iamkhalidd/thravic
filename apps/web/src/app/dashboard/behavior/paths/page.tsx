@@ -10,25 +10,20 @@ import { useDomain } from '@/contexts/DomainContext';
 
 export default function PathsPage() {
     const { selectedDomainId, loading: domainLoading } = useDomain();
-    const [paths, setPaths] = useState<any[]>([]);
+    const [data, setData] = useState<{
+        flows: Array<{ from: string; to: string; count: number; percentage: number }>;
+        entries: Array<{ path: string; count: number }>;
+        exits: Array<{ path: string; count: number }>;
+    } | null>(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         const loadPaths = async () => {
             if (!selectedDomainId) return;
             setLoading(true);
-            // Use analytics endpoint
-            const result = await analytics.getTopPages(selectedDomainId);
+            const result = await analytics.getPaths(selectedDomainId);
             if (result.data) {
-                // Generate path data from pages
-                const pages = result.data.pages || [];
-                const mockPaths = pages.slice(0, 5).map((page: any, idx: number) => ({
-                    from: idx === 0 ? '(entry)' : pages[idx - 1]?.path || '/',
-                    to: page.path,
-                    count: page.pageviews || 0,
-                    percentage: 100 - (idx * 15)
-                }));
-                setPaths(mockPaths);
+                setData(result.data);
             }
             setLoading(false);
         };
@@ -90,7 +85,7 @@ export default function PathsPage() {
                 </h3>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-lg)' }}>
-                    {paths.map((path, idx) => (
+                    {data?.flows.map((path, idx) => (
                         <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
                             {/* From Node */}
                             <div style={{
@@ -99,11 +94,14 @@ export default function PathsPage() {
                                 borderRadius: 'var(--radius-md)',
                                 border: '1px solid var(--color-border)',
                                 minWidth: '120px',
-                                textAlign: 'center'
+                                textAlign: 'center',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis'
                             }}>
                                 <span style={{
                                     fontSize: '0.75rem',
-                                    color: 'var(--color-text-secondary)'
+                                    color: 'var(--color-text-secondary)',
+                                    whiteSpace: 'nowrap'
                                 }}>
                                     {path.from}
                                 </span>
@@ -139,18 +137,26 @@ export default function PathsPage() {
                                 borderRadius: 'var(--radius-md)',
                                 border: '1px solid var(--color-primary)',
                                 minWidth: '150px',
-                                textAlign: 'center'
+                                textAlign: 'center',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis'
                             }}>
                                 <span style={{
                                     fontSize: '0.75rem',
                                     color: 'var(--color-primary)',
-                                    fontWeight: 500
+                                    fontWeight: 500,
+                                    whiteSpace: 'nowrap'
                                 }}>
                                     {path.to}
                                 </span>
                             </div>
                         </div>
                     ))}
+                    {!data?.flows.length && (
+                        <div style={{ padding: 'var(--space-xl)', textAlign: 'center', color: 'var(--color-text-secondary)' }}>
+                            Not enough path data available yet.
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -179,7 +185,7 @@ export default function PathsPage() {
                         Top Entry Pages
                     </h3>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
-                        {paths.slice(0, 5).map((path, idx) => (
+                        {data?.entries.map((entry, idx) => (
                             <div key={idx} style={{
                                 display: 'flex',
                                 justifyContent: 'space-between',
@@ -188,13 +194,16 @@ export default function PathsPage() {
                                 borderBottom: idx < 4 ? '1px solid var(--color-border)' : 'none'
                             }}>
                                 <span style={{ fontSize: '0.8125rem', color: 'var(--color-text-primary)' }}>
-                                    {path.to}
+                                    {entry.path}
                                 </span>
                                 <span style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>
-                                    {path.count.toLocaleString()}
+                                    {entry.count.toLocaleString()}
                                 </span>
                             </div>
                         ))}
+                        {!data?.entries.length && (
+                            <span style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)' }}>No entries yet.</span>
+                        )}
                     </div>
                 </div>
 
@@ -217,7 +226,7 @@ export default function PathsPage() {
                         Top Exit Pages
                     </h3>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
-                        {paths.slice(0, 5).reverse().map((path, idx) => (
+                        {data?.exits.map((exit, idx) => (
                             <div key={idx} style={{
                                 display: 'flex',
                                 justifyContent: 'space-between',
@@ -226,13 +235,16 @@ export default function PathsPage() {
                                 borderBottom: idx < 4 ? '1px solid var(--color-border)' : 'none'
                             }}>
                                 <span style={{ fontSize: '0.8125rem', color: 'var(--color-text-primary)' }}>
-                                    {path.to}
+                                    {exit.path}
                                 </span>
                                 <span style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>
-                                    {Math.round(path.count * 0.3).toLocaleString()}
+                                    {exit.count.toLocaleString()}
                                 </span>
                             </div>
                         ))}
+                        {!data?.exits.length && (
+                            <span style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)' }}>No exits yet.</span>
+                        )}
                     </div>
                 </div>
             </div>

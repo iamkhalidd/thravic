@@ -408,4 +408,52 @@ router.get('/:domainId/devices', authenticate, async (req: AuthRequest, res: Res
     }
 });
 
+// GET /api/analytics/:domainId/paths - User flow paths
+router.get('/:domainId/paths', authenticate, async (req: AuthRequest, res: Response) => {
+    try {
+        const domain = await domainService.getById(req.params.domainId);
+        if (!domain || domain.user_id !== req.userId) {
+            return res.status(404).json({ error: 'Domain not found' });
+        }
+
+        const { startDate, endDate } = getDateRange(
+            req.query.start as string,
+            req.query.end as string
+        );
+
+        const [flows, entriesAndExits] = await Promise.all([
+            eventService.getUserPaths(domain.id, startDate, endDate, 20),
+            eventService.getEntriesAndExits(domain.id, startDate, endDate, 20)
+        ]);
+
+        const totalFlows = flows.reduce((sum, f) => sum + f.count, 0) || 1;
+
+        const entries = entriesAndExits.filter(e => e.is_entry).slice(0, 5).map(e => ({
+            path: e.url,
+            count: e.count
+        }));
+
+        const exits = entriesAndExits.filter(e => e.is_exit).slice(0, 5).map(e => ({
+            path: e.url,
+            count: e.count
+        }));
+
+        res.json({
+            period: { start: startDate, end: endDate },
+            flows: flows.map(f => ({
+                from: f.source_url,
+                to: f.target_url,
+                count: f.count,
+                percentage: Math.round((f.count / totalFlows) * 100)
+            })),
+            entries,
+            exits
+        });
+
+    } catch (error) {
+        log.error('Analytics paths error', error);
+        res.status(500).json({ error: 'Failed to get paths data' });
+    }
+});
+
 export default router;
