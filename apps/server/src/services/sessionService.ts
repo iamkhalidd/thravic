@@ -224,6 +224,7 @@ export async function getRealtimeActiveSessions(
 
 /**
  * Classify traffic source based on UTM params and referrer.
+ * Returns keys that match the frontend dashboard: direct | organic | paid | social | referral | email
  */
 export function classifySource(
     referrer: string | null,
@@ -233,29 +234,28 @@ export function classifySource(
     const medium = (utmMedium || '').toLowerCase();
     const source = (utmSource || '').toLowerCase();
 
+    // UTM-based classification (most specific)
     if (medium === 'email' || source === 'email') return 'email';
-    if (medium === 'cpc' || medium === 'ppc' || medium === 'paid') return 'ad';
-    if (source) return 'campaign';
+    if (medium === 'cpc' || medium === 'ppc' || medium === 'paid' || medium === 'paidsearch' || medium === 'paidsocial') return 'paid';
+    if (source || medium) return 'paid'; // any other UTM = deliberate campaign = paid/tracked
 
+    // Referrer-based classification
     if (!referrer) return 'direct';
 
     try {
         const refUrl = new URL(referrer);
-        const hostname = refUrl.hostname.toLowerCase();
+        const hostname = refUrl.hostname.toLowerCase().replace(/^www\./, '');
 
-        if (hostname.includes('google') || hostname.includes('bing') || hostname.includes('yahoo') || hostname.includes('duckduckgo') || hostname.includes('baidu')) {
-            return 'search';
-        }
-        if (hostname.includes('facebook') || hostname.includes('twitter') || hostname.includes('linkedin') || hostname.includes('instagram') || hostname.includes('t.co') || hostname.includes('pinterest') || hostname.includes('tiktok')) {
-            return 'social';
-        }
-        if (hostname.includes(process.env.DOMAIN || 'trackflow')) {
-            return 'internal';
-        }
-    } catch (e) {
-        // Invalid URL
+        const searchEngines = ['google.com', 'bing.com', 'yahoo.com', 'duckduckgo.com', 'baidu.com', 'yandex.com', 'ecosia.org', 'brave.com', 'search.yahoo.com'];
+        if (searchEngines.some(e => hostname === e || hostname.endsWith('.' + e))) return 'organic';
+
+        const socialNetworks = ['facebook.com', 'twitter.com', 'x.com', 't.co', 'linkedin.com', 'instagram.com', 'pinterest.com', 'tiktok.com', 'reddit.com', 'youtube.com', 'snapchat.com', 'telegram.org', 'whatsapp.com'];
+        if (socialNetworks.some(s => hostname === s || hostname.endsWith('.' + s))) return 'social';
+    } catch {
+        // malformed URL — treat as referral
     }
 
     return 'referral';
 }
+
 

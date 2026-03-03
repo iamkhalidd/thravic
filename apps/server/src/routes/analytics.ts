@@ -1,5 +1,6 @@
 import { Router, Response } from 'express';
 import { authenticate, AuthRequest } from '../middleware/auth';
+import { query as dbQuery } from '../db';
 import * as domainService from '../services/domainService';
 import * as eventService from '../services/eventService';
 import * as sessionService from '../services/sessionService';
@@ -301,6 +302,109 @@ router.get('/:domainId/pages', authenticate, async (req: AuthRequest, res: Respo
     } catch (error) {
         log.error('Analytics pages error', error);
         res.status(500).json({ error: 'Failed to get page data' });
+    }
+});
+
+// GET /api/analytics/:domainId/devices - Device, browser & OS breakdown
+router.get('/:domainId/devices', authenticate, async (req: AuthRequest, res: Response) => {
+    try {
+        const domain = await domainService.getById(req.params.domainId);
+        if (!domain || domain.user_id !== req.userId) {
+            return res.status(404).json({ error: 'Domain not found' });
+        }
+
+        const { startDate, endDate } = getDateRange(
+            req.query.start as string,
+            req.query.end as string
+        );
+
+        // Device type from screen_width (mobile < 768, tablet 768-1024, desktop > 1024)
+        const deviceRows = await dbQuery<{ device: string; count: number }>(
+            `SELECT
+                CASE
+                    WHEN s.screen_width IS NULL THEN 'unknown'
+                    WHEN s.screen_width < 768 THEN 'mobile'
+                    WHEN s.screen_width < 1024 THEN 'tablet'
+                    ELSE 'desktop'
+                END AS device,
+                COUNT(DISTINCT s.session_id)::int AS count
+             FROM sessions s
+             WHERE s.domain_id = $1
+               AND s.started_at >= $2
+               AND s.started_at <= $3
+             GROUP BY 1
+             ORDER BY count DESC`,
+            [domain.id, startDate, endDate]
+        );
+
+        // Browser from user_agent substring matching
+        const browserRows = await dbQuery<{ browser: string; count: number }>(
+            `SELECT
+                CASE
+                    WHEN s.user_agent ILIKE '%Edg/%' OR s.user_agent ILIKE '%Edge/%' THEN 'Edge'
+                    WHEN s.user_agent ILIKE '%OPR/%' OR s.user_agent ILIKE '%Opera%' THEN 'Opera'
+                    WHEN s.user_agent ILIKE '%Firefox/%' THEN 'Firefox'
+                    WHEN s.user_agent ILIKE '%Chrome/%' AND s.user_agent NOT ILIKE '%Chromium%' THEN 'Chrome'
+                    WHEN s.user_agent ILIKE '%Safari/%' AND s.user_agent NOT ILIKE '%Chrome%' THEN 'Safari'
+                    WHEN s.user_agent ILIKE '%Chromium%' THEN 'Chromium'
+                    WHEN s.user_agent IS NULL THEN 'Unknown'
+                    ELSE 'Other'
+                END AS browser,
+                COUNT(DISTINCT s.session_id)::int AS count
+             FROM sessions s
+             WHERE s.domain_id = $1
+               AND s.started_at >= $2
+               AND s.started_at <= $3
+             GROUP BY 1
+             ORDER BY count DESC`,
+            [domain.id, startDate, endDate]
+        );
+
+        // OS from user_agent
+        const osRows = await dbQuery<{ os: string; count: number }>(
+            `SELECT
+                CASE
+                    WHEN s.user_agent ILIKE '%Windows%' THEN 'Windows'
+                    WHEN s.user_agent ILIKE '%iPhone%' OR s.user_agent ILIKE '%iPad%' THEN 'iOS'
+                    WHEN s.user_agent ILIKE '%Macintosh%' OR s.user_agent ILIKE '%Mac OS%' THEN 'macOS'
+                    WHEN s.user_agent ILIKE '%Android%' THEN 'Android'
+                    WHEN s.user_agent ILIKE '%Linux%' THEN 'Linux'
+                    WHEN s.user_agent IS NULL THEN 'Unknown'
+                    ELSE 'Other'
+                END AS os,
+                COUNT(DISTINCT s.session_id)::int AS count
+             FROM sessions s
+             WHERE s.domain_id = $1
+               AND s.started_at >= $2
+               AND s.started_at <= $3
+             GROUP BY 1
+             ORDER BY count DESC`,
+            [domain.id, startDate, endDate]
+        );
+
+        const total = (deviceRows as any[]).reduce((sum, r) => sum + r.count, 0) || 1;
+
+        res.json({
+            period: { start: startDate, end: endDate },
+            devices: (deviceRows as any[]).map(r => ({
+                name: r.device.charAt(0).toUpperCase() + r.device.slice(1),
+                sessions: r.count,
+                percentage: Math.round((r.count / total) * 100)
+            })),
+            browsers: (browserRows as any[]).map(r => ({
+                name: r.browser,
+                sessions: r.count,
+                percentage: Math.round((r.count / total) * 100)
+            })),
+            operatingSystems: (osRows as any[]).map(r => ({
+                name: r.os,
+                sessions: r.count,
+                percentage: Math.round((r.count / total) * 100)
+            }))
+        });
+    } catch (error) {
+        log.error('Analytics devices error', error);
+        res.status(500).json({ error: 'Failed to get device data' });
     }
 });
 

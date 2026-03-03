@@ -128,10 +128,12 @@ app.use(redirectGuard());
 // NOTE: counters are in-memory. Add REDIS_URL (Upstash) to make them
 // persistent across Render restarts and scale to multiple instances.
 
-// 1. Global API — 50 req / 15 min per IP (covers all routes as a baseline)
+// 1. Global API — 300 req / 15 min per IP
+// Dashboard pages each trigger 4-8 parallel API calls, so 50 was way too tight.
+// Auth and collect have their own dedicated stricter limiters below.
 const apiLimiter = rateLimit({
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000'), // 15 min
-    max: parseInt(process.env.RATE_LIMIT_MAX || '50'),
+    max: parseInt(process.env.RATE_LIMIT_MAX || '300'),
     message: { error: 'Too many requests, please try again later.' },
     standardHeaders: true,
     legacyHeaders: false,

@@ -321,6 +321,19 @@ export const analytics = {
             }>;
         }>(`/api/analytics/${domainId}/pages${query}`);
     }
+    // Get device, browser, and OS breakdown
+    async getDevices(domainId: string, start?: string, end?: string) {
+        const params = new URLSearchParams();
+        if (start) params.set('start', start);
+        if (end) params.set('end', end);
+        const query = params.toString() ? `?${params}` : '';
+
+        return apiRequest<{
+            devices: Array<{ name: string; sessions: number; percentage: number }>;
+            browsers: Array<{ name: string; sessions: number; percentage: number }>;
+            operatingSystems: Array<{ name: string; sessions: number; percentage: number }>;
+        }>(`/api/analytics/${domainId}/devices${query}`);
+    }
 };
 
 // Sources API (detailed traffic source analytics)

@@ -233,6 +233,20 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
         });
     }, []);
 
+    // ── Refresh data when user returns to the tab ──────────────────────────
+    // Next.js App Router caches route segments. When a user leaves and comes
+    // back, the page doesn't re-fetch. This fixes that by calling router.refresh()
+    // which triggers a server-side re-render without a full page reload.
+    useEffect(() => {
+        const handleVisibility = () => {
+            if (document.visibilityState === 'visible') {
+                router.refresh();
+            }
+        };
+        document.addEventListener('visibilitychange', handleVisibility);
+        return () => document.removeEventListener('visibilitychange', handleVisibility);
+    }, [router]);
+
     const handleLogout = async () => {
         await auth.logout();
         router.push('/login');
