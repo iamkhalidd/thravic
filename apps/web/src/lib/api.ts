@@ -320,7 +320,7 @@ export const analytics = {
                 bounceRate: number;
             }>;
         }>(`/api/analytics/${domainId}/pages${query}`);
-    }
+    },
     // Get device, browser, and OS breakdown
     async getDevices(domainId: string, start?: string, end?: string) {
         const params = new URLSearchParams();
