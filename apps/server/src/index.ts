@@ -136,6 +136,15 @@ app.use(redirectGuard());
 // NOTE: counters are in-memory. Add REDIS_URL (Upstash) to make them
 // persistent across Render restarts and scale to multiple instances.
 
+// Helper to reliably extract the client's real IP behind proxies
+const getIp = (req: express.Request) => {
+    const forwarded = req.headers['x-forwarded-for'] as string;
+    if (forwarded) {
+        return forwarded.split(',')[0].trim();
+    }
+    return req.socket.remoteAddress || req.ip || 'unknown';
+};
+
 // 1. Global API — 300 req / 15 min per IP
 // Dashboard pages each trigger 4-8 parallel API calls, so 50 was way too tight.
 // Auth and collect have their own dedicated stricter limiters below.
@@ -149,6 +158,7 @@ const apiLimiter = rateLimit({
     message: { error: 'Too many requests, please try again later.' },
     standardHeaders: true,
     legacyHeaders: false,
+    keyGenerator: getIp,
     skip: (req) => req.path.startsWith('/api/collect'), // collect has its own limiter
 });
 app.use('/api/', apiLimiter);
@@ -165,6 +175,7 @@ const authLimiter = rateLimit({
     message: { error: 'Too many auth attempts, please try again in 15 minutes.' },
     standardHeaders: true,
     legacyHeaders: false,
+    keyGenerator: getIp,
 });
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/register', authLimiter);
@@ -183,6 +194,7 @@ const collectRateLimiter = rateLimit({
     message: { error: 'Event rate limit exceeded, slow down.' },
     standardHeaders: true,
     legacyHeaders: false,
+    keyGenerator: getIp,
 });
 app.use('/api/collect', collectRateLimiter);
 
@@ -193,6 +205,7 @@ const adminLimiter = rateLimit({
     message: { error: 'Too many admin requests, please slow down.' },
     standardHeaders: true,
     legacyHeaders: false,
+    keyGenerator: getIp,
 });
 app.use('/api/admin', adminLimiter);
 
