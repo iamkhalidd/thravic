@@ -163,9 +163,7 @@ export default function TrafficSourcesPage() {
             </div>
 
             {/* Chart Section */}
-            <div style={{
-                display: 'grid',
-                gridTemplateColumns: '1fr 1fr',
+            <div className="dash-grid-2" style={{
                 gap: 'var(--space-lg)',
                 marginBottom: 'var(--space-xl)'
             }}>
@@ -306,11 +304,7 @@ export default function TrafficSourcesPage() {
             </div>
 
             {/* Quick Links */}
-            <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(3, 1fr)',
-                gap: 'var(--space-md)'
-            }}>
+            <div className="dash-grid-3">
                 <Link
                     href="/dashboard/traffic/campaigns"
                     style={{

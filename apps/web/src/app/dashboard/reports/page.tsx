@@ -236,11 +236,7 @@ export default function ReportsPage() {
                         }}>
                             Select Report Type
                         </h3>
-                        <div style={{
-                            display: 'grid',
-                            gridTemplateColumns: 'repeat(2, 1fr)',
-                            gap: 'var(--space-md)'
-                        }}>
+                        <div className="dash-grid-2">
                             {reportTypes.map(type => (
                                 <button
                                     key={type.id}

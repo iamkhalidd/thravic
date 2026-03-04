@@ -401,6 +401,49 @@ a:hover {
 .grid-cols-3     { grid-template-columns: repeat(3, 1fr); }
 .grid-cols-4     { grid-template-columns: repeat(4, 1fr); }
 
+/* ── Dashboard Content Grids ── */
+/* These auto-collapse at tablet/mobile breakpoints so pages don't need inline media queries */
+.dash-grid-4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-md);
+}
+.dash-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-md);
+}
+.dash-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-md);
+}
+
+/* Horizontal-scroll wrapper for tables */
+.dash-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.dash-table-wrap table {
+  min-width: 600px;
+}
+
+/* Dashboard page content area */
+.dash-content {
+  flex: 1;
+  padding: 20px 24px;
+}
+
+/* Dashboard page header (title + actions row) */
+.dash-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  margin-bottom: var(--space-lg);
+  flex-wrap: wrap;
+}
+
 /* ── Dashboard Sidebar (Desktop) ── */
 .dash-sidebar {
   position: fixed;
@@ -517,6 +560,17 @@ a:hover {
     display: flex;
   }
 
+  /* Dashboard grids — collapse to 2 cols */
+  .dash-grid-4 { grid-template-columns: repeat(2, 1fr); }
+  .dash-grid-3 { grid-template-columns: repeat(2, 1fr); }
+
+  /* Utility grids — collapse to 2 cols on tablet */
+  .grid-cols-4 { grid-template-columns: repeat(2, 1fr); }
+  .grid-cols-3 { grid-template-columns: repeat(2, 1fr); }
+
+  /* Dashboard content — tighter padding */
+  .dash-content { padding: 16px; }
+
   /* Landing grids */
   .lp-grid-features {
     grid-template-columns: 1fr;
@@ -540,6 +594,20 @@ a:hover {
 @media (max-width: 640px) {
   h1 { font-size: 1.875rem; }
   h2 { font-size: 1.5rem; }
+
+  /* Dashboard grids — full width single column */
+  .dash-grid-4,
+  .dash-grid-3,
+  .dash-grid-2 { grid-template-columns: 1fr; }
+
+  /* Dashboard content — compact padding */
+  .dash-content { padding: 12px; }
+
+  /* Dashboard page header — stack vertically */
+  .dash-page-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 
   .lp-grid-3,
   .lp-grid-4-stat { grid-template-columns: 1fr; }
@@ -570,5 +638,4 @@ a:hover {
 @media (min-width: 641px) {
   .desktop-only { display: flex; }
 }
-
 

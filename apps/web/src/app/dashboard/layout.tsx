@@ -608,7 +608,7 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                 </header>
 
                 {/* Page Content */}
-                <div key={refreshKey} style={{ flex: 1, padding: '20px 24px' }}>
+                <div key={refreshKey} className="dash-content">
                     {children}
                 </div>
             </main>

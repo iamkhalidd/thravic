@@ -111,7 +111,7 @@ export default function PagesPage() {
             </div>
 
             {/* Pages Table */}
-            <div style={{
+            <div className="dash-table-wrap" style={{
                 background: 'var(--color-bg-secondary)',
                 borderRadius: 'var(--radius-lg)',
                 border: '1px solid var(--color-border)',

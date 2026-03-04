@@ -106,10 +106,7 @@ export default function TrendsPage() {
             </div>
 
             {/* Trend Summary */}
-            <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(3, 1fr)',
-                gap: 'var(--space-md)',
+            <div className="dash-grid-3" style={{
                 marginBottom: 'var(--space-xl)'
             }}>
                 <div style={{

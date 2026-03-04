@@ -161,9 +161,7 @@ export default function PathsPage() {
             </div>
 
             {/* Entry vs Exit Pages */}
-            <div style={{
-                display: 'grid',
-                gridTemplateColumns: '1fr 1fr',
+            <div className="dash-grid-2" style={{
                 gap: 'var(--space-lg)'
             }}>
                 <div style={{

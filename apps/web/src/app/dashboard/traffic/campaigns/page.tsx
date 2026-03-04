@@ -201,11 +201,7 @@ export default function CampaignsPage() {
                                 </div>
                             </div>
 
-                            <div style={{
-                                display: 'grid',
-                                gridTemplateColumns: 'repeat(4, 1fr)',
-                                gap: 'var(--space-md)'
-                            }}>
+                            <div className="dash-grid-4">
                                 <div>
                                     <div style={{
                                         fontSize: '0.6875rem',
