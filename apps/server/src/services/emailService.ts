@@ -16,44 +16,62 @@ export interface EmailOptions {
     html?: string;
 }
 
-// ── Transport ────────────────────────────────────────────────────────────────
+// ── Transport (lazy-init) ────────────────────────────────────────────────────
+// Created on first send, not on module load, to ensure env vars are available.
 
-function createTransport() {
+let transporter: nodemailer.Transporter | null = null;
+let transporterChecked = false;
+
+function getTransporter(): nodemailer.Transporter | null {
+    if (transporterChecked) return transporter;
+    transporterChecked = true;
+
     const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS } = process.env;
+
+    log.info(`SMTP config check — HOST=${SMTP_HOST || '(not set)'}, PORT=${SMTP_PORT || '(not set)'}, USER=${SMTP_USER ? SMTP_USER.slice(0, 4) + '***' : '(not set)'}, PASS=${SMTP_PASS ? '****' : '(not set)'}`);
 
     if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) {
         log.warn('SMTP not configured — emails will be logged to console only');
         return null;
     }
 
-    return nodemailer.createTransport({
+    transporter = nodemailer.createTransport({
         host: SMTP_HOST,
         port: Number(SMTP_PORT) || 587,
         secure: Number(SMTP_PORT) === 465,
         auth: { user: SMTP_USER, pass: SMTP_PASS },
     });
+
+    // Verify connection asynchronously — log result but don't block
+    transporter.verify()
+        .then(() => log.info('✅ SMTP connection verified successfully'))
+        .catch((err: Error) => log.error(`❌ SMTP connection verification FAILED: ${err.message}`));
+
+    return transporter;
 }
 
-let transporter: nodemailer.Transporter | null = null;
-
+// Keep initEmailTransport for backwards compatibility but make it a no-op
+// (transport is now created lazily on first send)
 export function initEmailTransport() {
-    transporter = createTransport();
+    // Force re-check on next send
+    transporterChecked = false;
+    transporter = null;
 }
-
-// Auto-init on module load
-initEmailTransport();
 
 // ── Core send ────────────────────────────────────────────────────────────────
 
 export const sendEmail = async (options: EmailOptions): Promise<void> => {
     const from = process.env.SMTP_FROM || 'TrackFlow <noreply@trackflow.app>';
+    const transport = getTransporter();
 
-    if (transporter) {
+    if (transport) {
         try {
-            await transporter.sendMail({ from, ...options });
-            log.info(`Email sent — "${options.subject}" → ${options.to}`);
+            const info = await transport.sendMail({ from, ...options });
+            log.info(`✅ Email sent — "${options.subject}" → ${options.to} (messageId: ${info.messageId})`);
         } catch (err) {
-            log.error(`Email failed → ${options.to}: ${(err as Error).message}`);
+            const error = err as Error;
+            log.error(`❌ Email FAILED → ${options.to}: ${error.message}`);
+            log.error(`   Full error: ${error.stack || error.toString()}`);
             throw err;
         }
         return;

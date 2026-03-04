@@ -367,6 +367,26 @@ app.get(['/tf.js', '/v.js'], (req, res) => {
 `.trim());
 });
 
+// ── Email diagnostic endpoint ───────────────────────────────────────────────
+app.get('/api/test-email', async (req, res) => {
+    const { sendEmail } = await import('./services/emailService');
+    const to = (req.query.to as string) || process.env.SMTP_USER || '';
+    if (!to) return res.status(400).json({ error: 'No recipient — set ?to=email or SMTP_USER env' });
+
+    try {
+        await sendEmail({
+            to,
+            subject: '🧪 TrackFlow Test Email',
+            text: `This is a test email from TrackFlow at ${new Date().toISOString()}. If you see this, SMTP is working!`,
+            html: `<div style="font-family:sans-serif;padding:20px;"><h2>✅ SMTP is working!</h2><p>Sent at: ${new Date().toISOString()}</p><p>Server: ${process.env.SERVER_URL || 'localhost'}</p></div>`,
+        });
+        res.json({ ok: true, message: `Test email sent to ${to}` });
+    } catch (err) {
+        const error = err as Error;
+        res.status(500).json({ ok: false, error: error.message, stack: error.stack });
+    }
+});
+
 // 404 handler
 app.use((req, res) => {
     res.status(404).json({ error: 'Not found', code: 'NOT_FOUND' });
