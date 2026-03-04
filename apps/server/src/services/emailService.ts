@@ -1,10 +1,11 @@
 // ──────────────────────────────────────────────
 // TrackFlow — Email Service
-// Supports Gmail SMTP (App Password) via nodemailer.
-// Set SMTP_HOST / SMTP_PORT / SMTP_USER / SMTP_PASS in .env.
-// Without those vars, emails are logged to console only (dev mode).
+// Primary:  Resend (HTTP API) — works on all cloud providers (Render, etc.)
+// Fallback: SMTP via nodemailer (works on localhost / non-blocking hosts)
+// Dev:      Console logging if neither is configured
 // ──────────────────────────────────────────────
 import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 import { createLogger } from '../config/logger';
 
 const log = createLogger('Email');
@@ -16,24 +17,30 @@ export interface EmailOptions {
     html?: string;
 }
 
-// ── Transport (lazy-init) ────────────────────────────────────────────────────
-// Created on first send, not on module load, to ensure env vars are available.
+// ── Resend (HTTP-based, recommended for production) ──────────────────────────
+
+let resend: Resend | null = null;
+
+function getResend(): Resend | null {
+    if (resend) return resend;
+    const apiKey = process.env.RESEND_API_KEY;
+    if (!apiKey) return null;
+    resend = new Resend(apiKey);
+    log.info('✅ Resend API configured (HTTP email delivery)');
+    return resend;
+}
+
+// ── SMTP fallback (for localhost / dev) ──────────────────────────────────────
 
 let transporter: nodemailer.Transporter | null = null;
-let transporterChecked = false;
+let smtpChecked = false;
 
-function getTransporter(): nodemailer.Transporter | null {
-    if (transporterChecked) return transporter;
-    transporterChecked = true;
+function getSmtpTransporter(): nodemailer.Transporter | null {
+    if (smtpChecked) return transporter;
+    smtpChecked = true;
 
     const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS } = process.env;
-
-    log.info(`SMTP config check — HOST=${SMTP_HOST || '(not set)'}, PORT=${SMTP_PORT || '(not set)'}, USER=${SMTP_USER ? SMTP_USER.slice(0, 4) + '***' : '(not set)'}, PASS=${SMTP_PASS ? '****' : '(not set)'}`);
-
-    if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) {
-        log.warn('SMTP not configured — emails will be logged to console only');
-        return null;
-    }
+    if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) return null;
 
     transporter = nodemailer.createTransport({
         host: SMTP_HOST,
@@ -42,42 +49,62 @@ function getTransporter(): nodemailer.Transporter | null {
         auth: { user: SMTP_USER, pass: SMTP_PASS },
     });
 
-    // Verify connection asynchronously — log result but don't block
-    transporter.verify()
-        .then(() => log.info('✅ SMTP connection verified successfully'))
-        .catch((err: Error) => log.error(`❌ SMTP connection verification FAILED: ${err.message}`));
-
+    log.info('SMTP transport configured (fallback)');
     return transporter;
 }
 
-// Keep initEmailTransport for backwards compatibility but make it a no-op
-// (transport is now created lazily on first send)
+// Keep for backwards compatibility
 export function initEmailTransport() {
-    // Force re-check on next send
-    transporterChecked = false;
+    resend = null;
     transporter = null;
+    smtpChecked = false;
 }
 
 // ── Core send ────────────────────────────────────────────────────────────────
 
 export const sendEmail = async (options: EmailOptions): Promise<void> => {
-    const from = process.env.SMTP_FROM || 'TrackFlow <noreply@trackflow.app>';
-    const transport = getTransporter();
+    const from = process.env.SMTP_FROM || 'TrackFlow <onboarding@resend.dev>';
 
-    if (transport) {
+    // 1. Try Resend (HTTP — works on Render, Vercel, etc.)
+    const r = getResend();
+    if (r) {
         try {
-            const info = await transport.sendMail({ from, ...options });
-            log.info(`✅ Email sent — "${options.subject}" → ${options.to} (messageId: ${info.messageId})`);
+            const { data, error } = await r.emails.send({
+                from,
+                to: options.to,
+                subject: options.subject,
+                text: options.text,
+                html: options.html || options.text,
+            });
+            if (error) {
+                log.error(`❌ Resend error → ${options.to}: ${error.message}`);
+                throw new Error(error.message);
+            }
+            log.info(`✅ Email sent via Resend — "${options.subject}" → ${options.to} (id: ${data?.id})`);
+            return;
         } catch (err) {
             const error = err as Error;
-            log.error(`❌ Email FAILED → ${options.to}: ${error.message}`);
-            log.error(`   Full error: ${error.stack || error.toString()}`);
+            log.error(`❌ Resend FAILED → ${options.to}: ${error.message}`);
+            throw err;
+        }
+    }
+
+    // 2. Try SMTP (works on localhost)
+    const smtp = getSmtpTransporter();
+    if (smtp) {
+        try {
+            const info = await smtp.sendMail({ from, ...options });
+            log.info(`✅ Email sent via SMTP — "${options.subject}" → ${options.to} (messageId: ${info.messageId})`);
+        } catch (err) {
+            const error = err as Error;
+            log.error(`❌ SMTP FAILED → ${options.to}: ${error.message}`);
             throw err;
         }
         return;
     }
 
-    // Dev fallback — log to console
+    // 3. Dev fallback — log to console
+    log.warn('No email provider configured (set RESEND_API_KEY or SMTP_HOST)');
     log.info(`[DEV EMAIL] To: ${options.to} | Subject: ${options.subject}`);
     log.info(`[DEV EMAIL] ${options.text}`);
 };
