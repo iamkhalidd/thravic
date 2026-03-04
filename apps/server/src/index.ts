@@ -152,6 +152,7 @@ const apiLimiter = rateLimit({
     store: new RedisStore({
         // @ts-expect-error - ioredis types don't exactly match what rate-limit-redis expects
         sendCommand: (...args: string[]) => redisClient.call(...args) as any,
+        prefix: 'rl:global:',
     }),
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000'), // 15 min
     max: parseInt(process.env.RATE_LIMIT_MAX || '300'),
@@ -169,6 +170,7 @@ const authLimiter = rateLimit({
     store: new RedisStore({
         // @ts-expect-error - ioredis types don't exactly match what rate-limit-redis expects
         sendCommand: (...args: string[]) => redisClient.call(...args) as any,
+        prefix: 'rl:auth:',
     }),
     windowMs: 15 * 60 * 1000,
     max: 10,
@@ -188,6 +190,7 @@ const collectRateLimiter = rateLimit({
     store: new RedisStore({
         // @ts-expect-error - ioredis types don't exactly match what rate-limit-redis expects
         sendCommand: (...args: string[]) => redisClient.call(...args) as any,
+        prefix: 'rl:collect:',
     }),
     windowMs: 60 * 1000,  // 1 min
     max: 60,
@@ -198,8 +201,12 @@ const collectRateLimiter = rateLimit({
 });
 app.use('/api/collect', collectRateLimiter);
 
-// 4. Admin panel — 30 req / 15 min per IP (admin actions should never be high-volume)
 const adminLimiter = rateLimit({
+    store: new RedisStore({
+        // @ts-expect-error - ioredis types don't exactly match what rate-limit-redis expects
+        sendCommand: (...args: string[]) => redisClient.call(...args) as any,
+        prefix: 'rl:admin:',
+    }),
     windowMs: 15 * 60 * 1000,
     max: 30,
     message: { error: 'Too many admin requests, please slow down.' },
