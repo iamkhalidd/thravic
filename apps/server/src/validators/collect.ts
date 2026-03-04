@@ -4,7 +4,7 @@
 import { z } from 'zod';
 
 export const eventSchema = z.object({
-    type: z.enum(['pageview', 'click', 'scroll', 'form', 'custom']),
+    type: z.enum(['pageview', 'click', 'scroll', 'form', 'custom', 'session_end']),
     url: z.string().url('Invalid URL'),
     referrer: z.string().optional(),
     visitorId: z.string().min(1, 'Visitor ID is required'),
