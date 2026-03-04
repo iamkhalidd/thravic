@@ -84,11 +84,11 @@ function NavItem({ item, pathname, expandedSections, toggleSection, collapsed }:
         gap: collapsed ? '0' : '10px',
         padding: collapsed ? '10px 0' : '8px 12px',
         justifyContent: collapsed ? 'center' : 'flex-start',
-        background: isActive ? 'rgba(242,159,103,0.1)' : 'transparent',
+        background: isActive ? 'var(--color-bg-hover)' : 'transparent',
         border: 'none',
-        borderLeft: isActive && !collapsed ? '3px solid #f29f67' : collapsed ? 'none' : '3px solid transparent',
+        borderLeft: isActive && !collapsed ? '2px solid var(--color-accent-primary)' : collapsed ? 'none' : '2px solid transparent',
         borderRadius: collapsed ? '8px' : '0 6px 6px 0',
-        color: isActive ? '#f29f67' : 'var(--color-text-secondary)',
+        color: isActive ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
         cursor: 'pointer',
         fontSize: '0.875rem',
         fontWeight: isActive ? 600 : 400,
@@ -127,12 +127,12 @@ function NavItem({ item, pathname, expandedSections, toggleSection, collapsed }:
                                     style={{
                                         display: 'block',
                                         padding: '6px 12px 6px 28px',
-                                        color: childActive ? '#f29f67' : 'var(--color-text-secondary)',
+                                        color: childActive ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
                                         fontSize: '0.8125rem',
                                         fontWeight: childActive ? 500 : 400,
                                         textDecoration: 'none',
                                         borderRadius: '4px',
-                                        background: childActive ? 'rgba(242,159,103,0.08)' : 'transparent',
+                                        background: childActive ? 'var(--color-bg-hover)' : 'transparent',
                                         transition: 'all 150ms ease',
                                     }}
                                 >
@@ -287,7 +287,7 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                             textDecoration: 'none', color: 'var(--color-text-primary)',
                         }}>
                             <div style={{
-                                width: '28px', height: '28px', background: '#f29f67',
+                                width: '28px', height: '28px', background: 'var(--color-accent-primary)',
                                 borderRadius: '6px', display: 'flex', alignItems: 'center',
                                 justifyContent: 'center', flexShrink: 0,
                             }}>
@@ -298,7 +298,7 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                     )}
                     {sidebarCollapsed && !isMobile && (
                         <div style={{
-                            width: '28px', height: '28px', background: '#f29f67',
+                            width: '28px', height: '28px', background: 'var(--color-accent-primary)',
                             borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center',
                         }}>
                             <TrendingUp size={15} color="white" />
@@ -361,9 +361,9 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                                             onClick={() => { setSelectedDomain(domain.id); setDomainDropdownOpen(false); }}
                                             style={{
                                                 width: '100%', padding: '8px 12px',
-                                                background: selectedDomain === domain.id ? 'rgba(242,159,103,0.1)' : 'transparent',
+                                                background: selectedDomain === domain.id ? 'var(--color-bg-hover)' : 'transparent',
                                                 border: 'none', textAlign: 'left', cursor: 'pointer',
-                                                fontSize: '0.8125rem', color: selectedDomain === domain.id ? '#f29f67' : 'var(--color-text-primary)',
+                                                fontSize: '0.8125rem', color: selectedDomain === domain.id ? 'var(--color-accent-primary)' : 'var(--color-text-primary)',
                                             }}
                                         >{domain.domain}</button>
                                     ))}
@@ -373,7 +373,7 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                                         style={{
                                             display: 'block', padding: '8px 12px',
                                             borderTop: '1px solid var(--color-border)',
-                                            color: '#f29f67', fontSize: '0.8125rem',
+                                            color: 'var(--color-accent-primary)', fontSize: '0.8125rem',
                                         }}
                                     >+ Add Domain</Link>
                                 </div>
@@ -416,10 +416,10 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                             gap: (sidebarCollapsed && !isMobile) ? '0' : '10px',
                             padding: (sidebarCollapsed && !isMobile) ? '10px 0' : '8px 12px',
                             justifyContent: (sidebarCollapsed && !isMobile) ? 'center' : 'flex-start',
-                            color: pathname.startsWith('/dashboard/settings') ? '#f29f67' : 'var(--color-text-secondary)',
+                            color: pathname.startsWith('/dashboard/settings') ? 'var(--color-accent-primary)' : 'var(--color-text-secondary)',
                             textDecoration: 'none', fontSize: '0.875rem',
-                            background: pathname.startsWith('/dashboard/settings') ? 'rgba(242,159,103,0.1)' : 'transparent',
-                            borderLeft: !(sidebarCollapsed && !isMobile) && pathname.startsWith('/dashboard/settings') ? '3px solid #f29f67' : !(sidebarCollapsed && !isMobile) ? '3px solid transparent' : 'none',
+                            background: pathname.startsWith('/dashboard/settings') ? 'var(--color-bg-hover)' : 'transparent',
+                            borderLeft: !(sidebarCollapsed && !isMobile) && pathname.startsWith('/dashboard/settings') ? '3px solid var(--color-accent-primary)' : !(sidebarCollapsed && !isMobile) ? '3px solid transparent' : 'none',
                             whiteSpace: 'nowrap', overflow: 'hidden',
                         }}
                     >
@@ -438,7 +438,7 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                         }}>
                             <div style={{
                                 width: '28px', height: '28px', borderRadius: '50%',
-                                background: '#f29f67', display: 'flex', alignItems: 'center',
+                                background: 'var(--color-accent-primary)', display: 'flex', alignItems: 'center',
                                 justifyContent: 'center', color: 'white',
                                 fontWeight: 700, fontSize: '0.75rem', flexShrink: 0,
                             }}>
@@ -536,10 +536,10 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                                             onClick={() => { setDateRange(preset.value); setDateDropdownOpen(false); }}
                                             style={{
                                                 width: '100%', padding: '8px 12px',
-                                                background: dateRange === preset.value ? 'rgba(242,159,103,0.1)' : 'transparent',
+                                                background: dateRange === preset.value ? 'var(--color-bg-hover)' : 'transparent',
                                                 border: 'none', textAlign: 'left', cursor: 'pointer',
                                                 fontSize: '0.8125rem',
-                                                color: dateRange === preset.value ? '#f29f67' : 'var(--color-text-primary)',
+                                                color: dateRange === preset.value ? 'var(--color-accent-primary)' : 'var(--color-text-primary)',
                                             }}
                                         >{preset.label}</button>
                                     ))}
@@ -554,11 +554,11 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                             style={{
                                 alignItems: 'center', gap: '6px',
                                 padding: '5px 10px',
-                                background: comparisonEnabled ? 'rgba(242,159,103,0.1)' : 'var(--color-bg-primary)',
-                                border: `1px solid ${comparisonEnabled ? '#f29f67' : 'var(--color-border)'}`,
+                                background: comparisonEnabled ? 'var(--color-bg-hover)' : 'var(--color-bg-primary)',
+                                border: `1px solid ${comparisonEnabled ? 'var(--color-accent-primary)' : 'var(--color-border)'}`,
                                 borderRadius: '6px', cursor: 'pointer',
                                 fontSize: '0.8125rem',
-                                color: comparisonEnabled ? '#f29f67' : 'var(--color-text-secondary)',
+                                color: comparisonEnabled ? 'var(--color-accent-primary)' : 'var(--color-text-secondary)',
                             }}
                         >
                             <TrendingUp size={13} />

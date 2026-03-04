@@ -65,7 +65,7 @@ interface Campaign {
     pagesPerSession: number;
 }
 
-const COLORS = ['#F29F67', '#E0B50F', '#34B1AA', '#3B8FF3', '#10b981', '#ef4444'];
+const COLORS = ['var(--color-accent-primary)', '#E0B50F', '#34B1AA', '#3B8FF3', '#10b981', '#ef4444'];
 
 const sourceTypeIcons: Record<string, React.ElementType> = {
     direct: MousePointer2,

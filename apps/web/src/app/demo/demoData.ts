@@ -18,7 +18,7 @@ export const trafficData = [
 ];
 
 export const sourceData = [
-    { name: 'Direct', value: 3240, color: '#F29F67' },
+    { name: 'Direct', value: 3240, color: 'var(--color-accent-primary)' },
     { name: 'Organic', value: 2180, color: '#E0B50F' },
     { name: 'Social', value: 1560, color: '#34B1AA' },
     { name: 'Referral', value: 890, color: '#3B8FF3' },

@@ -73,7 +73,7 @@ export function UpgradeGate({ feature, requiredPlan, message, blurChildren, chil
                         marginTop: '0.5rem',
                         padding: '0.5rem 1.25rem',
                         borderRadius: '0.5rem',
-                        background: 'var(--accent, #F29F67)',
+                        background: 'var(--accent, var(--color-accent-primary))',
                         color: '#fff',
                         fontWeight: 600,
                         textDecoration: 'none',

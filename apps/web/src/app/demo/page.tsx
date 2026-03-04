@@ -87,7 +87,7 @@ export default function DemoPage() {
             {/* Demo Banner */}
             <div style={{
                 position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100,
-                background: 'linear-gradient(90deg, #F29F67, #E0B50F)',
+                background: 'linear-gradient(90deg, var(--color-accent-primary), #E0B50F)',
                 padding: '10px var(--space-md)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--space-md)'
             }}>
@@ -118,7 +118,7 @@ export default function DemoPage() {
                             <BarChart3 size={18} color="white" />
                         </div>
                         <span style={{ fontSize: '1.125rem', fontWeight: 700 }}>TrackFlow</span>
-                        <span style={{ marginLeft: '4px', padding: '2px 8px', background: 'rgba(242,159,103,0.2)', color: '#F29F67', borderRadius: 'var(--radius-full)', fontSize: '0.6875rem', fontWeight: 600 }}>DEMO</span>
+                        <span style={{ marginLeft: '4px', padding: '2px 8px', background: 'var(--color-bg-hover)', color: 'var(--color-accent-primary)', borderRadius: 'var(--radius-full)', fontSize: '0.6875rem', fontWeight: 600 }}>DEMO</span>
                     </Link>
                 </div>
 
@@ -150,7 +150,7 @@ export default function DemoPage() {
                                     <div key={i}>
                                         <button onClick={() => toggleSection(item.label)} style={{
                                             width: '100%', display: 'flex', alignItems: 'center', gap: 'var(--space-sm)',
-                                            padding: 'var(--space-sm) var(--space-md)', background: itemActive ? 'rgba(242,159,103,0.1)' : 'transparent',
+                                            padding: 'var(--space-sm) var(--space-md)', background: itemActive ? 'var(--color-bg-hover)' : 'transparent',
                                             border: 'none', borderRadius: 'var(--radius-md)',
                                             color: itemActive ? 'var(--color-primary)' : 'var(--color-text-secondary)',
                                             cursor: 'pointer', fontSize: '0.875rem', fontWeight: itemActive ? 500 : 400,
@@ -168,7 +168,7 @@ export default function DemoPage() {
                                                             padding: 'var(--space-xs) var(--space-md)',
                                                             color: isActive(child.id) ? 'var(--color-primary)' : 'var(--color-text-secondary)',
                                                             fontSize: '0.8125rem', borderRadius: 'var(--radius-sm)',
-                                                            background: isActive(child.id) ? 'rgba(242,159,103,0.1)' : 'transparent',
+                                                            background: isActive(child.id) ? 'var(--color-bg-hover)' : 'transparent',
                                                             border: 'none', cursor: 'pointer',
                                                         }}
                                                     >
@@ -186,7 +186,7 @@ export default function DemoPage() {
                                     style={{
                                         display: 'flex', alignItems: 'center', gap: 'var(--space-sm)',
                                         padding: 'var(--space-sm) var(--space-md)', width: '100%', textAlign: 'left',
-                                        background: itemActive ? 'rgba(242,159,103,0.1)' : 'transparent',
+                                        background: itemActive ? 'var(--color-bg-hover)' : 'transparent',
                                         borderRadius: 'var(--radius-md)', border: 'none',
                                         color: itemActive ? 'var(--color-primary)' : 'var(--color-text-secondary)',
                                         fontSize: '0.875rem', fontWeight: itemActive ? 500 : 400, cursor: 'pointer',

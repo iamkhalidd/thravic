@@ -16,7 +16,7 @@ import { useDomain } from '@/contexts/DomainContext';
 
 // Channel icons and colors
 const channels = {
-    direct: { label: 'Direct', color: '#F29F67' },
+    direct: { label: 'Direct', color: 'var(--color-accent-primary)' },
     organic: { label: 'Organic Search', color: '#22c55e' },
     paid: { label: 'Paid Search', color: '#f59e0b' },
     social: { label: 'Social', color: '#34B1AA' },
