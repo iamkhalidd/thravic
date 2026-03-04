@@ -141,10 +141,9 @@ router.patch('/:id', adminAuth, async (req: AuthRequest, res: Response) => {
         // Sync the subscriptions table when plan changes
         if (subscription && user) {
             const PLAN_LIMITS: Record<string, { events: number; domains: number }> = {
-                free:       { events: 10_000,     domains: 1  },
-                growth:     { events: 250_000,    domains: 5  },
-                pro:        { events: 2_000_000,  domains: 20 },
-                enterprise: { events: -1,         domains: -1 },
+                free:   { events: 5_000,     domains: 1  },
+                pro:    { events: 100_000,   domains: 3  },
+                agency: { events: 500_000,   domains: 20 },
             };
             const limits = PLAN_LIMITS[subscription] ?? PLAN_LIMITS.free;
             await query(

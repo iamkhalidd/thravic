@@ -106,7 +106,7 @@ export interface User {
     id: string;
     email: string;
     name: string;
-    subscription: 'free' | 'growth' | 'pro' | 'enterprise';
+    subscription: 'free' | 'pro' | 'agency';
     createdAt?: string;
 }
 

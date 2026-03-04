@@ -47,9 +47,8 @@ router.get('/', adminAuth, async (req: AuthRequest, res: Response) => {
         const revenue = await query(
             `SELECT plan, COUNT(*) as count,
                     SUM(CASE plan 
-                        WHEN 'growth' THEN 39 
-                        WHEN 'pro' THEN 99 
-                        WHEN 'enterprise' THEN 299 
+                        WHEN 'pro' THEN 29 
+                        WHEN 'agency' THEN 79 
                         ELSE 0 END
                     ) as revenue
              FROM subscriptions WHERE status = 'active'

@@ -38,9 +38,8 @@ router.get('/stats', adminAuth, async (req: AuthRequest, res: Response) => {
         const mrr = await queryOne<{ total: string }>(
             `SELECT COALESCE(SUM(
                 CASE plan 
-                    WHEN 'growth' THEN 39 
-                    WHEN 'pro' THEN 99 
-                    WHEN 'enterprise' THEN 299 
+                    WHEN 'pro' THEN 29 
+                    WHEN 'agency' THEN 79 
                     ELSE 0 
                 END
             ), 0) as total FROM subscriptions WHERE status = 'active'`
@@ -167,9 +166,8 @@ router.get('/actions', adminAuth, async (req: AuthRequest, res: Response) => {
                 SELECT
                     COUNT(*) as count,
                     SUM(CASE plan
-                        WHEN 'growth' THEN 39
-                        WHEN 'pro' THEN 99
-                        WHEN 'enterprise' THEN 299
+                        WHEN 'pro' THEN 29
+                        WHEN 'agency' THEN 79
                         ELSE 0 END) as mrr
                 FROM subscriptions
                 WHERE status = 'active'

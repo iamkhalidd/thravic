@@ -13,7 +13,7 @@ export interface User {
     password: string;
     name: string;
     createdAt: Date;
-    subscription: 'free' | 'growth' | 'pro' | 'enterprise';
+    subscription: 'free' | 'pro' | 'agency';
 }
 
 // ── Domain ──────────────────────────────────

@@ -21,9 +21,8 @@ interface Subscription {
 
 const PLAN_COLORS: Record<string, string> = {
     free: '#606072',
-    growth: '#6c5ce7',
-    pro: '#ffaa00',
-    enterprise: '#00d68f'
+    pro: '#6c5ce7',
+    agency: '#00d68f'
 };
 
 export default function SubscriptionsPage() {
@@ -118,9 +117,8 @@ export default function SubscriptionsPage() {
                 <select className="input" style={{ width: '180px' }} value={plan} onChange={e => setPlan(e.target.value)}>
                     <option value="">All Plans</option>
                     <option value="free">Free</option>
-                    <option value="growth">Growth</option>
                     <option value="pro">Pro</option>
-                    <option value="enterprise">Enterprise</option>
+                    <option value="agency">Agency</option>
                 </select>
                 <span style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>{total} total subscriptions</span>
             </div>
@@ -173,9 +171,8 @@ export default function SubscriptionsPage() {
                                 <label style={{ display: 'block', fontSize: '13px', color: 'var(--color-text-secondary)', marginBottom: '4px' }}>Plan</label>
                                 <select className="input" value={editForm.plan} onChange={e => setEditForm(f => ({ ...f, plan: e.target.value }))}>
                                     <option value="free">Free</option>
-                                    <option value="growth">Growth</option>
                                     <option value="pro">Pro</option>
-                                    <option value="enterprise">Enterprise</option>
+                                    <option value="agency">Agency</option>
                                 </select>
                             </div>
                             <div>

@@ -134,9 +134,8 @@ export default function UsersPage() {
                 >
                     <option value="">All Plans</option>
                     <option value="free">Free</option>
-                    <option value="growth">Growth</option>
                     <option value="pro">Pro</option>
-                    <option value="enterprise">Enterprise</option>
+                    <option value="agency">Agency</option>
                 </select>
             </div>
 
@@ -226,9 +225,8 @@ export default function UsersPage() {
                                 <label style={{ display: 'block', fontSize: '13px', color: 'var(--color-text-secondary)', marginBottom: '4px' }}>Plan</label>
                                 <select className="input" value={editForm.subscription} onChange={e => setEditForm(f => ({ ...f, subscription: e.target.value }))}>
                                     <option value="free">Free</option>
-                                    <option value="growth">Growth</option>
                                     <option value="pro">Pro</option>
-                                    <option value="enterprise">Enterprise</option>
+                                    <option value="agency">Agency</option>
                                 </select>
                             </div>
                             <div>

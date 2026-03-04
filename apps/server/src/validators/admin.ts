@@ -8,7 +8,7 @@ import { z } from 'zod';
 export const updateUserSchema = z.object({
     name: z.string().min(2).max(100).optional(),
     email: z.string().email().optional(),
-    subscription: z.enum(['free', 'growth', 'pro', 'enterprise']).optional(),
+    subscription: z.enum(['free', 'pro', 'agency']).optional(),
     role: z.enum(['user', 'admin', 'super_admin']).optional(),
 });
 
@@ -31,7 +31,7 @@ export const transferDomainSchema = z.object({
 
 // ── Subscription Management ─────────────────
 export const updateSubscriptionSchema = z.object({
-    plan: z.enum(['free', 'growth', 'pro', 'enterprise']).optional(),
+    plan: z.enum(['free', 'pro', 'agency']).optional(),
     status: z.enum(['active', 'canceled', 'past_due']).optional(),
     events_limit: z.number().int().min(-1).optional(),
     domains_limit: z.number().int().min(-1).optional(),

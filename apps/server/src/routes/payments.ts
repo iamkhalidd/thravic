@@ -20,9 +20,8 @@ const PAYSTACK_BASE  = 'https://api.paystack.co';
 // Prices in the smallest currency unit (USD cents for Paystack).
 // Paystack supports USD — set your Paystack dashboard to a USD-enabled integration.
 const PLAN_PRICES_CENTS: Record<string, number> = {
-    growth:     39_00,    // $39 / month
-    pro:        99_00,    // $99 / month
-    enterprise: 299_00,   // $299 / month
+    pro:    29_00,    // $29 / month
+    agency: 79_00,    // $79 / month
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -116,7 +115,7 @@ router.post('/checkout', authenticate, async (req: AuthRequest, res: Response) =
         const userId = req.userId!;
         const userEmail = req.email!;
 
-        if (!plan || !['growth', 'pro', 'enterprise'].includes(plan)) {
+        if (!plan || !['pro', 'agency'].includes(plan)) {
             return res.status(400).json({ error: 'Invalid plan' });
         }
 
@@ -373,7 +372,7 @@ async function upgradeSubscription(userId: string, plan: PlanName, reference: st
     ).catch(() => null);
 
     if (user) {
-        const planPrices: Record<string, number> = { growth: 39, pro: 99, enterprise: 299 };
+        const planPrices: Record<string, number> = { pro: 29, agency: 79 };
         sendPaymentReceiptEmail(
             user.email,
             user.name,

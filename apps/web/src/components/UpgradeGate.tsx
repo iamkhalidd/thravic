@@ -16,10 +16,9 @@ interface UpgradeGateProps {
 }
 
 const PLAN_LABELS: Record<PlanName, string> = {
-    free: 'Free',
-    growth: 'Growth',
+    free: 'Hobby',
     pro: 'Pro',
-    enterprise: 'Enterprise',
+    agency: 'Agency',
 };
 
 /**

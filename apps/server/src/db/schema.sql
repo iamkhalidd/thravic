@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS users (
     email VARCHAR(255) UNIQUE NOT NULL,
     password VARCHAR(255) NOT NULL,
     name VARCHAR(255) NOT NULL,
-    subscription VARCHAR(50) DEFAULT 'free' CHECK (subscription IN ('free', 'growth', 'pro', 'enterprise')),
+    subscription VARCHAR(50) DEFAULT 'free' CHECK (subscription IN ('free', 'pro', 'agency')),
     paystack_customer_code VARCHAR(255),
     paystack_subscription_code VARCHAR(255),
     preferences JSONB DEFAULT '{}',
@@ -184,7 +184,7 @@ CREATE TABLE IF NOT EXISTS subscriptions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     paystack_subscription_code VARCHAR(255),
-    plan VARCHAR(50) NOT NULL CHECK (plan IN ('free', 'growth', 'pro', 'enterprise')),
+    plan VARCHAR(50) NOT NULL CHECK (plan IN ('free', 'pro', 'agency')),
     status VARCHAR(50) DEFAULT 'active' CHECK (status IN ('active', 'canceled', 'past_due', 'trialing')),
     events_limit INTEGER NOT NULL,
     domains_limit INTEGER NOT NULL,
@@ -295,10 +295,9 @@ ON CONFLICT (key) DO NOTHING;
 -- Default retention policies
 -- ═══════════════════════════════════════════════
 INSERT INTO data_retention_policies (plan, events_days, sessions_days, recordings_days, heatmaps_days) VALUES
-    ('free', 7, 7, 7, 7),
-    ('growth', 90, 90, 30, 90),
+    ('free', 30, 30, 30, 30),
     ('pro', 365, 365, 90, 365),
-    ('enterprise', 730, 730, 365, 730)
+    ('agency', 730, 730, 365, 730)
 ON CONFLICT (plan) DO NOTHING;
 
 -- ═══════════════════════════════════════════════

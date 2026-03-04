@@ -17,7 +17,7 @@ export type PlanFeature =
     | 'webhooks'
     | 'team';
 
-export type PlanName = 'free' | 'growth' | 'pro' | 'enterprise';
+export type PlanName = 'free' | 'pro' | 'agency';
 
 export interface Subscription {
     plan: PlanName;

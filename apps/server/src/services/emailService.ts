@@ -183,7 +183,7 @@ export async function sendWelcomeEmail(to: string, name: string): Promise<void> 
             Your TrackFlow account is ready. Start tracking traffic, building funnels, and getting AI-powered insights for your website.
           </p>
           <table style="background:#0f0f1a;border-radius:8px;width:100%;border-collapse:collapse;margin-bottom:8px;">
-            ${infoRow('Plan', 'Free — 10,000 events/mo')}
+            ${infoRow('Plan', 'Hobby — 5,000 events/mo')}
             ${infoRow('Domains', '1 domain included')}
           </table>
           ${btn('Open Dashboard →', `${frontendUrl}/dashboard`)}

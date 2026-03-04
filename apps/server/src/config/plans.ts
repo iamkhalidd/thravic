@@ -5,15 +5,15 @@
 // Consumed by featureGate middleware and payments routes.
 // ──────────────────────────────────────────────
 
-export type PlanName = 'free' | 'growth' | 'pro' | 'enterprise';
+export type PlanName = 'free' | 'pro' | 'agency';
 
 export type PlanFeature =
     | 'analytics'       // Core dashboard (all plans)
     | 'realtime'        // Real-time visitors (all plans)
     | 'utm'             // UTM / traffic sources (all plans)
-    | 'heatmaps'        // Click & scroll heatmaps (Growth+)
-    | 'insights'        // Auto-generated smart insights (Growth+)
-    | 'export'          // CSV data export (Growth+)
+    | 'heatmaps'        // Click & scroll heatmaps (Pro+)
+    | 'insights'        // Auto-generated smart insights (Pro+)
+    | 'export'          // CSV data export (Pro+)
     | 'funnels'         // Conversion funnels (Pro+)
     | 'recordings'      // Session recordings (Pro+)
     | 'experiments'     // A/B experiments (Pro+)
@@ -26,14 +26,6 @@ export const PLAN_FEATURES: Record<PlanName, PlanFeature[]> = {
         'analytics',
         'realtime',
         'utm',
-    ],
-    growth: [
-        'analytics',
-        'realtime',
-        'utm',
-        'heatmaps',
-        'insights',
-        'export',
     ],
     pro: [
         'analytics',
@@ -48,7 +40,7 @@ export const PLAN_FEATURES: Record<PlanName, PlanFeature[]> = {
         'webhooks',
         'team',
     ],
-    enterprise: [
+    agency: [
         'analytics',
         'realtime',
         'utm',
@@ -68,9 +60,9 @@ const FEATURE_PLAN_MAP: Record<PlanFeature, PlanName> = {
     analytics:    'free',
     realtime:     'free',
     utm:          'free',
-    heatmaps:     'growth',
-    insights:     'growth',
-    export:       'growth',
+    heatmaps:     'pro',
+    insights:     'pro',
+    export:       'pro',
     funnels:      'pro',
     recordings:   'pro',
     experiments:  'pro',
@@ -85,32 +77,25 @@ export function getPlanForFeature(feature: PlanFeature): PlanName {
 /** Usage & pricing limits per plan */
 export const PLAN_LIMITS = {
     free: {
-        name: 'Free',
-        eventsLimit: 10_000,
+        name: 'Hobby',
+        eventsLimit: 5_000,
         domainsLimit: 1,
-        retentionDays: 7,
+        retentionDays: 30,
         price: 0,
-    },
-    growth: {
-        name: 'Growth',
-        eventsLimit: 250_000,
-        domainsLimit: 5,
-        retentionDays: 90,
-        price: 39,
     },
     pro: {
         name: 'Pro',
-        eventsLimit: 2_000_000,
-        domainsLimit: 20,
+        eventsLimit: 100_000,
+        domainsLimit: 3,
         retentionDays: 365,
-        price: 99,
+        price: 29,
     },
-    enterprise: {
-        name: 'Enterprise',
-        eventsLimit: -1,       // Unlimited
-        domainsLimit: -1,
-        retentionDays: 365,
-        price: 299,
+    agency: {
+        name: 'Agency',
+        eventsLimit: 500_000,
+        domainsLimit: 20,
+        retentionDays: 730,
+        price: 79,
     },
 } satisfies Record<PlanName, { name: string; eventsLimit: number; domainsLimit: number; retentionDays: number; price: number }>;
 

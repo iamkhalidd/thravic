@@ -22,31 +22,24 @@ import { auth, domains, payments } from '@/lib/api';
 const plans = [
     {
         id: 'free',
-        name: 'Free',
+        name: 'Hobby',
         price: 0,
         currency: 'USD',
-        features: ['1 domain', '10,000 events/mo', '7-day history', 'Basic analytics'],
-    },
-    {
-        id: 'growth',
-        name: 'Growth',
-        price: 39,
-        currency: 'USD',
-        features: ['5 domains', '250,000 events/mo', '90-day history', 'Heatmaps', 'AI Insights', 'CSV Export'],
+        features: ['1 domain', '5,000 events/mo', '30-day history', 'Core analytics & UTM'],
     },
     {
         id: 'pro',
         name: 'Pro',
-        price: 99,
+        price: 29,
         currency: 'USD',
-        features: ['20 domains', '2M events/mo', '1-year history', 'Funnels', 'Session recordings', 'A/B Experiments', 'Team members'],
+        features: ['3 domains', '100,000 events/mo', '1-year history', 'Heatmaps & recordings', 'Funnels & AI insights', 'CSV export & team'],
     },
     {
-        id: 'enterprise',
-        name: 'Enterprise',
-        price: 299,
+        id: 'agency',
+        name: 'Agency',
+        price: 79,
         currency: 'USD',
-        features: ['Unlimited domains', 'Unlimited events', '1-year history', 'Everything in Pro', 'Priority support', 'Custom integrations'],
+        features: ['20 domains', '500,000 events/mo', '2-year history', 'Everything in Pro', 'Unlimited team members', 'Priority support'],
     },
 ];
 

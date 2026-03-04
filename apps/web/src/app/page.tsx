@@ -72,18 +72,18 @@ const stats = [
 
 const pricingTiers = [
     {
-        name: 'Starter', price: 'Free', description: 'Perfect for side projects',
-        features: ['1 website', '10k events/month', 'Basic analytics', '7-day retention'],
+        name: 'Hobby', price: 'Free', description: 'For personal projects & blogs',
+        features: ['1 website', '5k events/month', 'Core analytics & UTM', '30-day retention'],
         cta: 'Get Started Free', highlighted: false
     },
     {
-        name: 'Growth', price: '$39', period: '/month', description: 'For growing startups',
-        features: ['5 websites', '250k events/month', 'Funnels & heatmaps', 'Session recordings', 'AI insights', '90-day retention'],
+        name: 'Pro', price: '$29', period: '/month', description: 'For startups & businesses',
+        features: ['3 websites', '100k events/month', 'Heatmaps & recordings', 'Funnels & AI insights', 'CSV export & team', '1-year retention'],
         cta: 'Start Free Trial', highlighted: true
     },
     {
-        name: 'Pro', price: '$99', period: '/month', description: 'For agencies & teams',
-        features: ['20 websites', '2M events/month', 'Advanced AI', 'Cross-domain analytics', '1-year retention', 'Priority support'],
+        name: 'Agency', price: '$79', period: '/month', description: 'For agencies & high-traffic',
+        features: ['20 websites', '500k events/month', 'Everything in Pro', 'Unlimited team members', '2-year retention', 'Priority support'],
         cta: 'Start Free Trial', highlighted: false
     }
 ];
