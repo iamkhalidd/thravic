@@ -21,8 +21,6 @@ import {
     Calendar,
     RefreshCw,
     Download,
-    Sun,
-    Moon,
     PanelLeftClose,
     PanelLeftOpen,
     Menu,
@@ -30,7 +28,6 @@ import {
 } from 'lucide-react';
 import { auth } from '@/lib/api';
 import { DomainProvider, useDomain } from '@/contexts/DomainContext';
-import { useTheme } from '@/contexts/ThemeContext';
 import { DateRangeProvider, useDateRange, datePresets } from '@/contexts/DateRangeContext';
 import { AnnouncementBanner } from '@/components/AnnouncementBanner';
 import { ImpersonationBanner } from '@/components/ImpersonationBanner';
@@ -149,29 +146,6 @@ function NavItem({ item, pathname, expandedSections, toggleSection, collapsed }:
             <Icon size={18} style={{ flexShrink: 0 }} />
             {!collapsed && <span>{item.label}</span>}
         </Link>
-    );
-}
-
-function ThemeToggleButton() {
-    const { theme, toggleTheme } = useTheme();
-    return (
-        <button
-            onClick={toggleTheme}
-            title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
-            style={{
-                padding: '6px',
-                background: 'transparent',
-                border: '1px solid var(--color-border)',
-                borderRadius: '6px',
-                color: 'var(--color-text-secondary)',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-            }}
-        >
-            {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
-        </button>
     );
 }
 
@@ -456,7 +430,6 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                                         }}>{user.subscription} Plan</div>
                                     </div>
                                     <div style={{ display: 'flex', gap: '4px' }}>
-                                        <ThemeToggleButton />
                                         <button
                                             onClick={handleLogout}
                                             title="Logout"
@@ -599,9 +572,6 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                             <Download size={13} />
                             <span>Export</span>
                         </button>
-
-                        {/* Theme toggle — always visible */}
-                        <ThemeToggleButton />
                     </div>
                 </header>
 

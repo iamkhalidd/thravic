@@ -79,24 +79,28 @@ export default function TrendsPage() {
             </div>
 
             {/* Metric Selector */}
-            <div style={{
-                display: 'flex',
-                gap: 'var(--space-xs)',
-                marginBottom: 'var(--space-lg)'
+            <div style={{ 
+                display: 'inline-flex', 
+                gap: '4px', 
+                marginBottom: 'var(--space-lg)',
+                background: 'var(--color-bg-secondary)',
+                padding: '4px',
+                borderRadius: '8px',
+                border: '1px solid var(--color-border)'
             }}>
                 {(['visitors', 'sessions', 'pageviews'] as const).map(m => (
                     <button
                         key={m}
                         onClick={() => setMetric(m)}
                         style={{
-                            padding: 'var(--space-xs) var(--space-md)',
-                            background: metric === m ? 'var(--color-primary)' : 'var(--color-bg-tertiary)',
-                            color: metric === m ? 'white' : 'var(--color-text-secondary)',
-                            border: 'none',
-                            borderRadius: 'var(--radius-md)',
+                            padding: '6px 16px',
+                            background: metric === m ? 'var(--color-bg-hover)' : 'transparent',
+                            color: metric === m ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
+                            border: metric === m ? '1px solid var(--color-border)' : '1px solid transparent',
+                            borderRadius: '6px',
                             cursor: 'pointer',
                             fontSize: '0.8125rem',
-                            fontWeight: 500,
+                            fontWeight: metric === m ? 500 : 400,
                             textTransform: 'capitalize'
                         }}
                     >

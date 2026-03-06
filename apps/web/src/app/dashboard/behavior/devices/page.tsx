@@ -87,21 +87,28 @@ export default function DevicesPage() {
             </div>
 
             {/* Tab Selector */}
-            <div style={{ display: 'flex', gap: 'var(--space-xs)', marginBottom: 'var(--space-lg)' }}>
+            <div style={{ 
+                display: 'inline-flex', 
+                gap: '4px', 
+                marginBottom: 'var(--space-lg)',
+                background: 'var(--color-bg-secondary)',
+                padding: '4px',
+                borderRadius: '8px',
+                border: '1px solid var(--color-border)'
+            }}>
                 {(['devices', 'browsers', 'os'] as const).map(t => (
                     <button
                         key={t}
                         onClick={() => setTab(t)}
                         style={{
-                            padding: 'var(--space-xs) var(--space-md)',
-                            background: tab === t ? 'var(--color-primary)' : 'var(--color-bg-tertiary)',
-                            color: tab === t ? 'white' : 'var(--color-text-secondary)',
-                            border: 'none',
-                            borderRadius: 'var(--radius-md)',
+                            padding: '6px 16px',
+                            background: tab === t ? 'var(--color-bg-hover)' : 'transparent',
+                            color: tab === t ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
+                            border: tab === t ? '1px solid var(--color-border)' : '1px solid transparent',
+                            borderRadius: '6px',
                             cursor: 'pointer',
                             fontSize: '0.8125rem',
-                            fontWeight: 500,
-                            textTransform: 'capitalize'
+                            fontWeight: tab === t ? 500 : 400,
                         }}
                     >
                         {t === 'os' ? 'Operating Systems' : t === 'browsers' ? 'Browsers' : 'Devices'}

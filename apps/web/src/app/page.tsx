@@ -3,9 +3,8 @@
 import Link from 'next/link';
 import {
     BarChart3, Target, MousePointer2, Video, Sparkles, Globe,
-    ArrowRight, Check, Sun, Moon, Lock
+    ArrowRight, Check, Lock
 } from 'lucide-react';
-import { useTheme } from '@/contexts/ThemeContext';
 
 /* ─── DATA ─── */
 
@@ -137,8 +136,6 @@ const s = {
 
 /* ─── COMPONENT ─── */
 export default function HomePage() {
-    const { theme, toggleTheme } = useTheme();
-
     return (
         <div style={s.page}>
             <div className="linear-hero-grid"></div>
@@ -171,15 +168,6 @@ export default function HomePage() {
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <button onClick={toggleTheme} aria-label="Toggle theme"
-                            style={{
-                                padding: '6px', background: 'transparent', border: '1px solid var(--color-border)',
-                                borderRadius: 'var(--radius-md)', color: 'var(--color-text-muted)',
-                                cursor: 'pointer', display: 'flex', alignItems: 'center',
-                                transition: 'all 0.2s',
-                            }}>
-                            {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
-                        </button>
                         <Link href="/login" style={{
                             color: 'var(--color-text-secondary)', textDecoration: 'none',
                             fontSize: '0.8125rem', fontWeight: 500,

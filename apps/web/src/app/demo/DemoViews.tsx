@@ -417,12 +417,44 @@ export function HeatmapsView() {
         <>
             <h2 style={{ margin: '0 0 var(--space-lg)', fontSize: '1.25rem' }}>Heatmaps</h2>
             <div style={{ display: 'flex', gap: 'var(--space-sm)', marginBottom: 'var(--space-lg)' }}>
-                {['Click Map', 'Scroll Map'].map((tab, i) => (
-                    <button key={tab} style={{ padding: 'var(--space-sm) var(--space-md)', background: i === 0 ? 'var(--color-primary)' : 'var(--color-bg-tertiary)', color: i === 0 ? 'white' : 'var(--color-text-secondary)', border: '1px solid ' + (i === 0 ? 'var(--color-primary)' : 'var(--color-border)'), borderRadius: 'var(--radius-md)', cursor: 'pointer', fontSize: '0.875rem', fontWeight: i === 0 ? 600 : 400 }}>{tab}</button>
-                ))}
+                {/* Left Tabs (Segmented Control) */}
+                <div style={{ 
+                    display: 'inline-flex', 
+                    gap: '4px', 
+                    background: 'var(--color-bg-secondary)',
+                    padding: '4px',
+                    borderRadius: '8px',
+                    border: '1px solid var(--color-border)'
+                }}>
+                    {['Click Map', 'Scroll Map'].map((tab, i) => (
+                        <button key={tab} style={{ 
+                            padding: '6px 16px', 
+                            background: i === 0 ? 'var(--color-bg-hover)' : 'transparent', 
+                            color: i === 0 ? 'var(--color-text-primary)' : 'var(--color-text-secondary)', 
+                            border: i === 0 ? '1px solid var(--color-border)' : '1px solid transparent', 
+                            borderRadius: '6px', 
+                            cursor: 'pointer', 
+                            fontSize: '0.8125rem', 
+                            fontWeight: i === 0 ? 500 : 400 
+                        }}>{tab}</button>
+                    ))}
+                </div>
+                
+                {/* Right Tabs */}
                 <div style={{ marginLeft: 'auto', display: 'flex', gap: 'var(--space-sm)' }}>
                     {[{ icon: Monitor, label: 'Desktop' }, { icon: Tablet, label: 'Tablet' }, { icon: Smartphone, label: 'Mobile' }].map((d, i) => (
-                        <button key={d.label} style={{ padding: 'var(--space-xs) var(--space-sm)', background: i === 0 ? 'var(--color-bg-hover)' : 'var(--color-bg-tertiary)', border: '1px solid ' + (i === 0 ? 'var(--color-primary)' : 'var(--color-border)'), borderRadius: 'var(--radius-md)', color: i === 0 ? 'var(--color-primary)' : 'var(--color-text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.8125rem' }}>
+                        <button key={d.label} style={{ 
+                            padding: 'var(--space-xs) var(--space-sm)', 
+                            background: i === 0 ? 'var(--color-text-primary)' : 'var(--color-bg-tertiary)', 
+                            border: '1px solid ' + (i === 0 ? 'var(--color-border)' : 'var(--color-border)'), 
+                            borderRadius: 'var(--radius-md)', 
+                            color: i === 0 ? 'var(--color-bg-primary)' : 'var(--color-text-secondary)', 
+                            cursor: 'pointer', 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            gap: '4px', 
+                            fontSize: '0.8125rem' 
+                        }}>
                             <d.icon size={14} /> {d.label}
                         </button>
                     ))}

@@ -5,9 +5,8 @@ import Link from 'next/link';
 import {
     BarChart3, LayoutDashboard, Globe, Users, Target, MousePointer2,
     Video, Sparkles, FileBarChart, Settings, ChevronDown, ChevronRight,
-    ArrowRight, Sun, Moon, TrendingUp, Megaphone
+    ArrowRight, TrendingUp, Megaphone
 } from 'lucide-react';
-import { useTheme } from '@/contexts/ThemeContext';
 import {
     OverviewView, TrafficSourcesView, CampaignsView, TrendsView,
     BehaviorPagesView, FunnelsView, HeatmapsView, SessionsView,
@@ -69,7 +68,6 @@ export default function DemoPage() {
     const [expandedSections, setExpandedSections] = useState<string[]>(['Traffic', 'Behavior']);
     const [dateRange, setDateRange] = useState('7d');
     const [domainDropdownOpen, setDomainDropdownOpen] = useState(false);
-    const { theme, toggleTheme } = useTheme();
 
     const toggleSection = (label: string) => {
         setExpandedSections(prev =>
@@ -209,16 +207,6 @@ export default function DemoPage() {
                             <div style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>Free Plan</div>
                         </div>
                         <Settings size={16} style={{ color: 'var(--color-text-tertiary)', cursor: 'pointer' }} />
-                        <button onClick={toggleTheme} title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-                            style={{
-                                padding: 'var(--space-xs)', background: 'var(--color-bg-tertiary)',
-                                border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)',
-                                color: 'var(--color-text-tertiary)', cursor: 'pointer',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center'
-                            }}
-                        >
-                            {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
-                        </button>
                     </div>
                 </div>
             </aside>

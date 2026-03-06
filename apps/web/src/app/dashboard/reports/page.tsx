@@ -58,22 +58,26 @@ export default function ReportsPage() {
             </div>
 
             {/* Tab Selector */}
-            <div style={{
-                display: 'flex',
-                gap: 'var(--space-xs)',
-                marginBottom: 'var(--space-lg)'
+            <div style={{ 
+                display: 'inline-flex', 
+                gap: '4px', 
+                marginBottom: 'var(--space-lg)',
+                background: 'var(--color-bg-secondary)',
+                padding: '4px',
+                borderRadius: '8px',
+                border: '1px solid var(--color-border)'
             }}>
                 <button
                     onClick={() => setActiveTab('saved')}
                     style={{
-                        padding: 'var(--space-xs) var(--space-md)',
-                        background: activeTab === 'saved' ? 'var(--color-primary)' : 'var(--color-bg-tertiary)',
-                        color: activeTab === 'saved' ? 'white' : 'var(--color-text-secondary)',
-                        border: 'none',
-                        borderRadius: 'var(--radius-md)',
+                        padding: '6px 16px',
+                        background: activeTab === 'saved' ? 'var(--color-bg-hover)' : 'transparent',
+                        color: activeTab === 'saved' ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
+                        border: activeTab === 'saved' ? '1px solid var(--color-border)' : '1px solid transparent',
+                        borderRadius: '6px',
                         cursor: 'pointer',
                         fontSize: '0.8125rem',
-                        fontWeight: 500
+                        fontWeight: activeTab === 'saved' ? 500 : 400
                     }}
                 >
                     Saved Reports
@@ -81,14 +85,14 @@ export default function ReportsPage() {
                 <button
                     onClick={() => setActiveTab('create')}
                     style={{
-                        padding: 'var(--space-xs) var(--space-md)',
-                        background: activeTab === 'create' ? 'var(--color-primary)' : 'var(--color-bg-tertiary)',
-                        color: activeTab === 'create' ? 'white' : 'var(--color-text-secondary)',
-                        border: 'none',
-                        borderRadius: 'var(--radius-md)',
+                        padding: '6px 16px',
+                        background: activeTab === 'create' ? 'var(--color-bg-hover)' : 'transparent',
+                        color: activeTab === 'create' ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
+                        border: activeTab === 'create' ? '1px solid var(--color-border)' : '1px solid transparent',
+                        borderRadius: '6px',
                         cursor: 'pointer',
                         fontSize: '0.8125rem',
-                        fontWeight: 500,
+                        fontWeight: activeTab === 'create' ? 500 : 400,
                         display: 'flex',
                         alignItems: 'center',
                         gap: '4px'

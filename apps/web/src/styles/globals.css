@@ -2,34 +2,34 @@
    TrackFlow - Flat Minimalist Design System
    ============================================ */
 
-/* CSS Variables - Light Theme (Default, mimicking Linear's clean white theme) */
+/* CSS Variables - Forced Dark Theme (Linear Style) */
 :root {
-  --color-bg-primary: #ffffff;
-  --color-bg-secondary: #f7f8f9;
-  --color-bg-tertiary: #f1f2f4;
-  --color-bg-card: #ffffff;
-  --color-bg-hover: rgba(0,0,0,0.04);
+  --color-bg-primary: #000000;
+  --color-bg-secondary: #08090a;
+  --color-bg-tertiary: #0c0d10;
+  --color-bg-card: #08090a;
+  --color-bg-hover: rgba(255,255,255,0.05);
 
-  --sidebar-width: 240px;
-  --sidebar-collapsed-width: 56px;
-  --color-sidebar-bg: #f7f8f9;
-  --color-sidebar-border: rgba(0,0,0,0.08);
+  --color-sidebar-bg: #161618;
+  --color-sidebar-border: rgba(255,255,255,0.04);
 
-  --color-accent-primary: #5e6ad2;
-  --color-accent-secondary: #5e6ad2;
-  --color-primary: #5e6ad2;
+  --color-text-primary: #f4f5f6;
+  --color-text-secondary: #8a8f98;
+  --color-text-muted: #575c66;
+  --color-text-tertiary: #575c66;
 
-  --color-text-primary: #111827;
-  --color-text-secondary: #6b7280;
-  --color-text-muted: #9ca3af;
-  --color-text-tertiary: #9ca3af;
+  /* Overriding default accents with monochromatic high-contrast */
+  --color-accent-primary: #f4f5f6;
+  --color-accent-secondary: #8a8f98;
+  --color-primary: #f4f5f6;
 
-  --color-border: rgba(0,0,0,0.08);
-  --color-border-hover: rgba(0,0,0,0.15);
+  /* Ultra-thin borders */
+  --color-border: rgba(255,255,255,0.08);
+  --color-border-hover: rgba(255,255,255,0.15);
 
-  --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
-  --shadow-md: 0 4px 12px rgba(0,0,0,0.05);
-  --shadow-lg: 0 8px 24px rgba(0,0,0,0.08);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.5);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.6);
+  --shadow-lg: 0 8px 24px rgba(0,0,0,0.8);
 
   /* Spacing */
   --space-xs: 0.25rem;
@@ -55,37 +55,6 @@
   --transition-fast: 120ms ease;
   --transition-normal: 200ms ease;
   --transition-slow: 350ms ease;
-}
-
-/* Dark Theme — Strict Linear Style */
-[data-theme="dark"] {
-  --color-bg-primary: #000000;
-  --color-bg-secondary: #08090a;
-  --color-bg-tertiary: #0c0d10;
-  --color-bg-card: #08090a;
-  --color-bg-hover: rgba(255,255,255,0.05);
-
-  --color-sidebar-bg: #161618;
-  --color-sidebar-border: rgba(255,255,255,0.04);
-
-  --color-text-primary: #f4f5f6;
-  --color-text-primary: #f4f5f6;
-  --color-text-secondary: #8a8f98;
-  --color-text-muted: #575c66;
-  --color-text-tertiary: #575c66;
-
-  /* Overriding default blue accents with monochromatic high-contrast */
-  --color-accent-primary: #f4f5f6;
-  --color-accent-secondary: #8a8f98;
-  --color-primary: #f4f5f6;
-
-  /* Ultra-thin borders */
-  --color-border: rgba(255,255,255,0.08);
-  --color-border-hover: rgba(255,255,255,0.15);
-
-  --shadow-sm: 0 1px 2px rgba(0,0,0,0.5);
-  --shadow-md: 0 4px 12px rgba(0,0,0,0.6);
-  --shadow-lg: 0 8px 24px rgba(0,0,0,0.8);
 }
 
 /* Global Resets */

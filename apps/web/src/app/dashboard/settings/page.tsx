@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
     Settings,
@@ -51,7 +51,7 @@ interface UserData {
     createdAt?: string;
 }
 
-export default function SettingsPage() {
+function SettingsPageInner() {
     const searchParams = useSearchParams();
 
     const [user, setUser] = useState<UserData | null>(null);
@@ -538,5 +538,17 @@ export default function SettingsPage() {
                 }
             `}</style>
         </div>
+    );
+}
+
+export default function SettingsPage() {
+    return (
+        <Suspense fallback={
+            <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-xl)' }}>
+                <div className="loading-spinner" />
+            </div>
+        }>
+            <SettingsPageInner />
+        </Suspense>
     );
 }

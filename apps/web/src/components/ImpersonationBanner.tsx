@@ -1,23 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ShieldAlert, X } from 'lucide-react';
 
 const ADMIN_PANEL_URL = process.env.NEXT_PUBLIC_ADMIN_URL ?? 'http://localhost:3002';
 
-/**
- * ImpersonationBanner
- *
- * On mount, checks for ?impersonate_token=<token> in the URL.
- * If found:
- *  - stores it in sessionStorage as the active auth token
- *  - cleans the URL
- *  - displays a persistent red banner so it's obvious you're in an admin session
- *
- * Clicking "Exit" clears the session token and redirects back to the admin panel.
- */
-export function ImpersonationBanner() {
+function ImpersonationBannerInner() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const [impersonating, setImpersonating] = useState<string | null>(null);
@@ -98,5 +87,13 @@ export function ImpersonationBanner() {
                 <X size={14} /> Exit Session
             </button>
         </div>
+    );
+}
+
+export function ImpersonationBanner() {
+    return (
+        <Suspense fallback={null}>
+            <ImpersonationBannerInner />
+        </Suspense>
     );
 }
