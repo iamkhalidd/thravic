@@ -1,7 +1,6 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
 import {
     BarChart3, Target, MousePointer2, Video, Sparkles, Globe,
     ArrowRight, Check, Sun, Moon, Lock
@@ -10,152 +9,155 @@ import { useTheme } from '@/contexts/ThemeContext';
 
 /* ─── DATA ─── */
 
-const features = [
+const bentoFeatures = [
     {
-        icon: BarChart3,
-        title: 'Traffic Analytics',
-        desc: 'Real-time pageviews, sessions, and source attribution with full UTM support.',
-    },
-    {
-        icon: Target,
-        title: 'Conversion Funnels',
-        desc: 'Build multi-step funnels and see exactly where users drop off.',
-    },
-    {
-        icon: MousePointer2,
-        title: 'Heatmaps',
-        desc: 'Visualize clicks and scroll depth on every page of your site.',
-    },
-    {
+        title: 'Understand every click.',
+        desc: 'Privacy-safe session recordings let you play back exactly what users do, where they get stuck, and why they leave.',
         icon: Video,
-        title: 'Session Recordings',
-        desc: 'Watch privacy-safe replays to understand exactly what users do.',
+        large: true
     },
     {
+        title: 'Funnels that convert.',
+        desc: 'Build multi-step conversion funnels and identify the exact drop-off points.',
+        icon: Target,
+        large: false
+    },
+    {
+        title: 'Visual heatmaps.',
+        desc: 'Instantly see where people click and scroll on your key pages.',
+        icon: MousePointer2,
+        large: false
+    },
+    {
+        title: 'AI Insights.',
+        desc: 'Automatic anomaly detection surfaces what needs your attention immediately.',
         icon: Sparkles,
-        title: 'AI Insights',
-        desc: 'Automatic anomaly detection and actionable recommendations.',
+        large: false
     },
     {
-        icon: Globe,
-        title: 'Multi-Domain',
-        desc: 'Manage all your websites from a single unified dashboard.',
-    },
+        title: 'Traffic & UTMs.',
+        desc: 'Track every source, medium, and campaign with full attribution reporting.',
+        icon: BarChart3,
+        large: true
+    }
 ];
 
 const pricingTiers = [
     {
         name: 'Hobby', price: 'Free', description: 'For personal projects',
         features: ['1 website', '5k events/month', 'Core analytics & UTM', '30-day retention'],
-        cta: 'Get Started', highlighted: false
+        cta: 'Get Started Fixed', highlighted: false
     },
     {
         name: 'Pro', price: '$29', period: '/mo', description: 'For startups & businesses',
         features: ['3 websites', '100k events/month', 'Heatmaps & recordings', 'Funnels & AI insights', 'CSV export & team', '1-year retention'],
-        cta: 'Get Started', highlighted: true
+        cta: 'Upgrade to Pro', highlighted: true
     },
     {
         name: 'Agency', price: '$79', period: '/mo', description: 'For agencies & scale',
         features: ['20 websites', '500k events/month', 'Everything in Pro', 'Unlimited team members', '2-year retention', 'Priority support'],
-        cta: 'Get Started', highlighted: false
+        cta: 'Upgrade to Agency', highlighted: false
     }
 ];
 
 /* ─── STYLES ─── */
-
 const s = {
-    page: { minHeight: '100vh', background: 'var(--color-bg-primary)' } as React.CSSProperties,
-    container: { maxWidth: '1080px', margin: '0 auto', padding: '0 24px' } as React.CSSProperties,
+    page: { minHeight: '100vh', background: 'var(--color-bg-primary)', position: 'relative' as const, overflow: 'hidden' },
+    container: { maxWidth: '1080px', margin: '0 auto', padding: '0 24px', position: 'relative' as const, zIndex: 10 },
 
     // Nav
     nav: {
-        position: 'fixed', top: 0, left: 0, right: 0, zIndex: 50,
-        background: 'var(--color-bg-primary)',
+        position: 'fixed' as const, top: 0, left: 0, right: 0, zIndex: 50,
+        background: 'rgba(0, 0, 0, 0.4)',
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
         borderBottom: '1px solid var(--color-border)',
-    } as React.CSSProperties,
+    },
     navInner: {
         maxWidth: '1080px', margin: '0 auto', padding: '0 24px',
         height: '56px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-    } as React.CSSProperties,
+    },
 
     // Hero
     hero: {
-        paddingTop: '160px', paddingBottom: '120px',
-        textAlign: 'center',
-    } as React.CSSProperties,
+        paddingTop: '200px', paddingBottom: '140px',
+        textAlign: 'center' as const,
+        position: 'relative' as const,
+    },
     h1: {
-        fontSize: 'clamp(2.5rem, 6vw, 4.5rem)',
+        fontSize: 'clamp(3rem, 7vw, 6rem)',
         fontWeight: 600,
-        letterSpacing: '-0.03em',
-        lineHeight: 1.1,
+        letterSpacing: '-0.04em',
+        lineHeight: 1.05,
         marginBottom: '24px',
-    } as React.CSSProperties,
+        color: 'var(--color-text-primary)',
+        marginTop: '24px'
+    },
     heroSub: {
-        fontSize: 'clamp(1rem, 2vw, 1.25rem)',
+        fontSize: 'clamp(1.125rem, 2vw, 1.375rem)',
         color: 'var(--color-text-secondary)',
         maxWidth: '540px',
         margin: '0 auto 40px',
-        lineHeight: 1.6,
-    } as React.CSSProperties,
+        lineHeight: 1.5,
+        letterSpacing: '-0.01em'
+    },
     ctaRow: {
-        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px',
-        flexWrap: 'wrap',
-    } as React.CSSProperties,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '16px',
+        flexWrap: 'wrap' as const,
+    },
 
-    // Buttons
-    btnPrimary: {
-        display: 'inline-flex', alignItems: 'center', gap: '8px',
-        padding: '12px 28px', background: 'var(--color-accent-primary)',
-        color: '#fff', borderRadius: 'var(--radius-md)',
-        fontSize: '0.9375rem', fontWeight: 500, textDecoration: 'none',
-        transition: 'opacity var(--transition-fast)',
-    } as React.CSSProperties,
-    btnSecondary: {
-        display: 'inline-flex', alignItems: 'center', gap: '8px',
-        padding: '12px 28px', background: 'transparent',
+    // Badges/Pills
+    sectionPill: {
+        display: 'inline-flex',
+        alignItems: 'center',
+        padding: '0.25rem 0.75rem',
+        background: 'var(--color-bg-secondary)',
         border: '1px solid var(--color-border)',
-        color: 'var(--color-text-primary)', borderRadius: 'var(--radius-md)',
-        fontSize: '0.9375rem', fontWeight: 500, textDecoration: 'none',
-        transition: 'border-color var(--transition-fast)',
-    } as React.CSSProperties,
+        borderRadius: '9999px',
+        fontSize: '0.75rem',
+        fontWeight: 500,
+        color: 'var(--color-text-primary)',
+        textTransform: 'uppercase' as const,
+        letterSpacing: '0.05em',
+        marginBottom: '24px',
+    },
 
-    // Section headers
-    sectionLabel: {
-        fontSize: '0.8125rem', fontWeight: 500, color: 'var(--color-accent-primary)',
-        textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '12px',
-    } as React.CSSProperties,
+    // Typography
     sectionTitle: {
-        fontSize: 'clamp(1.5rem, 3vw, 2.25rem)', fontWeight: 600,
-        letterSpacing: '-0.02em', marginBottom: '16px',
-    } as React.CSSProperties,
+        fontSize: 'clamp(2rem, 4vw, 3.5rem)', fontWeight: 600,
+        letterSpacing: '-0.03em', marginBottom: '24px',
+        color: 'var(--color-text-primary)'
+    },
     sectionSub: {
-        fontSize: '1.0625rem', color: 'var(--color-text-secondary)',
-        maxWidth: '480px', margin: '0 auto', lineHeight: 1.6,
-    } as React.CSSProperties,
+        fontSize: '1.125rem', color: 'var(--color-text-secondary)',
+        maxWidth: '540px', margin: '0 auto', lineHeight: 1.6,
+        letterSpacing: '-0.01em'
+    },
 };
 
 /* ─── COMPONENT ─── */
-
 export default function HomePage() {
     const { theme, toggleTheme } = useTheme();
 
     return (
         <div style={s.page}>
+            <div className="linear-hero-grid"></div>
+
             {/* ═══ NAV ═══ */}
             <nav style={s.nav}>
                 <div style={s.navInner}>
                     <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: '10px', textDecoration: 'none', color: 'var(--color-text-primary)' }}>
                         <div style={{
-                            width: '28px', height: '28px', borderRadius: '7px',
-                            background: 'var(--color-accent-primary)', display: 'flex',
+                            width: '24px', height: '24px', borderRadius: '6px',
+                            background: 'var(--color-text-primary)', display: 'flex',
                             alignItems: 'center', justifyContent: 'center',
                         }}>
-                            <BarChart3 size={16} color="white" />
+                            <BarChart3 size={14} style={{ color: 'var(--color-bg-primary)' }} />
                         </div>
-                        <span style={{ fontSize: '1rem', fontWeight: 600 }}>TrackFlow</span>
+                        <span style={{ fontSize: '0.9375rem', fontWeight: 600, letterSpacing: '-0.02em' }}>TrackFlow</span>
                     </Link>
 
-                    <div className="lp-nav-links">
+                    <div className="desktop-only" style={{ display: 'flex', gap: '24px' }}>
                         {[
                             { label: 'Features', href: '#features' },
                             { label: 'Pricing', href: '#pricing' },
@@ -163,29 +165,25 @@ export default function HomePage() {
                         ].map(link => (
                             <Link key={link.label} href={link.href} style={{
                                 color: 'var(--color-text-secondary)', textDecoration: 'none',
-                                fontSize: '0.875rem', fontWeight: 450,
+                                fontSize: '0.8125rem', fontWeight: 500, transition: 'color 0.2s'
                             }}>{link.label}</Link>
                         ))}
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                         <button onClick={toggleTheme} aria-label="Toggle theme"
                             style={{
-                                padding: '6px', background: 'none', border: '1px solid var(--color-border)',
+                                padding: '6px', background: 'transparent', border: '1px solid var(--color-border)',
                                 borderRadius: 'var(--radius-md)', color: 'var(--color-text-muted)',
                                 cursor: 'pointer', display: 'flex', alignItems: 'center',
+                                transition: 'all 0.2s',
                             }}>
-                            {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+                            {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
                         </button>
                         <Link href="/login" style={{
-                            padding: '6px 14px', color: 'var(--color-text-secondary)',
-                            textDecoration: 'none', fontSize: '0.875rem', fontWeight: 450,
-                        }}>Log in</Link>
-                        <Link href="/register" className="desktop-only" style={{
-                            padding: '7px 18px', background: 'var(--color-accent-primary)',
-                            color: 'white', textDecoration: 'none', borderRadius: 'var(--radius-md)',
+                            color: 'var(--color-text-secondary)', textDecoration: 'none',
                             fontSize: '0.8125rem', fontWeight: 500,
-                        }}>Get Started</Link>
+                        }}>Log in</Link>
                     </div>
                 </div>
             </nav>
@@ -193,62 +191,62 @@ export default function HomePage() {
             {/* ═══ HERO ═══ */}
             <section style={s.hero}>
                 <div style={s.container}>
-                    <h1 style={s.h1}>Understand your users.</h1>
+                    <div className="linear-pill">
+                        <Sparkles size={12} style={{ color: 'var(--color-text-muted)' }} />
+                        <span>TrackFlow Public Beta</span>
+                        <ArrowRight size={12} style={{ color: 'var(--color-text-muted)' }} />
+                    </div>
+
+                    <h1 style={s.h1}>
+                        The analytics system<br />
+                        <span className="text-gradient">for modern teams.</span>
+                    </h1>
+                    
                     <p style={s.heroSub}>
-                        Traffic analytics, heatmaps, and session recordings — in one lightweight script.
+                        Purpose-built for speed and clarity. TrackFlow turns overwhelming data into undeniable user insights in milliseconds.
                     </p>
+                    
                     <div style={s.ctaRow}>
-                        <Link href="/register" style={s.btnPrimary}>
-                            Get Started Free <ArrowRight size={16} />
+                        <Link href="/register" className="btn-primary" style={{ padding: '12px 24px', borderRadius: '999px', fontSize: '0.875rem', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: '8px', textDecoration: 'none' }}>
+                            Start tracking free <ArrowRight size={14} />
                         </Link>
-                        <Link href="/demo" style={s.btnSecondary}>
-                            Live Demo
+                        <Link href="/demo" style={{ padding: '12px 24px', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--color-border)', color: 'var(--color-text-primary)', borderRadius: '999px', fontSize: '0.875rem', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: '8px', textDecoration: 'none', backdropFilter: 'blur(10px)' }}>
+                            View interactive demo <Globe size={14} style={{ color: 'var(--color-text-muted)' }}/>
                         </Link>
                     </div>
-                    <p style={{
-                        fontSize: '0.8125rem', color: 'var(--color-text-muted)',
-                        marginTop: '20px',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
-                    }}>
-                        <Lock size={12} /> No credit card required
-                    </p>
                 </div>
             </section>
 
-            {/* ═══ FEATURES ═══ */}
-            <section id="features" style={{ padding: 'var(--space-3xl) 0' }}>
+            {/* ═══ BENTO FEATURES ═══ */}
+            <section id="features" style={{ padding: '120px 0', borderTop: '1px solid var(--color-border)' }}>
                 <div style={s.container}>
-                    <div style={{ textAlign: 'center', marginBottom: '64px' }}>
-                        <p style={s.sectionLabel}>Features</p>
-                        <h2 style={s.sectionTitle}>Everything you need to grow</h2>
+                    <div style={{ textAlign: 'center', marginBottom: '80px' }}>
+                        <div style={s.sectionPill}>Features</div>
+                        <h2 style={s.sectionTitle}>Built for clarity.</h2>
                         <p style={s.sectionSub}>
-                            One script replaces your entire analytics stack.
+                            Every tool you need to understand user behavior, seamlessly integrated into a single, high-performance platform.
                         </p>
                     </div>
 
-                    <div style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(3, 1fr)',
-                        gap: '1px',
-                        background: 'var(--color-border)',
-                        borderRadius: 'var(--radius-lg)',
-                        overflow: 'hidden',
-                        border: '1px solid var(--color-border)',
-                    }}>
-                        {features.map((f, i) => {
+                    <div className="bento-grid">
+                        {bentoFeatures.map((f, i) => {
                             const Icon = f.icon;
                             return (
-                                <div key={i} style={{
-                                    background: 'var(--color-bg-card)',
-                                    padding: '40px 32px',
-                                }}>
-                                    <Icon size={20} style={{ color: 'var(--color-text-muted)', marginBottom: '16px' }} />
-                                    <h3 style={{ fontSize: '0.9375rem', fontWeight: 600, marginBottom: '8px' }}>
+                                <div key={i} className={`bento-item ${f.large ? 'bento-item-large' : ''}`}>
+                                    <div style={{
+                                        width: '40px', height: '40px', borderRadius: '10px',
+                                        background: 'rgba(255,255,255,0.03)', border: '1px solid var(--color-border)',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        marginBottom: '24px', boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
+                                    }}>
+                                        <Icon size={18} style={{ color: 'var(--color-text-primary)' }} strokeWidth={1.5} />
+                                    </div>
+                                    <h3 style={{ fontSize: '1.25rem', fontWeight: 500, letterSpacing: '-0.02em', marginBottom: '12px', color: 'var(--color-text-primary)' }}>
                                         {f.title}
                                     </h3>
                                     <p style={{
-                                        fontSize: '0.875rem', color: 'var(--color-text-secondary)',
-                                        lineHeight: 1.6, margin: 0,
+                                        fontSize: '0.9375rem', color: 'var(--color-text-secondary)',
+                                        lineHeight: 1.6, margin: 0, letterSpacing: '-0.01em'
                                     }}>
                                         {f.desc}
                                     </p>
@@ -261,71 +259,60 @@ export default function HomePage() {
 
             {/* ═══ PRICING ═══ */}
             <section id="pricing" style={{
-                padding: 'var(--space-3xl) 0',
-                background: 'var(--color-bg-secondary)',
+                padding: '120px 0',
+                borderTop: '1px solid var(--color-border)',
             }}>
                 <div style={s.container}>
-                    <div style={{ textAlign: 'center', marginBottom: '56px' }}>
-                        <p style={s.sectionLabel}>Pricing</p>
-                        <h2 style={s.sectionTitle}>Simple, transparent pricing</h2>
-                        <p style={s.sectionSub}>Start free, upgrade when you&apos;re ready.</p>
+                    <div style={{ textAlign: 'center', marginBottom: '80px' }}>
+                        <div style={s.sectionPill}>Pricing</div>
+                        <h2 style={s.sectionTitle}>Scale without surprises.</h2>
+                        <p style={s.sectionSub}>No opaque metrics. No arbitrary limits on seats. Just straightforward pricing for teams of any size.</p>
                     </div>
 
                     <div className="lp-grid-3" style={{ maxWidth: '960px', margin: '0 auto' }}>
                         {pricingTiers.map((tier, i) => (
                             <div key={i} style={{
-                                background: 'var(--color-bg-card)',
-                                borderRadius: 'var(--radius-lg)',
-                                border: tier.highlighted
-                                    ? '1px solid var(--color-accent-primary)'
-                                    : '1px solid var(--color-border)',
-                                padding: '36px 28px',
+                                background: 'transparent',
+                                borderTop: '1px solid var(--color-border)',
+                                paddingTop: '32px',
                                 position: 'relative',
                             }}>
-                                {tier.highlighted && (
-                                    <div style={{
-                                        position: 'absolute', top: '-11px', left: '50%', transform: 'translateX(-50%)',
-                                        background: 'var(--color-accent-primary)', padding: '3px 14px',
-                                        borderRadius: 'var(--radius-full)', fontSize: '0.6875rem',
-                                        fontWeight: 500, color: 'white', letterSpacing: '0.02em',
-                                    }}>Most Popular</div>
-                                )}
-                                <h4 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '4px' }}>{tier.name}</h4>
-                                <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', marginBottom: '20px' }}>
+                                <h4 style={{ fontSize: '1.125rem', fontWeight: 500, marginBottom: '8px', color: 'var(--color-text-primary)' }}>{tier.name}</h4>
+                                <p style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', marginBottom: '32px', minHeight: '40px' }}>
                                     {tier.description}
                                 </p>
-                                <div style={{ marginBottom: '24px' }}>
-                                    <span style={{ fontSize: '2.5rem', fontWeight: 600, letterSpacing: '-0.02em' }}>
+                                <div style={{ marginBottom: '32px' }}>
+                                    <span style={{ fontSize: '3rem', fontWeight: 500, letterSpacing: '-0.04em', color: 'var(--color-text-primary)' }}>
                                         {tier.price}
                                     </span>
                                     {tier.period && (
-                                        <span style={{ color: 'var(--color-text-muted)', fontSize: '0.875rem' }}>
+                                        <span style={{ color: 'var(--color-text-muted)', fontSize: '0.875rem', marginLeft: '4px' }}>
                                             {tier.period}
                                         </span>
                                     )}
                                 </div>
                                 <ul style={{
-                                    listStyle: 'none', padding: 0, marginBottom: '28px',
-                                    display: 'flex', flexDirection: 'column', gap: '10px',
+                                    listStyle: 'none', padding: 0, marginBottom: '40px',
+                                    display: 'flex', flexDirection: 'column', gap: '16px',
                                 }}>
                                     {tier.features.map((feature, idx) => (
                                         <li key={idx} style={{
-                                            display: 'flex', alignItems: 'center', gap: '8px',
-                                            fontSize: '0.8125rem', color: 'var(--color-text-secondary)',
+                                            display: 'flex', alignItems: 'center', gap: '12px',
+                                            fontSize: '0.875rem', color: 'var(--color-text-secondary)',
                                         }}>
-                                            <Check size={14} style={{ color: 'var(--color-text-muted)', flexShrink: 0 }} />
+                                            <Check size={14} style={{ color: 'var(--color-text-primary)', flexShrink: 0 }} strokeWidth={2} />
                                             {feature}
                                         </li>
                                     ))}
                                 </ul>
                                 <Link href="/register" style={{
-                                    display: 'block', textAlign: 'center', padding: '10px 20px',
-                                    background: tier.highlighted ? 'var(--color-accent-primary)' : 'transparent',
+                                    display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '10px 0',
+                                    background: tier.highlighted ? 'var(--color-text-primary)' : 'rgba(255,255,255,0.03)',
                                     border: tier.highlighted ? 'none' : '1px solid var(--color-border)',
-                                    borderRadius: 'var(--radius-md)',
-                                    color: tier.highlighted ? 'white' : 'var(--color-text-primary)',
-                                    textDecoration: 'none', fontWeight: 500, fontSize: '0.8125rem',
-                                    transition: 'opacity var(--transition-fast)',
+                                    borderRadius: '8px',
+                                    color: tier.highlighted ? 'var(--color-bg-primary)' : 'var(--color-text-primary)',
+                                    textDecoration: 'none', fontWeight: 500, fontSize: '0.875rem',
+                                    transition: 'background 0.2s',
                                 }}>{tier.cta}</Link>
                             </div>
                         ))}
@@ -334,42 +321,44 @@ export default function HomePage() {
             </section>
 
             {/* ═══ CTA ═══ */}
-            <section style={{ padding: 'var(--space-3xl) 0' }}>
+            <section style={{ padding: '160px 0', borderTop: '1px solid var(--color-border)' }}>
                 <div style={{ ...s.container, textAlign: 'center' as const }}>
-                    <h2 style={s.sectionTitle}>Ready to get started?</h2>
-                    <p style={{ ...s.sectionSub, marginBottom: '32px' }}>
-                        Add one script and start understanding your users today.
+                    <div style={{ 
+                        width: '64px', height: '64px', margin: '0 auto 32px', borderRadius: '16px',
+                        background: 'var(--color-text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        boxShadow: '0 0 32px rgba(255,255,255,0.1)'
+                    }}>
+                        <BarChart3 size={32} style={{ color: 'var(--color-bg-primary)' }} strokeWidth={1.5} />
+                    </div>
+                    <h2 style={s.sectionTitle}>Build better products, faster.</h2>
+                    <p style={{ ...s.sectionSub, marginBottom: '40px' }}>
+                        Join the next generation of product teams building with TrackFlow.
                     </p>
-                    <Link href="/register" style={s.btnPrimary}>
-                        Get Started Free <ArrowRight size={16} />
+                    <Link href="/register" className="btn-primary" style={{ padding: '12px 32px', borderRadius: '999px', fontSize: '0.9375rem', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: '8px', textDecoration: 'none' }}>
+                        Get Started Free <ArrowRight size={14} />
                     </Link>
                 </div>
             </section>
 
             {/* ═══ FOOTER ═══ */}
             <footer style={{
-                padding: '48px 0 32px',
+                padding: '64px 0 40px',
                 borderTop: '1px solid var(--color-border)',
+                background: 'var(--color-bg-secondary)'
             }}>
                 <div style={s.container}>
-                    <div className="lp-grid-footer" style={{ marginBottom: '40px' }}>
+                    <div className="lp-grid-footer" style={{ marginBottom: '64px' }}>
                         <div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
                                 <div style={{
-                                    width: '24px', height: '24px', borderRadius: '6px',
-                                    background: 'var(--color-accent-primary)', display: 'flex',
+                                    width: '20px', height: '20px', borderRadius: '4px',
+                                    background: 'var(--color-text-primary)', display: 'flex',
                                     alignItems: 'center', justifyContent: 'center',
                                 }}>
-                                    <BarChart3 size={14} color="white" />
+                                    <BarChart3 size={12} style={{ color: 'var(--color-bg-primary)' }} />
                                 </div>
-                                <span style={{ fontSize: '0.9375rem', fontWeight: 600 }}>TrackFlow</span>
+                                <span style={{ fontSize: '0.875rem', fontWeight: 600, letterSpacing: '-0.02em', color: 'var(--color-text-primary)' }}>TrackFlow</span>
                             </div>
-                            <p style={{
-                                fontSize: '0.8125rem', color: 'var(--color-text-muted)',
-                                lineHeight: 1.7, maxWidth: '260px',
-                            }}>
-                                Analytics, heatmaps, and session recordings in one script.
-                            </p>
                         </div>
                         {[
                             { title: 'Product', links: [{ label: 'Features', href: '#features' }, { label: 'Pricing', href: '#pricing' }, { label: 'Demo', href: '/demo' }] },
@@ -378,14 +367,14 @@ export default function HomePage() {
                         ].map((group, i) => (
                             <div key={i}>
                                 <h5 style={{
-                                    fontSize: '0.8125rem', fontWeight: 600,
-                                    marginBottom: '12px', color: 'var(--color-text-primary)',
+                                    fontSize: '0.8125rem', fontWeight: 500,
+                                    marginBottom: '20px', color: 'var(--color-text-primary)',
                                 }}>{group.title}</h5>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                                     {group.links.map((link, j) => (
                                         <Link key={j} href={link.href} style={{
-                                            color: 'var(--color-text-muted)', textDecoration: 'none',
-                                            fontSize: '0.8125rem',
+                                            color: 'var(--color-text-secondary)', textDecoration: 'none',
+                                            fontSize: '0.8125rem', transition: 'color 0.2s'
                                         }}>{link.label}</Link>
                                     ))}
                                 </div>
@@ -393,16 +382,15 @@ export default function HomePage() {
                         ))}
                     </div>
                     <div style={{
-                        paddingTop: '20px',
-                        borderTop: '1px solid var(--color-border)',
                         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        color: 'var(--color-text-muted)'
                     }}>
-                        <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
+                        <p style={{ fontSize: '0.8125rem' }}>
                             © {new Date().getFullYear()} TrackFlow
                         </p>
-                        <div style={{ display: 'flex', gap: '16px' }}>
-                            <Link href="/login" style={{ color: 'var(--color-text-muted)', textDecoration: 'none', fontSize: '0.75rem' }}>Login</Link>
-                            <Link href="/register" style={{ color: 'var(--color-text-muted)', textDecoration: 'none', fontSize: '0.75rem' }}>Register</Link>
+                        <div style={{ display: 'flex', gap: '24px' }}>
+                            <Link href="/login" style={{ color: 'var(--color-text-muted)', textDecoration: 'none', fontSize: '0.8125rem' }}>Login</Link>
+                            <Link href="/register" style={{ color: 'var(--color-text-muted)', textDecoration: 'none', fontSize: '0.8125rem' }}>Register</Link>
                         </div>
                     </div>
                 </div>
