@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
-import { Server, Database, Cpu, HardDrive, RefreshCw } from 'lucide-react';
+import { Server, Database, Cpu, HardDrive, RefreshCw, CheckCircle, XCircle } from 'lucide-react';
 
 interface HealthData {
     server: { uptime: number; uptimeFormatted: string; restartedAt: string; nodeVersion: string; platform: string; pid: number; env: string };
@@ -76,7 +76,7 @@ export default function SystemPage() {
                         ['Last Restarted', health?.server.restartedAt ? new Date(health.server.restartedAt).toLocaleString() : '—'],
                         ['RSS Memory', health?.memory.rss],
                         ['External Memory', health?.memory.external],
-                        ['DB Connected', health?.database.connected ? '✅ Yes' : '❌ No'],
+                        ['DB Connected', health?.database.connected ? 'Yes' : 'No'],
                     ].map(([label, value]) => (
                         <div key={String(label)} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--color-border)', fontSize: '14px' }}>
                             <span style={{ color: 'var(--color-text-secondary)' }}>{label}</span>

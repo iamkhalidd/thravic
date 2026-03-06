@@ -1,16 +1,17 @@
 'use client';
 
 import { useState } from 'react';
-import { Copy, Check } from 'lucide-react';
+import { Copy, Check, Globe, CircleDot, ShoppingBag, Zap, Atom, ClipboardList } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
 type Platform = 'html' | 'wordpress' | 'shopify' | 'webflow' | 'nextjs';
 
-const PLATFORM_TABS: { id: Platform; label: string; emoji: string }[] = [
-    { id: 'html', label: 'HTML', emoji: '🌐' },
-    { id: 'wordpress', label: 'WordPress', emoji: '🔵' },
-    { id: 'shopify', label: 'Shopify', emoji: '🛍️' },
-    { id: 'webflow', label: 'Webflow', emoji: '⚡' },
-    { id: 'nextjs', label: 'Next.js / React', emoji: '⚛️' },
+const PLATFORM_TABS: { id: Platform; label: string; icon: LucideIcon }[] = [
+    { id: 'html', label: 'HTML', icon: Globe },
+    { id: 'wordpress', label: 'WordPress', icon: CircleDot },
+    { id: 'shopify', label: 'Shopify', icon: ShoppingBag },
+    { id: 'webflow', label: 'Webflow', icon: Zap },
+    { id: 'nextjs', label: 'Next.js / React', icon: Atom },
 ];
 
 function getPlatformInstructions(platform: Platform, script: string) {
@@ -133,7 +134,7 @@ export function ScriptInstallation({ script }: ScriptInstallationProps) {
                             whiteSpace: 'nowrap',
                         }}
                     >
-                        {tab.emoji} {tab.label}
+                        <tab.icon size={14} style={{ marginRight: '4px' }} /> {tab.label}
                     </button>
                 ))}
             </div>
@@ -182,7 +183,7 @@ export function ScriptInstallation({ script }: ScriptInstallationProps) {
                 border: '1px solid var(--color-border)',
             }}>
                 <h4 style={{ marginBottom: 'var(--space-sm)', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    📋 Step-by-step instructions
+                    <ClipboardList size={16} /> Step-by-step instructions
                 </h4>
                 <ol style={{
                     paddingLeft: 'var(--space-lg)',

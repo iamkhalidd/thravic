@@ -16,6 +16,7 @@ import {
     Loader,
     AlertCircle,
     X,
+    Lock,
 } from 'lucide-react';
 import { auth, domains, payments } from '@/lib/api';
 
@@ -294,7 +295,7 @@ function SettingsPageInner() {
                                 }}>
                                     <Check size={18} />
                                     <span>
-                                        🎉 Payment successful! Your account has been upgraded to the{' '}
+                                        Payment successful! Your account has been upgraded to the{' '}
                                         <strong style={{ textTransform: 'capitalize' }}>{paymentSuccess}</strong> plan.
                                     </span>
                                     <button
@@ -425,7 +426,7 @@ function SettingsPageInner() {
                                 color: 'var(--color-text-muted)',
                                 textAlign: 'center',
                             }}>
-                                🔒 Secure payment via Paystack · All prices in USD · Cancel anytime
+                                <Lock size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '4px' }} /> Secure payment via Paystack · All prices in USD · Cancel anytime
                             </p>
                         </div>
                     )}

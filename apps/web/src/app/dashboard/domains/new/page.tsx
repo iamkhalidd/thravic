@@ -307,7 +307,7 @@ export default function NewDomainPage() {
                         <CheckCircle2 size={36} style={{ color: 'var(--color-success)' }} />
                     </div>
 
-                    <h2 style={{ marginBottom: 'var(--space-sm)' }}>You&apos;re all set! 🎉</h2>
+                    <h2 style={{ marginBottom: 'var(--space-sm)' }}>You&apos;re all set!</h2>
                     <p style={{ marginBottom: 'var(--space-xs)', fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
                         Your tracking script is installed and verified.
                     </p>

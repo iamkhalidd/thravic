@@ -161,7 +161,7 @@ export default function DashboardPage() {
     if (domainList.length === 0) {
         return (
             <div>
-                <h1 style={{ marginBottom: 'var(--space-xl)' }}>Welcome to TrackFlow! 👋</h1>
+                <h1 style={{ marginBottom: 'var(--space-xl)' }}>Welcome to TrackFlow!</h1>
 
                 {/* Getting Started Card */}
                 <div className="card" style={{ padding: 'var(--space-2xl)', textAlign: 'center', marginBottom: 'var(--space-xl)', background: 'var(--color-bg-card)', border: '1px solid var(--color-border)' }}>

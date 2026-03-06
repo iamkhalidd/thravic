@@ -2,6 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
+import { Lock } from 'lucide-react';
 import { PlanFeature, PlanName } from '../hooks/useSubscription';
 
 interface UpgradeGateProps {
@@ -60,7 +61,7 @@ export function UpgradeGate({ feature, requiredPlan, message, blurChildren, chil
                     border: '1px solid var(--border, #2a2a3e)',
                 }}
             >
-                <span style={{ fontSize: '2rem' }}>🔒</span>
+                <Lock size={32} style={{ color: 'var(--color-text-secondary)' }} />
                 <p style={{ margin: 0, fontWeight: 600, color: 'var(--text-primary, #fff)', fontSize: '1rem' }}>
                     {message ?? `This feature requires the ${planLabel} plan`}
                 </p>

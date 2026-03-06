@@ -3,7 +3,7 @@
 import {
     BarChart3, Users, MousePointer2, Clock, TrendingUp, TrendingDown,
     Globe, RefreshCw, ArrowRight, ArrowUpRight, ArrowDownRight,
-    Target, Video, Sparkles, FileBarChart, Download, Mail,
+    Target, Video, Sparkles, FileBarChart, Download, Mail, Lightbulb,
     Play, Monitor, Smartphone, Tablet, AlertTriangle, Zap,
     Search, Filter, Eye, ExternalLink, Calendar, CheckCircle
 } from 'lucide-react';
@@ -591,7 +591,7 @@ export function InsightsView() {
                                     </div>
                                     {insight.recommendation && (
                                         <div style={{ padding: 'var(--space-sm) var(--space-md)', background: 'var(--color-bg-tertiary)', borderRadius: 'var(--radius-md)', fontSize: '0.8125rem' }}>
-                                            <strong>💡 Recommendation:</strong> {insight.recommendation}
+                                            <strong><Lightbulb size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '4px' }} />Recommendation:</strong> {insight.recommendation}
                                         </div>
                                     )}
                                 </div>
