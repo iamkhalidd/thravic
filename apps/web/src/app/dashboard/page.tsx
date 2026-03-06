@@ -401,19 +401,17 @@ export default function DashboardPage() {
             <div className="grid grid-cols-4 gap-md" style={{ marginBottom: 'var(--space-xl)' }}>
                 {statCards.map((stat, i) => (
                     <div key={i} style={{ 
-                        background: 'rgba(255,255,255,0.01)', border: '1px solid var(--color-border)', 
-                        borderRadius: '16px', padding: '24px', transition: 'transform 0.2s', position: 'relative', overflow: 'hidden'
+                        background: 'transparent', border: '1px solid var(--color-border)', 
+                        borderRadius: '6px', padding: '16px', position: 'relative'
                     }}>
-                        <div className="flex items-center justify-between" style={{ marginBottom: 'var(--space-lg)' }}>
-                            <span style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--color-text-secondary)' }}>
+                        <div className="flex items-center gap-sm" style={{ marginBottom: 'var(--space-sm)' }}>
+                            <stat.icon size={14} strokeWidth={1.5} style={{ color: 'var(--color-text-secondary)' }} />
+                            <span style={{ fontSize: '11px', fontWeight: 500, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                 {stat.label}
                             </span>
-                            <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(255,255,255,0.03)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <stat.icon size={16} strokeWidth={1.5} style={{ color: 'var(--color-text-primary)' }} />
-                            </div>
                         </div>
-                        <div className="flex items-end gap-sm">
-                            <span style={{ fontSize: '2.5rem', fontWeight: 500, letterSpacing: '-0.04em', lineHeight: 1, color: 'var(--color-text-primary)' }}>{stat.value}</span>
+                        <div className="flex items-end gap-sm" style={{ marginTop: '20px' }}>
+                            <span style={{ fontSize: '24px', fontWeight: 500, letterSpacing: '-0.02em', lineHeight: 1, color: 'var(--color-text-primary)' }}>{stat.value}</span>
                         </div>
                     </div>
                 ))}
@@ -428,15 +426,11 @@ export default function DashboardPage() {
                     { href: '/dashboard/settings', icon: CreditCard, label: 'Upgrade Plan', desc: 'Get more features' }
                 ].map((action, i) => (
                     <Link key={i} href={action.href} style={{ 
-                        background: 'transparent', border: '1px solid var(--color-border)', borderRadius: '12px', padding: '16px',
-                        textDecoration: 'none', transition: 'all var(--transition-fast)' 
+                        background: 'transparent', border: '1px solid var(--color-border)', borderRadius: '6px', padding: '16px',
+                        textDecoration: 'none', transition: 'background var(--transition-fast)' 
                     }}>
                         <div className="flex items-center gap-md">
-                            <div style={{
-                                padding: '8px', background: 'var(--color-bg-hover)', borderRadius: '8px', border: '1px solid var(--color-border)'
-                            }}>
-                                <action.icon size={16} strokeWidth={1.5} style={{ color: 'var(--color-text-primary)' }} />
-                            </div>
+                            <action.icon size={16} strokeWidth={1.5} style={{ color: 'var(--color-text-secondary)' }} />
                             <div>
                                 <div style={{ fontSize: '0.875rem', fontWeight: 500, marginBottom: '2px', color: 'var(--color-text-primary)' }}>{action.label}</div>
                                 <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>{action.desc}</div>
@@ -449,12 +443,11 @@ export default function DashboardPage() {
             {/* Charts Row */}
             <div className="grid grid-cols-3 gap-lg" style={{ marginBottom: 'var(--space-xl)' }}>
                 {/* Traffic Chart */}
-                <div style={{ gridColumn: 'span 2' }} className="card">
-                    <h4 style={{ marginBottom: 'var(--space-md)', display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
-                        <TrendingUp size={18} style={{ color: 'var(--color-accent-primary)' }} />
-                        Traffic Overview
-                    </h4>
-                    <div style={{ height: '280px' }}>
+                <div style={{ gridColumn: 'span 2' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', paddingBottom: 'var(--space-md)', marginBottom: 'var(--space-sm)' }}>
+                        <h4 style={{ margin: 0, fontSize: '0.875rem', fontWeight: 500, color: 'var(--color-text-primary)' }}>Traffic Overview</h4>
+                    </div>
+                    <div style={{ height: '280px', border: '1px solid var(--color-border)', borderRadius: '6px', paddingTop: 'var(--space-md)' }}>
                         {timeseries.length > 0 ? (
                             <ResponsiveContainer width="100%" height="100%">
                                 <LineChart data={timeseries}>
@@ -489,41 +482,47 @@ export default function DashboardPage() {
                 </div>
 
                 {/* Sources Pie Chart */}
-                <div className="card">
-                    <h4 style={{ marginBottom: 'var(--space-md)' }}>Traffic Sources</h4>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <div style={{ paddingBottom: 'var(--space-md)', marginBottom: 'var(--space-sm)' }}>
+                        <h4 style={{ margin: 0, fontSize: '0.875rem', fontWeight: 500, color: 'var(--color-text-primary)' }}>Traffic Sources</h4>
+                    </div>
                     {pieData.length > 0 ? (
-                        <>
-                            <div style={{ height: '180px' }}>
+                        <div style={{ border: '1px solid var(--color-border)', borderRadius: '6px', padding: 'var(--space-md)', height: '280px', display: 'flex', flexDirection: 'column' }}>
+                            <div style={{ flex: 1, minHeight: 0 }}>
                                 <ResponsiveContainer width="100%" height="100%">
                                     <PieChart>
                                         <Pie
                                             data={pieData}
                                             cx="50%"
                                             cy="50%"
-                                            innerRadius={40}
-                                            outerRadius={70}
+                                            innerRadius={50}
+                                            outerRadius={80}
                                             dataKey="value"
                                             paddingAngle={2}
+                                            stroke="transparent"
                                         >
                                             {pieData.map((entry, index) => (
                                                 <Cell key={index} fill={entry.color} />
                                             ))}
                                         </Pie>
-                                        <Tooltip />
+                                        <Tooltip 
+                                            contentStyle={{ background: 'var(--color-bg-tertiary)', border: '1px solid var(--color-border)', borderRadius: '6px', color: 'var(--color-text-primary)' }}
+                                            itemStyle={{ color: 'var(--color-text-primary)' }}
+                                        />
                                     </PieChart>
                                 </ResponsiveContainer>
                             </div>
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-sm)', marginTop: 'var(--space-md)' }}>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-sm)', marginTop: 'var(--space-md)', justifyContent: 'center' }}>
                                 {pieData.map((item, i) => (
-                                    <div key={i} className="flex items-center gap-xs" style={{ fontSize: '0.75rem' }}>
-                                        <span style={{ width: '10px', height: '10px', borderRadius: '2px', background: item.color }} />
+                                    <div key={i} className="flex items-center gap-xs" style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>
+                                        <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: item.color }} />
                                         {item.name}: {item.value}
                                     </div>
                                 ))}
                             </div>
-                        </>
+                        </div>
                     ) : (
-                        <div style={{ height: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-muted)' }}>
+                        <div style={{ border: '1px solid var(--color-border)', borderRadius: '6px', height: '280px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-muted)' }}>
                             <div style={{ textAlign: 'center' }}>
                                 <Globe size={32} style={{ marginBottom: 'var(--space-sm)', opacity: 0.5 }} />
                                 <p style={{ fontSize: '0.875rem' }}>No source data yet</p>
@@ -534,85 +533,85 @@ export default function DashboardPage() {
             </div>
 
             {/* Bottom Row */}
-            <div className="grid grid-cols-2 gap-lg">
+            <div className="grid grid-cols-2 gap-lg" style={{ marginBottom: 'var(--space-xl)' }}>
                 {/* Top Pages */}
-                <div className="card">
-                    <h4 style={{ marginBottom: 'var(--space-md)' }}>Top Pages</h4>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <div style={{ paddingBottom: 'var(--space-md)', marginBottom: 'var(--space-sm)' }}>
+                        <h4 style={{ margin: 0, fontSize: '0.875rem', fontWeight: 500, color: 'var(--color-text-primary)' }}>Top Pages</h4>
+                    </div>
                     {topPages.length > 0 ? (
-                        <table style={{ width: '100%' }}>
-                            <tbody>
-                                {topPages.slice(0, 8).map((page, i) => (
-                                    <tr key={i}>
-                                        <td style={{
-                                            padding: 'var(--space-sm) 0',
-                                            borderBottom: '1px solid var(--color-border)'
-                                        }}>
-                                            <span style={{ fontSize: '0.875rem', color: 'var(--color-text-primary)' }}>
-                                                {page.path}
-                                            </span>
-                                        </td>
-                                        <td style={{
-                                            padding: 'var(--space-sm) 0',
-                                            borderBottom: '1px solid var(--color-border)',
-                                            textAlign: 'right',
-                                            width: '80px'
-                                        }}>
-                                            <span className="badge">{page.views.toLocaleString()}</span>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                        <div style={{ border: '1px solid var(--color-border)', borderRadius: '6px', overflow: 'hidden' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                <tbody>
+                                    {topPages.slice(0, 8).map((page, i) => (
+                                        <tr key={i} style={{ borderBottom: i === Math.min(topPages.length, 8) - 1 ? 'none' : '1px solid var(--color-border)' }}>
+                                            <td style={{ padding: '12px 16px' }}>
+                                                <span style={{ fontSize: '0.875rem', color: 'var(--color-text-primary)' }}>
+                                                    {page.path}
+                                                </span>
+                                            </td>
+                                            <td style={{ padding: '12px 16px', textAlign: 'right', width: '80px' }}>
+                                                <span style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
+                                                    {page.views.toLocaleString()}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
                     ) : (
-                        <p style={{ color: 'var(--color-text-muted)', textAlign: 'center', padding: 'var(--space-xl)' }}>
-                            No page views yet
-                        </p>
+                        <div style={{ border: '1px solid var(--color-border)', borderRadius: '6px', padding: 'var(--space-xl)', textAlign: 'center' }}>
+                            <p style={{ color: 'var(--color-text-muted)', margin: 0 }}>
+                                No page views yet
+                            </p>
+                        </div>
                     )}
                 </div>
 
                 {/* Real-time Activity */}
-                <div className="card">
-                    <div className="flex items-center justify-between" style={{ marginBottom: 'var(--space-md)' }}>
-                        <h4>Real-Time Activity</h4>
-                        <RefreshCw size={16} style={{ color: 'var(--color-text-muted)' }} />
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <div className="flex items-center justify-between" style={{ paddingBottom: 'var(--space-md)', marginBottom: 'var(--space-sm)' }}>
+                        <h4 style={{ margin: 0, fontSize: '0.875rem', fontWeight: 500, color: 'var(--color-text-primary)' }}>Real-Time Activity</h4>
+                        <RefreshCw size={14} style={{ color: 'var(--color-text-muted)' }} />
                     </div>
-                    <div style={{
-                        padding: 'var(--space-lg)',
-                        background: 'var(--color-bg-secondary)',
-                        borderRadius: 'var(--radius-md)',
-                        marginBottom: 'var(--space-lg)',
-                        textAlign: 'center'
-                    }}>
-                        <div style={{ fontSize: '2.5rem', fontWeight: 700, color: realtime?.activeVisitors ? 'var(--color-success)' : 'var(--color-text-muted)' }}>
-                            {realtime?.activeVisitors || 0}
-                        </div>
-                        <div style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
-                            Active visitors right now
-                        </div>
-                    </div>
-                    <div>
+                    <div style={{ border: '1px solid var(--color-border)', borderRadius: '6px', padding: 'var(--space-lg)' }}>
                         <div style={{
-                            fontSize: '0.75rem',
-                            color: 'var(--color-text-muted)',
-                            marginBottom: 'var(--space-sm)',
-                            textTransform: 'uppercase'
+                            marginBottom: 'var(--space-xl)',
+                            textAlign: 'center'
                         }}>
-                            Active Pages
-                        </div>
-                        {realtime?.activePages && realtime.activePages.length > 0 ? (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-xs)' }}>
-                                {realtime.activePages.slice(0, 5).map((page, i) => (
-                                    <div key={i} className="flex items-center justify-between">
-                                        <span style={{ fontSize: '0.875rem', color: 'var(--color-text-primary)' }}>{page.path}</span>
-                                        <span style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--color-text-primary)' }}>{page.count}</span>
-                                    </div>
-                                ))}
+                            <div style={{ fontSize: '3rem', fontWeight: 500, letterSpacing: '-0.04em', color: realtime?.activeVisitors ? 'var(--color-text-primary)' : 'var(--color-text-muted)' }}>
+                                {realtime?.activeVisitors || 0}
                             </div>
-                        ) : (
-                            <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>
-                                No active pages
-                            </p>
-                        )}
+                            <div style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: '4px' }}>
+                                Active visitors right now
+                            </div>
+                        </div>
+                        <div>
+                            <div style={{
+                                fontSize: '0.6875rem',
+                                color: 'var(--color-text-muted)',
+                                marginBottom: 'var(--space-sm)',
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.05em'
+                            }}>
+                                Active Pages
+                            </div>
+                            {realtime?.activePages && realtime.activePages.length > 0 ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                    {realtime.activePages.slice(0, 5).map((page, i) => (
+                                        <div key={i} className="flex items-center justify-between" style={{ padding: '6px 0', borderBottom: i === Math.min(realtime.activePages.length, 5) - 1 ? 'none' : '1px dotted var(--color-border)' }}>
+                                            <span style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)' }}>{page.path}</span>
+                                            <span style={{ fontSize: '0.8125rem', color: 'var(--color-text-primary)' }}>{page.count}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', margin: 0 }}>
+                                    No active pages
+                                </p>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>
