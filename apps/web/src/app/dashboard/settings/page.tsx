@@ -335,7 +335,7 @@ export default function SettingsPage() {
                             <div className="card" style={{ marginBottom: 'var(--space-lg)' }}>
                                 <div className="flex items-center justify-between" style={{ marginBottom: 'var(--space-md)' }}>
                                     <h3>Current Plan</h3>
-                                    <span className="badge" style={{ background: 'var(--color-accent-gradient)' }}>
+                                    <span className="badge">
                                         <Crown size={12} style={{ marginRight: '4px' }} />
                                         {currentPlan.charAt(0).toUpperCase() + currentPlan.slice(1)}
                                     </span>
@@ -362,7 +362,7 @@ export default function SettingsPage() {
                                             key={plan.id}
                                             className="card"
                                             style={{
-                                                borderColor: isCurrent ? 'var(--color-accent-primary)' : undefined,
+                                                borderColor: isCurrent ? 'var(--color-text-primary)' : undefined,
                                                 position: 'relative',
                                                 opacity: upgradingPlan && !isLoading ? 0.7 : 1,
                                                 transition: 'opacity 0.2s',
@@ -461,7 +461,7 @@ export default function SettingsPage() {
                                             width: '48px',
                                             height: '24px',
                                             borderRadius: 'var(--radius-full)',
-                                            background: value ? 'var(--color-accent-primary)' : 'var(--color-bg-tertiary)',
+                                            background: value ? 'var(--color-text-primary)' : 'var(--color-bg-tertiary)',
                                             border: 'none',
                                             cursor: 'pointer',
                                             position: 'relative',
@@ -476,7 +476,7 @@ export default function SettingsPage() {
                                             width: '20px',
                                             height: '20px',
                                             borderRadius: 'var(--radius-full)',
-                                            background: 'white',
+                                            background: value ? '#000' : 'white',
                                             transition: 'left var(--transition-fast)',
                                         }} />
                                     </button>
@@ -519,9 +519,9 @@ export default function SettingsPage() {
                                 padding: 'var(--space-md)',
                                 background: 'var(--color-bg-secondary)',
                                 borderRadius: 'var(--radius-md)',
-                                borderLeft: '3px solid var(--color-accent-primary)',
+                                borderLeft: '3px solid var(--color-text-primary)',
                             }}>
-                                <Shield size={18} style={{ marginBottom: 'var(--space-sm)', color: 'var(--color-accent-primary)' }} />
+                                <Shield size={18} style={{ marginBottom: 'var(--space-sm)', color: 'var(--color-text-primary)' }} />
                                 <p style={{ fontSize: '0.875rem', margin: 0 }}>
                                     Your data is exported securely and includes all events, funnels, and insights from the last 30 days.
                                 </p>

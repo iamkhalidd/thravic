@@ -29,7 +29,7 @@ import { analytics, domains } from '@/lib/api';
 import type { Metrics, TopPage, TimeseriesData, RealtimeData, Domain } from '@/types';
 import { ScriptInstallation } from '@/components/ScriptInstallation';
 
-const sourceColors = ['var(--color-accent-primary)', '#E0B50F', '#34B1AA', '#3B8FF3', '#10b981', '#ef4444'];
+const sourceColors = ['#f4f5f6', '#d1d5db', '#8a8f98', '#575c66', '#3f434a', '#2d3036'];
 
 export default function DashboardPage() {
     const [domainList, setDomainList] = useState<Domain[]>([]);
@@ -164,18 +164,20 @@ export default function DashboardPage() {
                 <h1 style={{ marginBottom: 'var(--space-xl)' }}>Welcome to TrackFlow! 👋</h1>
 
                 {/* Getting Started Card */}
-                <div className="card" style={{ padding: 'var(--space-2xl)', textAlign: 'center', marginBottom: 'var(--space-xl)' }}>
+                <div className="card" style={{ padding: 'var(--space-2xl)', textAlign: 'center', marginBottom: 'var(--space-xl)', background: 'var(--color-bg-card)', border: '1px solid var(--color-border)' }}>
                     <div style={{
                         width: '80px',
                         height: '80px',
-                        borderRadius: 'var(--radius-full)',
-                        background: 'var(--color-accent-gradient)',
+                        borderRadius: '24px',
+                        background: 'rgba(255,255,255,0.03)',
+                        border: '1px solid var(--color-border)',
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         margin: '0 auto var(--space-lg)'
                     }}>
-                        <Globe size={40} color="white" />
+                        <Globe size={32} color="var(--color-text-primary)" />
                     </div>
                     <h2 style={{ marginBottom: 'var(--space-sm)' }}>Add your first website</h2>
                     <p style={{ marginBottom: 'var(--space-xl)', color: 'var(--color-text-secondary)', maxWidth: '500px', margin: '0 auto var(--space-xl)' }}>
@@ -198,9 +200,9 @@ export default function DashboardPage() {
                         { icon: Sparkles, title: 'AI Insights', desc: 'Get automated recommendations to improve' },
                         { icon: Globe, title: 'Traffic Sources', desc: 'Know where your visitors come from' }
                     ].map((feature, i) => (
-                        <div key={i} className="card">
-                            <feature.icon size={24} style={{ color: 'var(--color-accent-primary)', marginBottom: 'var(--space-md)' }} />
-                            <h4 style={{ marginBottom: 'var(--space-xs)' }}>{feature.title}</h4>
+                        <div key={i} className="card" style={{ background: 'var(--color-bg-card)', padding: 'var(--space-lg)', borderRadius: '16px' }}>
+                            <feature.icon size={20} style={{ color: 'var(--color-text-primary)', marginBottom: 'var(--space-md)' }} />
+                            <h4 style={{ marginBottom: 'var(--space-xs)', fontSize: '0.9375rem', fontWeight: 500 }}>{feature.title}</h4>
                             <p style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', margin: 0 }}>{feature.desc}</p>
                         </div>
                     ))}
@@ -210,10 +212,10 @@ export default function DashboardPage() {
     }
 
     const statCards = [
-        { label: 'Total Pageviews', value: metrics?.pageviews.toLocaleString() || '0', icon: BarChart3, color: 'var(--color-accent-primary)' },
-        { label: 'Unique Visitors', value: metrics?.uniqueVisitors.toLocaleString() || '0', icon: Users, color: '#34B1AA' },
-        { label: 'Bounce Rate', value: `${metrics?.bounceRate || 0}%`, icon: MousePointer2, color: '#f59e0b' },
-        { label: 'Avg. Session', value: formatDuration(metrics?.avgSessionDuration || 0), icon: Clock, color: '#10b981' }
+        { label: 'Total Pageviews', value: metrics?.pageviews.toLocaleString() || '0', icon: BarChart3 },
+        { label: 'Unique Visitors', value: metrics?.uniqueVisitors.toLocaleString() || '0', icon: Users },
+        { label: 'Bounce Rate', value: `${metrics?.bounceRate || 0}%`, icon: MousePointer2 },
+        { label: 'Avg. Session', value: formatDuration(metrics?.avgSessionDuration || 0), icon: Clock }
     ];
 
     const pieData = sourceData.map((s, i) => ({
@@ -232,17 +234,18 @@ export default function DashboardPage() {
                     <h1>Dashboard</h1>
                     {/* Real-time indicator */}
                     <div className="flex items-center gap-sm" style={{
-                        padding: 'var(--space-sm) var(--space-md)',
-                        background: realtime?.activeVisitors ? 'rgba(16, 185, 129, 0.1)' : 'var(--color-bg-card)',
-                        border: `1px solid ${realtime?.activeVisitors ? 'rgba(16, 185, 129, 0.3)' : 'var(--color-border)'}`,
-                        borderRadius: 'var(--radius-md)'
+                        padding: 'var(--space-xs) var(--space-sm)',
+                        background: 'transparent',
+                        border: '1px solid var(--color-border)',
+                        borderRadius: '12px'
                     }}>
                         <span style={{
-                            width: '8px',
-                            height: '8px',
+                            width: '6px',
+                            height: '6px',
                             borderRadius: '50%',
-                            background: realtime?.activeVisitors ? 'var(--color-success)' : 'var(--color-text-muted)',
-                            animation: realtime?.activeVisitors ? 'pulse 2s infinite' : 'none'
+                            background: realtime?.activeVisitors ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
+                            animation: realtime?.activeVisitors ? 'pulse 2s infinite' : 'none',
+                            boxShadow: realtime?.activeVisitors ? '0 0 8px rgba(255,255,255,0.4)' : 'none'
                         }} />
                         <span style={{ fontSize: '0.875rem' }}>
                             <strong>{realtime?.activeVisitors || 0}</strong> active now
@@ -397,23 +400,20 @@ export default function DashboardPage() {
             {/* Stats Cards */}
             <div className="grid grid-cols-4 gap-md" style={{ marginBottom: 'var(--space-xl)' }}>
                 {statCards.map((stat, i) => (
-                    <div key={i} className="card" style={{ position: 'relative', overflow: 'hidden' }}>
-                        <div style={{
-                            position: 'absolute',
-                            top: 0,
-                            left: 0,
-                            right: 0,
-                            height: '3px',
-                            background: stat.color
-                        }} />
-                        <div className="flex items-center justify-between" style={{ marginBottom: 'var(--space-sm)' }}>
-                            <span style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
+                    <div key={i} style={{ 
+                        background: 'rgba(255,255,255,0.01)', border: '1px solid var(--color-border)', 
+                        borderRadius: '16px', padding: '24px', transition: 'transform 0.2s', position: 'relative', overflow: 'hidden'
+                    }}>
+                        <div className="flex items-center justify-between" style={{ marginBottom: 'var(--space-lg)' }}>
+                            <span style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--color-text-secondary)' }}>
                                 {stat.label}
                             </span>
-                            <stat.icon size={18} style={{ color: stat.color }} />
+                            <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(255,255,255,0.03)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <stat.icon size={16} strokeWidth={1.5} style={{ color: 'var(--color-text-primary)' }} />
+                            </div>
                         </div>
                         <div className="flex items-end gap-sm">
-                            <span style={{ fontSize: '1.75rem', fontWeight: 700 }}>{stat.value}</span>
+                            <span style={{ fontSize: '2.5rem', fontWeight: 500, letterSpacing: '-0.04em', lineHeight: 1, color: 'var(--color-text-primary)' }}>{stat.value}</span>
                         </div>
                     </div>
                 ))}
@@ -427,20 +427,20 @@ export default function DashboardPage() {
                     { href: '/dashboard/heatmaps', icon: MousePointer2, label: 'Heatmaps', desc: 'See click patterns' },
                     { href: '/dashboard/settings', icon: CreditCard, label: 'Upgrade Plan', desc: 'Get more features' }
                 ].map((action, i) => (
-                    <Link key={i} href={action.href} className="card" style={{ textDecoration: 'none', transition: 'all var(--transition-fast)' }}>
+                    <Link key={i} href={action.href} style={{ 
+                        background: 'transparent', border: '1px solid var(--color-border)', borderRadius: '12px', padding: '16px',
+                        textDecoration: 'none', transition: 'all var(--transition-fast)' 
+                    }}>
                         <div className="flex items-center gap-md">
                             <div style={{
-                                padding: 'var(--space-sm)',
-                                background: 'var(--color-bg-tertiary)',
-                                borderRadius: 'var(--radius-md)'
+                                padding: '8px', background: 'var(--color-bg-hover)', borderRadius: '8px', border: '1px solid var(--color-border)'
                             }}>
-                                <action.icon size={20} style={{ color: 'var(--color-accent-primary)' }} />
+                                <action.icon size={16} strokeWidth={1.5} style={{ color: 'var(--color-text-primary)' }} />
                             </div>
                             <div>
-                                <div style={{ fontWeight: 500, marginBottom: '2px' }}>{action.label}</div>
+                                <div style={{ fontSize: '0.875rem', fontWeight: 500, marginBottom: '2px', color: 'var(--color-text-primary)' }}>{action.label}</div>
                                 <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>{action.desc}</div>
                             </div>
-                            <ArrowRight size={16} style={{ marginLeft: 'auto', color: 'var(--color-text-muted)' }} />
                         </div>
                     </Link>
                 ))}
@@ -472,8 +472,8 @@ export default function DashboardPage() {
                                             borderRadius: 'var(--radius-md)'
                                         }}
                                     />
-                                    <Line type="monotone" dataKey="pageviews" stroke="var(--color-accent-primary)" strokeWidth={2} dot={false} name="Pageviews" />
-                                    <Line type="monotone" dataKey="visitors" stroke="#34B1AA" strokeWidth={2} dot={false} name="Visitors" />
+                                    <Line type="monotone" dataKey="pageviews" stroke="var(--color-text-primary)" strokeWidth={2} dot={false} name="Pageviews" />
+                                    <Line type="monotone" dataKey="visitors" stroke="var(--color-text-muted)" strokeDasharray="4 4" strokeWidth={2} dot={false} name="Visitors" />
                                 </LineChart>
                             </ResponsiveContainer>
                         ) : (
@@ -603,8 +603,8 @@ export default function DashboardPage() {
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-xs)' }}>
                                 {realtime.activePages.slice(0, 5).map((page, i) => (
                                     <div key={i} className="flex items-center justify-between">
-                                        <span style={{ fontSize: '0.875rem' }}>{page.path}</span>
-                                        <span className="badge">{page.count}</span>
+                                        <span style={{ fontSize: '0.875rem', color: 'var(--color-text-primary)' }}>{page.path}</span>
+                                        <span style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--color-text-primary)' }}>{page.count}</span>
                                     </div>
                                 ))}
                             </div>

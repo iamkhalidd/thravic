@@ -65,7 +65,7 @@ interface Campaign {
     pagesPerSession: number;
 }
 
-const COLORS = ['var(--color-accent-primary)', '#E0B50F', '#34B1AA', '#3B8FF3', '#10b981', '#ef4444'];
+const COLORS = ['#f4f5f6', '#d1d5db', '#8a8f98', '#575c66', '#3f434a', '#2d3036'];
 
 const sourceTypeIcons: Record<string, React.ElementType> = {
     direct: MousePointer2,
@@ -190,7 +190,7 @@ export default function SourcesPage() {
             <div className="flex items-center justify-between" style={{ marginBottom: 'var(--space-xl)' }}>
                 <div className="flex items-center gap-md">
                     <h1>Traffic Sources</h1>
-                    <span className="badge" style={{ background: 'var(--color-accent-gradient)' }}>
+                    <span className="badge">
                         <Globe size={12} style={{ marginRight: '4px' }} />
                         {overview?.summary.totalSessions || 0} sessions
                     </span>
@@ -253,9 +253,9 @@ export default function SourcesPage() {
                             {Object.entries(overview.summary.byType).map(([type, data]) => {
                                 const Icon = sourceTypeIcons[type] || Globe;
                                 return (
-                                    <div key={type} style={{ padding: 'var(--space-md)', background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-md)' }}>
+                                    <div key={type} style={{ padding: 'var(--space-lg)', background: 'var(--color-bg-card)', border: '1px solid var(--color-border)', borderRadius: '16px' }}>
                                         <div className="flex items-center gap-sm" style={{ marginBottom: 'var(--space-sm)' }}>
-                                            <Icon size={18} style={{ color: 'var(--color-accent-primary)' }} />
+                                            <Icon size={18} style={{ color: 'var(--color-text-primary)' }} />
                                             <span style={{ textTransform: 'capitalize', fontWeight: 500 }}>{type}</span>
                                         </div>
                                         <div style={{ fontSize: '1.5rem', fontWeight: 700 }}>{data.count}</div>
@@ -360,7 +360,7 @@ export default function SourcesPage() {
                     ) : (
                         <div className="grid grid-cols-2 gap-md">
                             {socialPlatforms.map((platform, i) => (
-                                <div key={i} style={{ padding: 'var(--space-md)', background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-md)' }}>
+                                <div key={i} style={{ padding: 'var(--space-lg)', background: 'var(--color-bg-card)', border: '1px solid var(--color-border)', borderRadius: '16px' }}>
                                     <div className="flex items-center justify-between" style={{ marginBottom: 'var(--space-sm)' }}>
                                         <span style={{ fontWeight: 600 }}>{platform.platform}</span>
                                         <span className="badge" style={{
@@ -396,7 +396,7 @@ export default function SourcesPage() {
                                     <XAxis type="number" />
                                     <YAxis dataKey="engine" type="category" width={100} />
                                     <Tooltip />
-                                    <Bar dataKey="visitors" fill="var(--color-accent-primary)" radius={[0, 4, 4, 0]} />
+                                    <Bar dataKey="visitors" fill="var(--color-text-primary)" radius={[0, 4, 4, 0]} />
                                 </BarChart>
                             </ResponsiveContainer>
                         </div>

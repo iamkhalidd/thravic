@@ -143,7 +143,7 @@ export default function CampaignsPage() {
                         padding: 'var(--space-xl)',
                         textAlign: 'center',
                         color: 'var(--color-text-secondary)',
-                        background: 'var(--color-bg-secondary)',
+                        background: 'var(--color-bg-card)',
                         borderRadius: 'var(--radius-lg)',
                         border: '1px solid var(--color-border)'
                     }}>
@@ -159,7 +159,7 @@ export default function CampaignsPage() {
                             key={idx}
                             style={{
                                 padding: 'var(--space-lg)',
-                                background: 'var(--color-bg-secondary)',
+                                background: 'var(--color-bg-card)',
                                 borderRadius: 'var(--radius-lg)',
                                 border: '1px solid var(--color-border)'
                             }}
@@ -270,7 +270,7 @@ export default function CampaignsPage() {
                                     <div style={{
                                         fontSize: '1.125rem',
                                         fontWeight: 600,
-                                        color: 'var(--color-primary)'
+                                        color: 'var(--color-text-primary)'
                                     }}>
                                         {(campaign.conversionRate || 0).toFixed(1)}%
                                     </div>
