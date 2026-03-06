@@ -84,7 +84,6 @@ function NavItem({ item, pathname, expandedSections, toggleSection, collapsed }:
         gap: collapsed ? '0' : '10px',
         padding: collapsed ? '10px 0' : '8px 12px',
         justifyContent: collapsed ? 'center' : 'flex-start',
-        justifyContent: collapsed ? 'center' : 'flex-start',
         background: 'transparent',
         border: 'none',
         borderRadius: '6px',
