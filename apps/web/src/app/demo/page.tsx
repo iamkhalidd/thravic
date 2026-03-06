@@ -3,9 +3,9 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import {
-    BarChart3, LayoutDashboard, Globe, Users, Target, MousePointer2,
+    LayoutDashboard, Globe, Users, Target, MousePointer2,
     Video, Sparkles, FileBarChart, Settings, ChevronDown, ChevronRight,
-    ArrowRight, TrendingUp, Megaphone
+    ArrowRight, TrendingUp, Calendar
 } from 'lucide-react';
 import {
     OverviewView, TrafficSourcesView, CampaignsView, TrendsView,
@@ -50,24 +50,18 @@ const viewComponents: Record<DemoView, React.ComponentType> = {
     'reports': ReportsView,
 };
 
-const viewTitles: Record<DemoView, string> = {
-    'overview': 'Dashboard',
-    'traffic-sources': 'Traffic Sources',
-    'traffic-campaigns': 'Campaigns',
-    'traffic-trends': 'Trends',
-    'behavior-pages': 'Behavior – Pages',
-    'funnels': 'Funnels',
-    'heatmaps': 'Heatmaps',
-    'sessions': 'Session Recordings',
-    'insights': 'AI Insights',
-    'reports': 'Reports',
-};
+const datePresets = [
+    { value: '7d', label: 'Last 7 days' },
+    { value: '14d', label: 'Last 14 days' },
+    { value: '30d', label: 'Last 30 days' },
+    { value: '90d', label: 'Last 90 days' },
+];
 
 export default function DemoPage() {
     const [activeView, setActiveView] = useState<DemoView>('overview');
     const [expandedSections, setExpandedSections] = useState<string[]>(['Traffic', 'Behavior']);
     const [dateRange, setDateRange] = useState('7d');
-    const [domainDropdownOpen, setDomainDropdownOpen] = useState(false);
+    const [dateDropdownOpen, setDateDropdownOpen] = useState(false);
 
     const toggleSection = (label: string) => {
         setExpandedSections(prev =>
@@ -79,6 +73,28 @@ export default function DemoPage() {
     const isParentActive = (children: { id: DemoView }[]) => children.some(c => activeView === c.id);
 
     const ActiveComponent = viewComponents[activeView];
+    const currentDatePreset = datePresets.find(p => p.value === dateRange);
+
+    // Match real dashboard nav item style
+    const navItemStyle = (active: boolean): React.CSSProperties => ({
+        width: '100%',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '10px',
+        padding: '8px 12px',
+        background: 'transparent',
+        border: 'none',
+        borderRadius: '6px',
+        color: active ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
+        cursor: 'pointer',
+        fontSize: '0.8125rem',
+        fontWeight: active ? 500 : 400,
+        textDecoration: 'none',
+        transition: 'all 150ms ease',
+        textAlign: 'left' as const,
+        whiteSpace: 'nowrap' as const,
+        overflow: 'hidden',
+    });
 
     return (
         <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--color-bg-primary)' }}>
@@ -102,40 +118,64 @@ export default function DemoPage() {
                 </Link>
             </div>
 
-            {/* Sidebar */}
+            {/* Sidebar — matches real dashboard layout.tsx */}
             <aside style={{
-                width: '260px', background: 'var(--color-bg-secondary)',
-                borderRight: '1px solid var(--color-border)',
+                width: '240px',
+                background: 'var(--color-sidebar-bg, var(--color-bg-secondary))',
+                borderRight: '1px solid var(--color-sidebar-border, var(--color-border))',
                 display: 'flex', flexDirection: 'column',
                 position: 'fixed', top: '40px', left: 0, height: 'calc(100vh - 40px)', zIndex: 50
             }}>
-                {/* Logo */}
-                <div style={{ padding: 'var(--space-lg)', borderBottom: '1px solid var(--color-border)' }}>
-                    <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', textDecoration: 'none', color: 'var(--color-text-primary)' }}>
-                        <div style={{ width: '32px', height: '32px', background: 'var(--gradient-primary)', borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <BarChart3 size={18} color="white" />
-                        </div>
-                        <span style={{ fontSize: '1.125rem', fontWeight: 700 }}>TrackFlow</span>
-                        <span style={{ marginLeft: '4px', padding: '2px 8px', background: 'var(--color-bg-hover)', color: 'var(--color-accent-primary)', borderRadius: 'var(--radius-full)', fontSize: '0.6875rem', fontWeight: 600 }}>DEMO</span>
-                    </Link>
-                </div>
-
-                {/* Domain Selector */}
-                <div style={{ padding: 'var(--space-md)' }}>
-                    <button onClick={() => setDomainDropdownOpen(!domainDropdownOpen)} style={{
-                        width: '100%', display: 'flex', alignItems: 'center', gap: 'var(--space-sm)',
-                        padding: 'var(--space-sm) var(--space-md)', background: 'var(--color-bg-tertiary)',
-                        border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)',
-                        color: 'var(--color-text-primary)', cursor: 'pointer', fontSize: '0.875rem'
+                {/* Logo — matches real dashboard */}
+                <div style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '0 12px 0 16px', height: '56px',
+                    borderBottom: '1px solid var(--color-sidebar-border, var(--color-border))',
+                    flexShrink: 0,
+                }}>
+                    <Link href="/" style={{
+                        display: 'flex', alignItems: 'center', gap: '8px',
+                        textDecoration: 'none', color: 'var(--color-text-primary)',
                     }}>
-                        <Globe size={16} style={{ color: 'var(--color-primary)' }} />
-                        <span style={{ flex: 1, textAlign: 'left', fontWeight: 500 }}>demo-site.com</span>
-                        <ChevronDown size={14} />
-                    </button>
+                        <div style={{
+                            width: '28px', height: '28px', background: 'var(--color-accent-primary)',
+                            borderRadius: '6px', display: 'flex', alignItems: 'center',
+                            justifyContent: 'center', flexShrink: 0,
+                        }}>
+                            <TrendingUp size={15} color="white" />
+                        </div>
+                        <span style={{ fontWeight: 700, fontSize: '1rem', whiteSpace: 'nowrap' }}>TrackFlow</span>
+                    </Link>
+                    <span style={{
+                        padding: '2px 8px', background: 'var(--color-bg-hover)',
+                        color: 'var(--color-accent-primary)', borderRadius: 'var(--radius-full)',
+                        fontSize: '0.6875rem', fontWeight: 600
+                    }}>DEMO</span>
                 </div>
 
-                {/* Navigation */}
-                <nav style={{ flex: 1, padding: 'var(--space-sm) var(--space-md)', overflowY: 'auto' }}>
+                {/* Domain Selector — matches real dashboard */}
+                <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--color-sidebar-border, var(--color-border))', flexShrink: 0 }}>
+                    <div style={{ position: 'relative' }}>
+                        <button style={{
+                            width: '100%', display: 'flex', alignItems: 'center',
+                            justifyContent: 'space-between',
+                            padding: '7px 10px',
+                            background: 'var(--color-bg-primary)',
+                            border: '1px solid var(--color-border)',
+                            borderRadius: '6px', cursor: 'pointer',
+                            fontSize: '0.8125rem', color: 'var(--color-text-primary)',
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <Globe size={13} />
+                                <span>demo-site.com</span>
+                            </div>
+                            <ChevronDown size={12} />
+                        </button>
+                    </div>
+                </div>
+
+                {/* Navigation — matches real dashboard */}
+                <nav style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '8px 0' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                         {navStructure.map((item, i) => {
                             const Icon = item.icon;
@@ -146,33 +186,31 @@ export default function DemoPage() {
                             if (hasChildren) {
                                 return (
                                     <div key={i}>
-                                        <button onClick={() => toggleSection(item.label)} style={{
-                                            width: '100%', display: 'flex', alignItems: 'center', gap: 'var(--space-sm)',
-                                            padding: 'var(--space-sm) var(--space-md)', background: itemActive ? 'var(--color-bg-hover)' : 'transparent',
-                                            border: 'none', borderRadius: 'var(--radius-md)',
-                                            color: itemActive ? 'var(--color-primary)' : 'var(--color-text-secondary)',
-                                            cursor: 'pointer', fontSize: '0.875rem', fontWeight: itemActive ? 500 : 400,
-                                        }}>
-                                            <Icon size={18} />
-                                            <span style={{ flex: 1, textAlign: 'left' }}>{item.label}</span>
+                                        <button onClick={() => toggleSection(item.label)} style={navItemStyle(itemActive)}>
+                                            <Icon size={18} style={{ flexShrink: 0 }} />
+                                            <span style={{ flex: 1 }}>{item.label}</span>
                                             {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                                         </button>
                                         {isExpanded && (
-                                            <div style={{ marginLeft: 'var(--space-lg)', marginTop: '2px' }}>
-                                                {item.children!.map((child, j) => (
-                                                    <button key={j} onClick={() => setActiveView(child.id)}
-                                                        style={{
-                                                            display: 'block', width: '100%', textAlign: 'left',
-                                                            padding: 'var(--space-xs) var(--space-md)',
-                                                            color: isActive(child.id) ? 'var(--color-primary)' : 'var(--color-text-secondary)',
-                                                            fontSize: '0.8125rem', borderRadius: 'var(--radius-sm)',
-                                                            background: isActive(child.id) ? 'var(--color-bg-hover)' : 'transparent',
-                                                            border: 'none', cursor: 'pointer',
-                                                        }}
-                                                    >
-                                                        {child.label}
-                                                    </button>
-                                                ))}
+                                            <div style={{ marginLeft: '15px', marginTop: '2px' }}>
+                                                {item.children!.map((child, j) => {
+                                                    const childActive = isActive(child.id);
+                                                    return (
+                                                        <button key={j} onClick={() => setActiveView(child.id)}
+                                                            style={{
+                                                                display: 'block', width: '100%', textAlign: 'left',
+                                                                padding: '6px 12px 6px 28px',
+                                                                color: childActive ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
+                                                                fontSize: '0.8125rem', fontWeight: childActive ? 500 : 400,
+                                                                background: 'transparent',
+                                                                border: 'none', cursor: 'pointer',
+                                                                transition: 'all 150ms ease',
+                                                            }}
+                                                        >
+                                                            {child.label}
+                                                        </button>
+                                                    );
+                                                })}
                                             </div>
                                         )}
                                     </div>
@@ -180,17 +218,8 @@ export default function DemoPage() {
                             }
 
                             return (
-                                <button key={i} onClick={() => setActiveView(item.id!)}
-                                    style={{
-                                        display: 'flex', alignItems: 'center', gap: 'var(--space-sm)',
-                                        padding: 'var(--space-sm) var(--space-md)', width: '100%', textAlign: 'left',
-                                        background: itemActive ? 'var(--color-bg-hover)' : 'transparent',
-                                        borderRadius: 'var(--radius-md)', border: 'none',
-                                        color: itemActive ? 'var(--color-primary)' : 'var(--color-text-secondary)',
-                                        fontSize: '0.875rem', fontWeight: itemActive ? 500 : 400, cursor: 'pointer',
-                                    }}
-                                >
-                                    <Icon size={18} />
+                                <button key={i} onClick={() => setActiveView(item.id!)} style={navItemStyle(itemActive)}>
+                                    <Icon size={18} style={{ flexShrink: 0 }} />
                                     <span>{item.label}</span>
                                 </button>
                             );
@@ -198,53 +227,116 @@ export default function DemoPage() {
                     </div>
                 </nav>
 
-                {/* User Section */}
-                <div style={{ padding: 'var(--space-md)', borderTop: '1px solid var(--color-border)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', padding: 'var(--space-sm)' }}>
-                        <div style={{ width: '36px', height: '36px', borderRadius: 'var(--radius-full)', background: 'var(--gradient-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 600, fontSize: '0.875rem', color: 'white' }}>DU</div>
-                        <div style={{ flex: 1 }}>
-                            <div style={{ fontWeight: 500, fontSize: '0.875rem' }}>Demo User</div>
-                            <div style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>Free Plan</div>
+                {/* Bottom — Settings + User (matches real dashboard) */}
+                <div style={{
+                    borderTop: '1px solid var(--color-sidebar-border, var(--color-border))',
+                    padding: '8px 0', flexShrink: 0,
+                }}>
+                    {/* Settings link */}
+                    <button onClick={() => setActiveView('overview')} style={navItemStyle(false)}>
+                        <Settings size={18} style={{ flexShrink: 0 }} />
+                        <span>Settings</span>
+                    </button>
+
+                    {/* User row */}
+                    <div style={{
+                        display: 'flex', alignItems: 'center', gap: '8px',
+                        padding: '8px 12px', marginTop: '4px',
+                    }}>
+                        <div style={{
+                            width: '28px', height: '28px', borderRadius: '50%',
+                            background: 'var(--color-accent-primary)', display: 'flex', alignItems: 'center',
+                            justifyContent: 'center', color: 'white',
+                            fontWeight: 700, fontSize: '0.75rem', flexShrink: 0,
+                        }}>D</div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{
+                                fontSize: '0.8125rem', fontWeight: 500,
+                                color: 'var(--color-text-primary)',
+                                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                            }}>Demo User</div>
+                            <div style={{
+                                fontSize: '0.6875rem', color: 'var(--color-text-muted)',
+                                textTransform: 'capitalize',
+                            }}>Free Plan</div>
                         </div>
-                        <Settings size={16} style={{ color: 'var(--color-text-tertiary)', cursor: 'pointer' }} />
                     </div>
                 </div>
             </aside>
 
-            {/* Main Content */}
-            <main style={{ flex: 1, marginLeft: '260px', marginTop: '40px', padding: 'var(--space-xl)' }}>
-                {/* Header */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-xl)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
-                        <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 700 }}>{viewTitles[activeView]}</h1>
+            {/* Main Content — matches real dashboard layout */}
+            <main style={{ flex: 1, marginLeft: '240px', marginTop: '40px' }}>
+                {/* Top Header — matches real dashboard header */}
+                <header style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '0 16px', height: '52px',
+                    background: 'var(--color-bg-card)',
+                    borderBottom: '1px solid var(--color-border)',
+                    position: 'sticky', top: '40px', zIndex: 40,
+                    gap: '8px',
+                }}>
+                    {/* Left: date controls */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1, minWidth: 0 }}>
+                        <div style={{ position: 'relative' }}>
+                            <button
+                                onClick={() => setDateDropdownOpen(!dateDropdownOpen)}
+                                style={{
+                                    display: 'flex', alignItems: 'center', gap: '5px',
+                                    padding: '5px 10px',
+                                    background: 'var(--color-bg-primary)',
+                                    border: '1px solid var(--color-border)',
+                                    borderRadius: '6px', cursor: 'pointer',
+                                    fontSize: '0.8125rem', color: 'var(--color-text-primary)',
+                                    whiteSpace: 'nowrap',
+                                }}
+                            >
+                                <Calendar size={13} />
+                                <span>{currentDatePreset?.label || 'Date range'}</span>
+                                <ChevronDown size={12} />
+                            </button>
+                            {dateDropdownOpen && (
+                                <div style={{
+                                    position: 'absolute', top: '100%', left: 0,
+                                    marginTop: '4px', background: 'var(--color-bg-card)',
+                                    border: '1px solid var(--color-border)', borderRadius: '6px',
+                                    boxShadow: 'var(--shadow-md)', zIndex: 100, minWidth: '160px',
+                                }}>
+                                    {datePresets.map(preset => (
+                                        <button
+                                            key={preset.value}
+                                            onClick={() => { setDateRange(preset.value); setDateDropdownOpen(false); }}
+                                            style={{
+                                                width: '100%', padding: '8px 12px',
+                                                background: dateRange === preset.value ? 'var(--color-bg-hover)' : 'transparent',
+                                                border: 'none', textAlign: 'left', cursor: 'pointer',
+                                                fontSize: '0.8125rem',
+                                                color: dateRange === preset.value ? 'var(--color-accent-primary)' : 'var(--color-text-primary)',
+                                            }}
+                                        >{preset.label}</button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
                         {activeView === 'overview' && (
                             <div style={{
-                                display: 'flex', alignItems: 'center', gap: 'var(--space-sm)',
-                                padding: 'var(--space-sm) var(--space-md)',
-                                background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)',
-                                borderRadius: 'var(--radius-md)'
+                                display: 'flex', alignItems: 'center', gap: '6px',
+                                padding: '4px 10px',
+                                background: 'rgba(16,185,129,0.08)',
+                                border: '1px solid rgba(16,185,129,0.2)',
+                                borderRadius: '6px',
                             }}>
-                                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--color-success, #22c55e)', animation: 'pulse 2s infinite' }} />
-                                <span style={{ fontSize: '0.875rem' }}><strong>127</strong> active now</span>
+                                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#22c55e', animation: 'pulse 2s infinite' }} />
+                                <span style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)' }}><strong>127</strong> active</span>
                             </div>
                         )}
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
-                        <select value={dateRange} onChange={e => setDateRange(e.target.value)} style={{
-                            padding: 'var(--space-sm) var(--space-md)', background: 'var(--color-bg-secondary)',
-                            border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)',
-                            color: 'var(--color-text-primary)', fontSize: '0.875rem', cursor: 'pointer'
-                        }}>
-                            <option value="7d">Last 7 days</option>
-                            <option value="14d">Last 14 days</option>
-                            <option value="30d">Last 30 days</option>
-                            <option value="90d">Last 90 days</option>
-                        </select>
-                    </div>
-                </div>
+                </header>
 
-                {/* Active View Content */}
-                <ActiveComponent />
+                {/* Page Content */}
+                <div style={{ padding: '24px' }}>
+                    <ActiveComponent />
+                </div>
             </main>
 
             <style jsx global>{`

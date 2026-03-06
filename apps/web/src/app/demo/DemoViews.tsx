@@ -69,66 +69,78 @@ function ChangeIndicator({ value }: { value: number }) {
 // ── Overview ──
 export function OverviewView() {
     const statCards = [
-        { label: 'Total Pageviews', value: '28,450', icon: BarChart3, color: 'var(--color-accent-primary)' },
-        { label: 'Unique Visitors', value: '8,730', icon: Users, color: '#34B1AA' },
-        { label: 'Bounce Rate', value: '38.2%', icon: MousePointer2, color: '#f59e0b' },
-        { label: 'Avg. Session', value: '3m 24s', icon: Clock, color: '#10b981' },
+        { label: 'Total Pageviews', value: '28,450', icon: BarChart3 },
+        { label: 'Unique Visitors', value: '8,730', icon: Users },
+        { label: 'Bounce Rate', value: '38.2%', icon: MousePointer2 },
+        { label: 'Avg. Session', value: '3m 24s', icon: Clock },
     ];
 
     return (
         <>
+            {/* Stats — flat metric blocks matching real dashboard */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--space-md)', marginBottom: 'var(--space-xl)' }}>
                 {statCards.map((stat, i) => {
                     const Icon = stat.icon;
                     return (
-                        <div key={i} style={{ ...cardStyle, position: 'relative', overflow: 'hidden' }}>
-                            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '3px', background: stat.color }} />
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-sm)' }}>
-                                <span style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>{stat.label}</span>
-                                <Icon size={18} style={{ color: stat.color }} />
+                        <div key={i} style={{
+                            background: 'transparent', border: '1px solid var(--color-border)',
+                            borderRadius: '6px', padding: '16px', position: 'relative',
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: 'var(--space-sm)' }}>
+                                <Icon size={14} strokeWidth={1.5} style={{ color: 'var(--color-text-secondary)' }} />
+                                <span style={{ fontSize: '11px', fontWeight: 500, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                    {stat.label}
+                                </span>
                             </div>
-                            <div style={{ fontSize: '1.75rem', fontWeight: 700 }}>{stat.value}</div>
+                            <div style={{ marginTop: '20px' }}>
+                                <span style={{ fontSize: '24px', fontWeight: 500, letterSpacing: '-0.02em', lineHeight: 1, color: 'var(--color-text-primary)' }}>{stat.value}</span>
+                            </div>
                         </div>
                     );
                 })}
             </div>
 
+            {/* Charts Row — thin 1px bordered containers matching real dashboard */}
             <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--space-lg)', marginBottom: 'var(--space-xl)' }}>
-                <div style={cardStyle}>
-                    <h4 style={{ margin: '0 0 var(--space-md)', display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
-                        <TrendingUp size={18} style={{ color: 'var(--color-primary)' }} /> Traffic Overview
-                    </h4>
-                    <div style={{ height: '280px' }}>
+                <div>
+                    <div style={{ display: 'flex', alignItems: 'center', paddingBottom: 'var(--space-md)', marginBottom: 'var(--space-sm)' }}>
+                        <h4 style={{ margin: 0, fontSize: '0.875rem', fontWeight: 500, color: 'var(--color-text-primary)' }}>Traffic Overview</h4>
+                    </div>
+                    <div style={{ height: '280px', border: '1px solid var(--color-border)', borderRadius: '6px', paddingTop: 'var(--space-md)' }}>
                         <ResponsiveContainer width="100%" height="100%">
                             <LineChart data={data.trafficData}>
                                 <XAxis dataKey="date" stroke="var(--color-text-muted)" fontSize={12} tickFormatter={v => new Date(v).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} tickLine={false} axisLine={false} />
                                 <YAxis stroke="var(--color-text-muted)" fontSize={12} tickLine={false} axisLine={false} />
                                 <Tooltip contentStyle={tooltipStyle} />
-                                <Line type="monotone" dataKey="pageviews" stroke="var(--color-accent-primary)" strokeWidth={2} dot={false} name="Pageviews" />
-                                <Line type="monotone" dataKey="visitors" stroke="#34B1AA" strokeWidth={2} dot={false} name="Visitors" />
+                                <Line type="monotone" dataKey="pageviews" stroke="var(--color-text-primary)" strokeWidth={2} dot={false} name="Pageviews" />
+                                <Line type="monotone" dataKey="visitors" stroke="var(--color-text-muted)" strokeDasharray="4 4" strokeWidth={2} dot={false} name="Visitors" />
                             </LineChart>
                         </ResponsiveContainer>
                     </div>
                 </div>
-                <div style={cardStyle}>
-                    <h4 style={{ margin: '0 0 var(--space-md)' }}>Traffic Sources</h4>
-                    <div style={{ height: '180px' }}>
-                        <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                                <Pie data={data.sourceData} cx="50%" cy="50%" innerRadius={40} outerRadius={70} dataKey="value" paddingAngle={2}>
-                                    {data.sourceData.map((entry, i) => (<Cell key={i} fill={entry.color} />))}
-                                </Pie>
-                                <Tooltip />
-                            </PieChart>
-                        </ResponsiveContainer>
+                <div>
+                    <div style={{ display: 'flex', alignItems: 'center', paddingBottom: 'var(--space-md)', marginBottom: 'var(--space-sm)' }}>
+                        <h4 style={{ margin: 0, fontSize: '0.875rem', fontWeight: 500, color: 'var(--color-text-primary)' }}>Traffic Sources</h4>
                     </div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-sm)', marginTop: 'var(--space-md)' }}>
-                        {data.sourceData.map((item, i) => (
-                            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem' }}>
-                                <span style={{ width: '10px', height: '10px', borderRadius: '2px', background: item.color }} />
-                                {item.name}: {item.value.toLocaleString()}
-                            </div>
-                        ))}
+                    <div style={{ border: '1px solid var(--color-border)', borderRadius: '6px', padding: 'var(--space-md)' }}>
+                        <div style={{ height: '180px' }}>
+                            <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                    <Pie data={data.sourceData} cx="50%" cy="50%" innerRadius={40} outerRadius={70} dataKey="value" paddingAngle={2}>
+                                        {data.sourceData.map((entry, i) => (<Cell key={i} fill={entry.color} />))}
+                                    </Pie>
+                                    <Tooltip />
+                                </PieChart>
+                            </ResponsiveContainer>
+                        </div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-sm)', marginTop: 'var(--space-md)' }}>
+                            {data.sourceData.map((item, i) => (
+                                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem' }}>
+                                    <span style={{ width: '10px', height: '10px', borderRadius: '2px', background: item.color }} />
+                                    {item.name}: {item.value.toLocaleString()}
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 </div>
             </div>
