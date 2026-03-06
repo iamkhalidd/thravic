@@ -120,7 +120,7 @@ export default function SettingsPage() {
     const otherSettings = settings.filter(s => settingsConfig[s.key]?.type !== 'boolean');
 
     const severityColors: Record<string, string> = {
-        info: '#6366f1', warning: '#f59e0b', critical: '#ef4444',
+        info: 'var(--color-info)', warning: 'var(--color-warning)', critical: 'var(--color-danger)',
     };
 
     return (

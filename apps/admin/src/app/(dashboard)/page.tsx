@@ -74,18 +74,18 @@ export default function AdminDashboard() {
         info: Info,
     };
     const SEVERITY_COLOR: Record<string, string> = {
-        critical: '#ef4444',
-        warning: '#f59e0b',
-        success: '#22c55e',
-        info: '#6366f1',
+        critical: 'var(--color-danger)',
+        warning: 'var(--color-warning)',
+        success: 'var(--color-success)',
+        info: 'var(--color-text-primary)',
     };
 
     const kpis = stats ? [
-        { label: 'Total Users', value: stats.stats.totalUsers.toLocaleString(), icon: Users, color: '#6c5ce7', bg: 'rgba(108,92,231,0.12)' },
-        { label: 'Active Domains', value: stats.stats.totalDomains.toLocaleString(), icon: Globe, color: '#00d68f', bg: 'rgba(0,214,143,0.12)' },
-        { label: 'Events Today', value: stats.stats.eventsToday.toLocaleString(), icon: Activity, color: '#00bcd4', bg: 'rgba(0,188,212,0.12)' },
-        { label: 'MRR', value: `$${stats.stats.mrr.toLocaleString()}`, icon: DollarSign, color: '#ffaa00', bg: 'rgba(255,170,0,0.12)' },
-        { label: 'Paid Subscriptions', value: stats.stats.paidSubscriptions.toLocaleString(), icon: TrendingUp, color: '#a29bfe', bg: 'rgba(162,155,254,0.12)' },
+        { label: 'Total Users', value: stats.stats.totalUsers.toLocaleString(), icon: Users, color: 'var(--color-text-primary)', bg: 'rgba(255,255,255,0.05)' },
+        { label: 'Active Domains', value: stats.stats.totalDomains.toLocaleString(), icon: Globe, color: 'var(--color-text-secondary)', bg: 'rgba(255,255,255,0.05)' },
+        { label: 'Events Today', value: stats.stats.eventsToday.toLocaleString(), icon: Activity, color: 'var(--color-text-primary)', bg: 'rgba(255,255,255,0.05)' },
+        { label: 'MRR', value: `$${stats.stats.mrr.toLocaleString()}`, icon: DollarSign, color: 'var(--color-text-secondary)', bg: 'rgba(255,255,255,0.05)' },
+        { label: 'Paid Subscriptions', value: stats.stats.paidSubscriptions.toLocaleString(), icon: TrendingUp, color: 'var(--color-text-primary)', bg: 'rgba(255,255,255,0.05)' },
     ] : [];
 
     return (
@@ -95,7 +95,7 @@ export default function AdminDashboard() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)', marginBottom: 'var(--space-xl)' }}>
                     {actions.map((action) => {
                         const Icon = SEVERITY_ICON[action.severity] ?? Info;
-                        const color = SEVERITY_COLOR[action.severity] ?? '#6366f1';
+                        const color = SEVERITY_COLOR[action.severity] ?? 'var(--color-text-primary)';
                         return (
                             <div key={action.type} style={{
                                 display: 'flex',
@@ -158,7 +158,7 @@ export default function AdminDashboard() {
                             <Tooltip
                                 contentStyle={{ background: 'var(--color-bg-tertiary)', border: '1px solid var(--color-border)', borderRadius: '8px', color: 'var(--color-text-primary)' }}
                             />
-                            <Bar dataKey="count" fill="#6c5ce7" radius={[4, 4, 0, 0]} />
+                            <Bar dataKey="count" fill="var(--color-text-primary)" radius={[4, 4, 0, 0]} />
                         </BarChart>
                     </ResponsiveContainer>
                 </div>
@@ -176,7 +176,7 @@ export default function AdminDashboard() {
                             <Tooltip
                                 contentStyle={{ background: 'var(--color-bg-tertiary)', border: '1px solid var(--color-border)', borderRadius: '8px', color: 'var(--color-text-primary)' }}
                             />
-                            <Line type="monotone" dataKey="count" stroke="#00d68f" strokeWidth={2} dot={false} />
+                            <Line type="monotone" dataKey="count" stroke="var(--color-text-secondary)" strokeWidth={2} dot={false} />
                         </LineChart>
                     </ResponsiveContainer>
                 </div>

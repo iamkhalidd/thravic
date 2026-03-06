@@ -69,9 +69,15 @@
   --color-sidebar-border: rgba(255,255,255,0.08);
 
   --color-text-primary: #f4f5f6;
+  --color-text-primary: #f4f5f6;
   --color-text-secondary: #8a8f98;
   --color-text-muted: #575c66;
   --color-text-tertiary: #575c66;
+
+  /* Overriding default blue accents with monochromatic high-contrast */
+  --color-accent-primary: #f4f5f6;
+  --color-accent-secondary: #8a8f98;
+  --color-primary: #f4f5f6;
 
   /* Ultra-thin borders */
   --color-border: rgba(255,255,255,0.08);

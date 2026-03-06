@@ -242,7 +242,7 @@ export default function TrendsPage() {
                                     flex: 1,
                                     height: `${height}%`,
                                     minHeight: '2px',
-                                    background: `linear-gradient(180deg, var(--color-primary) 0%, var(--color-primary-dark, #4f46e5) 100%)`,
+                                    background: `linear-gradient(180deg, var(--color-primary) 0%, var(--color-text-muted) 100%)`,
                                     borderRadius: '2px 2px 0 0',
                                     position: 'relative'
                                 }}

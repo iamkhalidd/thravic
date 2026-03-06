@@ -1,26 +1,30 @@
 /* TrackFlow Admin Panel - Global Styles */
 
 :root {
-    /* Dark theme (default) */
-    --color-bg-primary: #0a0a0f;
-    --color-bg-secondary: #12121a;
-    --color-bg-tertiary: #1a1a28;
-    --color-bg-hover: #22223a;
-    --color-text-primary: #f0f0f5;
-    --color-text-secondary: #9090a0;
-    --color-text-muted: #606072;
-    --color-border: #2a2a3e;
-    --color-border-hover: #3a3a50;
-    --color-accent: #6c5ce7;
-    --color-accent-hover: #7c6cf7;
-    --color-accent-bg: rgba(108, 92, 231, 0.12);
-    --color-success: #00d68f;
-    --color-success-bg: rgba(0, 214, 143, 0.12);
-    --color-warning: #ffaa00;
-    --color-warning-bg: rgba(255, 170, 0, 0.12);
-    --color-danger: #ff4757;
-    --color-danger-bg: rgba(255, 71, 87, 0.12);
-    --color-info: #00bcd4;
+    /* Dark theme - Strict Linear Style */
+    --color-bg-primary: #000000;
+    --color-bg-secondary: #08090a;
+    --color-bg-tertiary: #0c0d10;
+    --color-bg-hover: rgba(255, 255, 255, 0.05);
+
+    --color-text-primary: #f4f5f6;
+    --color-text-secondary: #8a8f98;
+    --color-text-muted: #575c66;
+
+    --color-border: rgba(255, 255, 255, 0.08);
+    --color-border-hover: rgba(255, 255, 255, 0.15);
+
+    --color-accent: #f4f5f6;
+    --color-accent-hover: #ffffff;
+    --color-accent-bg: rgba(255, 255, 255, 0.08);
+
+    --color-success: #22c55e;
+    --color-success-bg: rgba(34, 197, 94, 0.12);
+    --color-warning: #f59e0b;
+    --color-warning-bg: rgba(245, 158, 11, 0.12);
+    --color-danger: #ef4444;
+    --color-danger-bg: rgba(239, 68, 68, 0.12);
+    --color-info: #f4f5f6;
 
     /* Spacing */
     --space-xs: 4px;
@@ -96,9 +100,7 @@ a {
 .sidebar-logo {
     font-size: 20px;
     font-weight: 700;
-    background: linear-gradient(135deg, var(--color-accent), #a29bfe);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
+    color: var(--color-text-primary);
 }
 
 .sidebar-badge {
@@ -323,10 +325,10 @@ a {
 }
 
 .btn-primary {
-    background: var(--color-accent);
-    color: white;
+    background: var(--color-text-primary);
+    color: var(--color-bg-primary);
 }
-.btn-primary:hover { background: var(--color-accent-hover); }
+.btn-primary:hover { background: var(--color-text-secondary); }
 
 .btn-danger {
     background: var(--color-danger-bg);
@@ -359,7 +361,7 @@ a {
 }
 
 .input:focus {
-    border-color: var(--color-accent);
+    border-color: var(--color-text-secondary);
 }
 
 .input::placeholder {
