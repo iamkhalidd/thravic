@@ -3,43 +3,13 @@
 import Link from 'next/link';
 import {
     BarChart3, Target, MousePointer2, Video, Sparkles, Globe,
-    ArrowRight, Check, Lock
+    ArrowRight, Check, Lock, PlayCircle
 } from 'lucide-react';
+import { OverviewView, SessionsView, FunnelsView, HeatmapsView } from './demo/DemoViews';
 
 /* ─── DATA ─── */
 
-const bentoFeatures = [
-    {
-        title: 'Understand every click.',
-        desc: 'Privacy-safe session recordings let you play back exactly what users do, where they get stuck, and why they leave.',
-        icon: Video,
-        large: true
-    },
-    {
-        title: 'Funnels that convert.',
-        desc: 'Build multi-step conversion funnels and identify the exact drop-off points.',
-        icon: Target,
-        large: false
-    },
-    {
-        title: 'Visual heatmaps.',
-        desc: 'Instantly see where people click and scroll on your key pages.',
-        icon: MousePointer2,
-        large: false
-    },
-    {
-        title: 'AI Insights.',
-        desc: 'Automatic anomaly detection surfaces what needs your attention immediately.',
-        icon: Sparkles,
-        large: false
-    },
-    {
-        title: 'Traffic & UTMs.',
-        desc: 'Track every source, medium, and campaign with full attribution reporting.',
-        icon: BarChart3,
-        large: true
-    }
-];
+/* ─── DATA ─── */
 
 const pricingTiers = [
     {
@@ -202,45 +172,103 @@ export default function HomePage() {
                             View interactive demo <Globe size={14} style={{ color: 'var(--color-text-muted)' }}/>
                         </Link>
                     </div>
+
+                    {/* HERO BROWSER MOCKUP */}
+                    <div className="animate-fade-in-up" style={{ 
+                        marginTop: '80px', 
+                        position: 'relative',
+                        zIndex: 20
+                    }}>
+                        {/* Glow effect */}
+                        <div style={{
+                            position: 'absolute', top: '10%', left: '10%', right: '10%', bottom: '10%',
+                            background: 'var(--gradient-primary)', filter: 'blur(100px)', opacity: 0.15, zIndex: -1,
+                            borderRadius: '100px'
+                        }} />
+                        
+                        <div className="browser-mockup animate-float" style={{ textAlign: 'left' }}>
+                            <div className="browser-mockup-header">
+                                <div style={{ display: 'flex', gap: '6px' }}>
+                                    <div className="browser-mockup-dot" style={{ background: '#ff5f56' }} />
+                                    <div className="browser-mockup-dot" style={{ background: '#ffbd2e' }} />
+                                    <div className="browser-mockup-dot" style={{ background: '#27c93f' }} />
+                                </div>
+                                <div style={{ 
+                                    flex: 1, textAlign: 'center', fontSize: '0.75rem', 
+                                    color: 'var(--color-text-muted)', fontFamily: 'var(--font-mono)' 
+                                }}>
+                                    app.trackflow.com/demo
+                                </div>
+                            </div>
+                            <div style={{ padding: '24px', background: 'var(--color-bg-primary)', pointerEvents: 'none' }}>
+                                <OverviewView />
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </section>
 
-            {/* ═══ BENTO FEATURES ═══ */}
+            {/* ═══ STORYTELLING FEATURES ═══ */}
             <section id="features" style={{ padding: '120px 0', borderTop: '1px solid var(--color-border)' }}>
-                <div style={s.container}>
-                    <div style={{ textAlign: 'center', marginBottom: '80px' }}>
-                        <div style={s.sectionPill}>Features</div>
-                        <h2 style={s.sectionTitle}>Built for clarity.</h2>
-                        <p style={s.sectionSub}>
-                            Every tool you need to understand user behavior, seamlessly integrated into a single, high-performance platform.
-                        </p>
+                {/* Feature 1: Session Recordings (Text Left, Mockup Right) */}
+                <div style={{ ...s.container, marginBottom: '160px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: '64px', alignItems: 'center' }}>
+                        <div>
+                            <div style={s.sectionPill}><Video size={14} style={{ marginRight: '6px' }} /> Session Replays</div>
+                            <h2 style={{ ...s.sectionTitle, marginBottom: '16px' }}>Understand every click.</h2>
+                            <p style={{ ...s.sectionSub, margin: 0 }}>
+                                Privacy-safe session recordings let you play back exactly what users do, where they get stuck, and why they leave. Stop guessing and start watching.
+                            </p>
+                            <ul style={{ listStyle: 'none', padding: 0, marginTop: '32px', display: 'flex', flexDirection: 'column', gap: '16px', color: 'var(--color-text-secondary)', fontSize: '0.9375rem' }}>
+                                <li style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Check size={16} color="var(--color-text-primary)" /> Identify UX friction points</li>
+                                <li style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Check size={16} color="var(--color-text-primary)" /> Watch users navigate forms</li>
+                                <li style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Check size={16} color="var(--color-text-primary)" /> See exactly how bugs occur</li>
+                            </ul>
+                        </div>
+                        <div style={{ position: 'relative' }}>
+                            <div style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, background: '#34B1AA', filter: 'blur(80px)', opacity: 0.1, zIndex: -1 }} />
+                            <div className="glass-panel" style={{ padding: '24px', pointerEvents: 'none' }}>
+                                <SessionsView />
+                            </div>
+                        </div>
                     </div>
+                </div>
 
-                    <div className="bento-grid">
-                        {bentoFeatures.map((f, i) => {
-                            const Icon = f.icon;
-                            return (
-                                <div key={i} className={`bento-item ${f.large ? 'bento-item-large' : ''}`}>
-                                    <div style={{
-                                        width: '40px', height: '40px', borderRadius: '10px',
-                                        background: 'rgba(255,255,255,0.03)', border: '1px solid var(--color-border)',
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        marginBottom: '24px', boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
-                                    }}>
-                                        <Icon size={18} style={{ color: 'var(--color-text-primary)' }} strokeWidth={1.5} />
-                                    </div>
-                                    <h3 style={{ fontSize: '1.25rem', fontWeight: 500, letterSpacing: '-0.02em', marginBottom: '12px', color: 'var(--color-text-primary)' }}>
-                                        {f.title}
-                                    </h3>
-                                    <p style={{
-                                        fontSize: '0.9375rem', color: 'var(--color-text-secondary)',
-                                        lineHeight: 1.6, margin: 0, letterSpacing: '-0.01em'
-                                    }}>
-                                        {f.desc}
-                                    </p>
-                                </div>
-                            );
-                        })}
+                {/* Feature 2: Funnels (Mockup Left, Text Right) */}
+                <div style={{ ...s.container, marginBottom: '160px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '64px', alignItems: 'center' }}>
+                        <div style={{ position: 'relative', order: 2 }}>
+                            <div style={s.sectionPill}><Target size={14} style={{ marginRight: '6px' }} /> Conversion Funnels</div>
+                            <h2 style={{ ...s.sectionTitle, marginBottom: '16px' }}>Funnels that convert.</h2>
+                            <p style={{ ...s.sectionSub, margin: 0 }}>
+                                Build multi-step conversion funnels in seconds. Identify the exact drop-off points in your onboarding or checkout flows and fix the leaks.
+                            </p>
+                        </div>
+                        <div style={{ position: 'relative', order: 1 }}>
+                            <div style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, background: 'var(--color-accent-primary)', filter: 'blur(80px)', opacity: 0.1, zIndex: -1 }} />
+                            <div className="glass-panel" style={{ padding: '24px', pointerEvents: 'none' }}>
+                                <FunnelsView />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Feature 3: Heatmaps (Text Left, Mockup Right) */}
+                <div style={{ ...s.container }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: '64px', alignItems: 'center' }}>
+                        <div>
+                            <div style={s.sectionPill}><MousePointer2 size={14} style={{ marginRight: '6px' }} /> Visual Heatmaps</div>
+                            <h2 style={{ ...s.sectionTitle, marginBottom: '16px' }}>See what matters.</h2>
+                            <p style={{ ...s.sectionSub, margin: 0 }}>
+                                Instantly see where people click, move, and scroll on your key pages. Discover which CTAs are working and which content is being ignored.
+                            </p>
+                        </div>
+                        <div style={{ position: 'relative' }}>
+                            <div style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, background: '#f59e0b', filter: 'blur(80px)', opacity: 0.15, zIndex: -1 }} />
+                            <div className="glass-panel" style={{ padding: '24px', pointerEvents: 'none' }}>
+                                <HeatmapsView />
+                            </div>
+                        </div>
                     </div>
                 </div>
             </section>
