@@ -200,7 +200,7 @@ export default function HomePage() {
                                     app.trackflow.com/demo
                                 </div>
                             </div>
-                            <div style={{ padding: '24px', background: 'var(--color-bg-primary)', pointerEvents: 'none' }}>
+                            <div style={{ padding: '24px', background: 'var(--color-bg-primary)' }}>
                                 <OverviewView />
                             </div>
                         </div>
@@ -227,7 +227,7 @@ export default function HomePage() {
                         </div>
                         <div style={{ position: 'relative' }}>
                             <div style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, background: '#34B1AA', filter: 'blur(80px)', opacity: 0.1, zIndex: -1 }} />
-                            <div className="glass-panel" style={{ padding: '24px', pointerEvents: 'none' }}>
+                            <div className="glass-panel animate-float" style={{ padding: '24px' }}>
                                 <SessionsView />
                             </div>
                         </div>
@@ -246,7 +246,7 @@ export default function HomePage() {
                         </div>
                         <div style={{ position: 'relative', order: 1 }}>
                             <div style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, background: 'var(--color-accent-primary)', filter: 'blur(80px)', opacity: 0.1, zIndex: -1 }} />
-                            <div className="glass-panel" style={{ padding: '24px', pointerEvents: 'none' }}>
+                            <div className="glass-panel animate-float-delayed" style={{ padding: '24px' }}>
                                 <FunnelsView />
                             </div>
                         </div>
@@ -265,7 +265,7 @@ export default function HomePage() {
                         </div>
                         <div style={{ position: 'relative' }}>
                             <div style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, background: '#f59e0b', filter: 'blur(80px)', opacity: 0.15, zIndex: -1 }} />
-                            <div className="glass-panel" style={{ padding: '24px', pointerEvents: 'none' }}>
+                            <div className="glass-panel animate-float-slow" style={{ padding: '24px' }}>
                                 <HeatmapsView />
                             </div>
                         </div>

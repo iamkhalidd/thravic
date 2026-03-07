@@ -353,6 +353,16 @@ a:hover {
     animation: float 6s ease-in-out infinite;
 }
 
+.animate-float-delayed {
+    animation: float 7s ease-in-out infinite;
+    animation-delay: 1s;
+}
+
+.animate-float-slow {
+    animation: float 8s ease-in-out infinite;
+    animation-delay: 2s;
+}
+
 .browser-mockup {
     position: relative;
     background: var(--color-bg-card);
@@ -360,7 +370,13 @@ a:hover {
     border-radius: var(--radius-lg);
     overflow: hidden;
     box-shadow: 0 40px 80px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05) inset;
-    transition: transform 0.3s ease;
+    transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.browser-mockup:hover {
+    transform: translateY(-8px) scale(1.01);
+    box-shadow: 0 50px 100px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.1) inset;
+    animation-play-state: paused;
 }
 
 .browser-mockup-header {
@@ -385,6 +401,15 @@ a:hover {
     -webkit-backdrop-filter: blur(16px);
     border: 1px solid rgba(255, 255, 255, 0.05);
     border-radius: var(--radius-lg);
+    transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+}
+
+.glass-panel:hover {
+    transform: translateY(-8px) scale(1.02);
+    box-shadow: 0 40px 80px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1) inset;
+    background: rgba(255, 255, 255, 0.03);
+    animation-play-state: paused;
 }
 
 @keyframes spin {
