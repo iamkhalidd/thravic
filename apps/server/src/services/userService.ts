@@ -1,5 +1,5 @@
 // ──────────────────────────────────────────────
-// TrackFlow — User Service
+// Thravic — User Service
 // ──────────────────────────────────────────────
 import { query, queryOne } from '../db';
 

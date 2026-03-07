@@ -163,7 +163,7 @@ function SettingsPageInner() {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `trackflow-export-${format}.${format}`;
+        a.download = `thravic-export-${format}.${format}`;
         a.click();
         URL.revokeObjectURL(url);
     };

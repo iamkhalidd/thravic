@@ -1,5 +1,5 @@
 // ──────────────────────────────────────────────
-// TrackFlow — Structured Request Logger
+// Thravic — Structured Request Logger
 // ──────────────────────────────────────────────
 import { Request, Response, NextFunction } from 'express';
 

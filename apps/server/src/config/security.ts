@@ -1,5 +1,5 @@
 // ──────────────────────────────────────────────
-// TrackFlow — Security Configuration
+// Thravic — Security Configuration
 // Centralizes security-related config and startup validation.
 // ──────────────────────────────────────────────
 

@@ -1,5 +1,5 @@
 // ──────────────────────────────────────────────
-// TrackFlow Web — Shared TypeScript Types
+// Thravic Web — Shared TypeScript Types
 // ──────────────────────────────────────────────
 // Centralised type definitions used across pages,
 // contexts, and the API client.  Import from

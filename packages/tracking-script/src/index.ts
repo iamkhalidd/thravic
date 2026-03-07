@@ -1,5 +1,5 @@
 /**
- * TrackFlow Analytics - Lightweight Tracking Script
+ * Thravic Analytics - Lightweight Tracking Script
  *
  * Features:
  * - Page view tracking
@@ -14,8 +14,8 @@
 
 interface TFConfig {
     /**
-     * Base URL of your TrackFlow server, e.g. https://analytics.yourdomain.com/api/collect
-     * Defaults to the hosted TrackFlow service.
+     * Base URL of your Thravic server, e.g. https://analytics.yourdomain.com/api/collect
+     * Defaults to the hosted Thravic service.
      * Set via window.TF.endpoint before calling init(), or pass in config.
      */
     endpoint: string;
@@ -63,7 +63,7 @@ const SESSION_EXPIRY = 30 * 60 * 1000; // 30 minutes
 
 // Default configuration
 const defaultConfig: TFConfig = {
-    endpoint: 'https://api.trackflow.app/api/collect',
+    endpoint: 'https://api.thravic.app/api/collect',
     batchSize: 10,
     batchInterval: 5000,
     trackClicks: true,
@@ -73,7 +73,7 @@ const defaultConfig: TFConfig = {
     clickTextMaxLength: 50,
 };
 
-class TrackFlowAnalytics {
+class ThravicAnalytics {
     private trackingId: string = '';
     private config: TFConfig = defaultConfig;
     private eventQueue: TFEvent[] = [];
@@ -351,7 +351,7 @@ class TrackFlowAnalytics {
 
         if (!this.trackingId) {
             // Silent in production; uncomment below during local debugging only:
-            // console.warn('[TrackFlow] No tracking ID found. Did you set window.__TF_ID__?');
+            // console.warn('[Thravic] No tracking ID found. Did you set window.__TF_ID__?');
             return;
         }
 
@@ -406,7 +406,7 @@ class TrackFlowAnalytics {
 // ──────────────────────────────────────────────────────────────────────────
 
 // Create singleton instance
-const tf = new TrackFlowAnalytics();
+const tf = new ThravicAnalytics();
 
 // Capture queued calls BEFORE overwriting the global (order matters)
 const _priorQueue: unknown[][] = (window as any).__TF_Q__ || [];

@@ -1,5 +1,5 @@
 // ──────────────────────────────────────────────
-// TrackFlow — Redis Cache Service
+// Thravic — Redis Cache Service
 // ──────────────────────────────────────────────
 import { createClient, RedisClientType } from 'redis';
 import { createLogger } from '../config/logger';

@@ -1,5 +1,5 @@
 // ──────────────────────────────────────────────────────────────
-// TrackFlow — Public Announcements Route
+// Thravic — Public Announcements Route
 //
 // Serves the current admin-authored announcement to the customer
 // dashboard. No auth required — the customer app polls this on

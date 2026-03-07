@@ -92,7 +92,7 @@ router.post('/:trackingId', async (req: Request, res: Response) => {
             receivedAt: new Date().toISOString()
         };
 
-        await redisClient.lpush('trackflow:events_queue', JSON.stringify(queuedEvent));
+        await redisClient.lpush('thravic:events_queue', JSON.stringify(queuedEvent));
 
         // Trigger Webhooks (async)
         triggerWebhooks(domain.id, event.type, {

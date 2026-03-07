@@ -259,7 +259,7 @@ app.use('/api/experiments', experimentRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/announcements', announcementRoutes);
 
-// ── TrackFlow Client Tracker Script ────────────────────────────────────────
+// ── Thravic Client Tracker Script ────────────────────────────────────────
 // Serves the analytics tracking script. Customer sites load this via <script>.
 // Uses a function wrapper + IIFE pattern, no external dependencies.
 // v2.0 — Strong UUIDs, replaceState tracking, debounce, session exit, bot filter
@@ -269,7 +269,7 @@ app.get(['/tf.js', '/v.js'], (req, res) => {
     res.setHeader('Cache-Control', 'public, max-age=86400, stale-while-revalidate=3600');
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.send(`
-/* TrackFlow Analytics Tracker v2.0 */
+/* Thravic Analytics Tracker v2.0 */
 (function(){
   'use strict';
 
@@ -285,7 +285,7 @@ app.get(['/tf.js', '/v.js'], (req, res) => {
     return s?s.getAttribute('data-tracking-id'):null;
   }
   var tid=getId();
-  if(!tid){console.warn('[TrackFlow] No tracking ID found.');return;}
+  if(!tid){console.warn('[Thravic] No tracking ID found.');return;}
 
   // ── Strong unique ID generator ───────────────────────────────────────────
   function uid(){
@@ -376,8 +376,8 @@ app.get('/api/test-email', async (req, res) => {
     try {
         await sendEmail({
             to,
-            subject: '🧪 TrackFlow Test Email',
-            text: `This is a test email from TrackFlow at ${new Date().toISOString()}. If you see this, SMTP is working!`,
+            subject: '🧪 Thravic Test Email',
+            text: `This is a test email from Thravic at ${new Date().toISOString()}. If you see this, SMTP is working!`,
             html: `<div style="font-family:sans-serif;padding:20px;"><h2>✅ SMTP is working!</h2><p>Sent at: ${new Date().toISOString()}</p><p>Server: ${process.env.SERVER_URL || 'localhost'}</p></div>`,
         });
         res.json({ ok: true, message: `Test email sent to ${to}` });
@@ -410,7 +410,7 @@ async function start() {
             await initDatabase();
             log.info('Database connected');
         } else {
-            log.warn('DATABASE_URL not set — API routes will fail without a PostgreSQL connection. Set DATABASE_URL=postgresql://user:pass@localhost:5432/trackflow');
+            log.warn('DATABASE_URL not set — API routes will fail without a PostgreSQL connection. Set DATABASE_URL=postgresql://user:pass@localhost:5432/thravic');
         }
         
         // Start background queue processors
@@ -421,7 +421,7 @@ async function start() {
 
         app.listen(PORT, () => {
             log.info(`Server running on port ${PORT}`);
-            log.info('TrackFlow API ready');
+            log.info('Thravic API ready');
         });
     } catch (error) {
         log.error('Failed to start server', error);

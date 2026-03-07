@@ -1,5 +1,5 @@
 // ──────────────────────────────────────────────
-// TrackFlow — Event Service
+// Thravic — Event Service
 // ──────────────────────────────────────────────
 import { query, queryOne, transaction } from '../db';
 

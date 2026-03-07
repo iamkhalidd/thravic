@@ -224,7 +224,7 @@ export default function NewDomainPage() {
                 <div className="card" style={{ padding: 'var(--space-xl)' }}>
                     <h2 style={{ marginBottom: 'var(--space-xs)' }}>Install tracking script</h2>
                     <p style={{ marginBottom: 'var(--space-lg)', fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
-                        Select your platform below and follow the steps to install TrackFlow.
+                        Select your platform below and follow the steps to install Thravic.
                     </p>
 
                     <ScriptInstallation script={script} />

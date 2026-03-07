@@ -1,5 +1,5 @@
 // ──────────────────────────────────────────────
-// TrackFlow — Session Service
+// Thravic — Session Service
 // ──────────────────────────────────────────────
 import { query, queryOne } from '../db';
 

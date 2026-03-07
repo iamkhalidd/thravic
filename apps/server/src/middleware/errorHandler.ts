@@ -1,5 +1,5 @@
 // ──────────────────────────────────────────────
-// TrackFlow — Centralized Error Handling
+// Thravic — Centralized Error Handling
 // ──────────────────────────────────────────────
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';

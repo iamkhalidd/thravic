@@ -1,5 +1,5 @@
 // ──────────────────────────────────────────────
-// TrackFlow Server — Shared TypeScript Types
+// Thravic Server — Shared TypeScript Types
 // ──────────────────────────────────────────────
 // Centralised type definitions used across routes,
 // middleware, and services.  Import from

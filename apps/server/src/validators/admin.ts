@@ -1,5 +1,5 @@
 // ──────────────────────────────────────────────
-// TrackFlow — Admin Validators
+// Thravic — Admin Validators
 // Zod schemas for all admin mutation endpoints
 // ──────────────────────────────────────────────
 import { z } from 'zod';

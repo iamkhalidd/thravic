@@ -1,5 +1,5 @@
 // ──────────────────────────────────────────────
-// TrackFlow — Email Service
+// Thravic — Email Service
 // Primary:  Resend (HTTP API) — works on all cloud providers (Render, etc.)
 // Fallback: SMTP via nodemailer (works on localhost / non-blocking hosts)
 // Dev:      Console logging if neither is configured
@@ -63,7 +63,7 @@ export function initEmailTransport() {
 // ── Core send ────────────────────────────────────────────────────────────────
 
 export const sendEmail = async (options: EmailOptions): Promise<void> => {
-    const from = process.env.SMTP_FROM || 'TrackFlow <onboarding@resend.dev>';
+    const from = process.env.SMTP_FROM || 'Thravic <onboarding@resend.dev>';
 
     // 1. Try Resend (HTTP — works on Render, Vercel, etc.)
     const r = getResend();
@@ -118,7 +118,7 @@ function layout(bodyHtml: string): string {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>TrackFlow</title>
+  <title>Thravic</title>
 </head>
 <body style="margin:0;padding:0;background:#0f0f1a;font-family:'Segoe UI',Arial,sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#0f0f1a;padding:40px 0;">
@@ -129,7 +129,7 @@ function layout(bodyHtml: string): string {
           <tr>
             <td style="background:linear-gradient(135deg,#6366f1,#8b5cf6);padding:28px 36px;">
               <h1 style="margin:0;color:#fff;font-size:22px;font-weight:700;letter-spacing:-0.5px;">
-                📊 TrackFlow
+                📊 Thravic
               </h1>
             </td>
           </tr>
@@ -143,8 +143,8 @@ function layout(bodyHtml: string): string {
           <tr>
             <td style="padding:20px 36px;border-top:1px solid #2a2a3e;text-align:center;">
               <p style="margin:0;font-size:12px;color:#6b7280;">
-                TrackFlow Analytics · You're receiving this because you have an account with us.<br/>
-                If you didn't perform this action, please <a href="mailto:support@trackflow.app" style="color:#8b5cf6;">contact support</a> immediately.
+                Thravic Analytics · You're receiving this because you have an account with us.<br/>
+                If you didn't perform this action, please <a href="mailto:support@thravic.app" style="color:#8b5cf6;">contact support</a> immediately.
               </p>
             </td>
           </tr>
@@ -175,12 +175,12 @@ export async function sendWelcomeEmail(to: string, name: string): Promise<void> 
 
     await sendEmail({
         to,
-        subject: 'Welcome to TrackFlow 🎉',
-        text: `Hi ${name},\n\nWelcome to TrackFlow! Your account is ready. Start tracking your first domain at ${frontendUrl}/dashboard.\n\nTrackFlow Team`,
+        subject: 'Welcome to Thravic 🎉',
+        text: `Hi ${name},\n\nWelcome to Thravic! Your account is ready. Start tracking your first domain at ${frontendUrl}/dashboard.\n\nThravic Team`,
         html: layout(`
           <h2 style="margin:0 0 8px;color:#fff;font-size:20px;">Welcome aboard, ${name}! 🎉</h2>
           <p style="margin:0 0 20px;color:#9ca3af;font-size:14px;line-height:1.6;">
-            Your TrackFlow account is ready. Start tracking traffic, building funnels, and getting AI-powered insights for your website.
+            Your Thravic account is ready. Start tracking traffic, building funnels, and getting AI-powered insights for your website.
           </p>
           <table style="background:#0f0f1a;border-radius:8px;width:100%;border-collapse:collapse;margin-bottom:8px;">
             ${infoRow('Plan', 'Hobby — 5,000 events/mo')}
@@ -208,12 +208,12 @@ export async function sendLoginAlertEmail(
 
     await sendEmail({
         to,
-        subject: '🔐 New sign-in to your TrackFlow account',
+        subject: '🔐 New sign-in to your Thravic account',
         text: `Hi ${name},\n\nWe detected a new sign-in to your account.\n\nTime: ${timeStr}\nIP: ${ip}\nDevice: ${device}\n\nNot you? Secure your account at ${frontendUrl}/dashboard/settings`,
         html: layout(`
           <h2 style="margin:0 0 8px;color:#fff;font-size:20px;">New sign-in detected 🔐</h2>
           <p style="margin:0 0 20px;color:#9ca3af;font-size:14px;line-height:1.6;">
-            Hi <strong style="color:#e2e8f0;">${name}</strong>, we noticed a new login to your TrackFlow account. Here are the details:
+            Hi <strong style="color:#e2e8f0;">${name}</strong>, we noticed a new login to your Thravic account. Here are the details:
           </p>
           <table style="background:#0f0f1a;border-radius:8px;width:100%;border-collapse:collapse;margin-bottom:8px;">
             ${infoRow('Time', timeStr)}
@@ -234,12 +234,12 @@ export async function sendLoginAlertEmail(
 export async function sendPasswordResetEmail(to: string, resetLink: string): Promise<void> {
     await sendEmail({
         to,
-        subject: 'TrackFlow — Reset your password',
+        subject: 'Thravic — Reset your password',
         text: `You requested a password reset.\n\nClick here to reset: ${resetLink}\n\nThis link expires in 1 hour. If you didn't request this, ignore this email.`,
         html: layout(`
           <h2 style="margin:0 0 8px;color:#fff;font-size:20px;">Reset your password 🔑</h2>
           <p style="margin:0 0 20px;color:#9ca3af;font-size:14px;line-height:1.6;">
-            We received a request to reset the password for your TrackFlow account. Click the button below to choose a new password.
+            We received a request to reset the password for your Thravic account. Click the button below to choose a new password.
           </p>
           <div style="margin-bottom:8px;">
             ${btn('Reset Password →', resetLink)}
@@ -258,12 +258,12 @@ export async function sendPasswordChangedEmail(to: string, name: string, ip: str
 
     await sendEmail({
         to,
-        subject: '✅ Your TrackFlow password was changed',
+        subject: '✅ Your Thravic password was changed',
         text: `Hi ${name},\n\nYour password was successfully changed.\n\nTime: ${timeStr}\nIP: ${ip}\n\nNot you? Contact support immediately.`,
         html: layout(`
           <h2 style="margin:0 0 8px;color:#fff;font-size:20px;">Password changed ✅</h2>
           <p style="margin:0 0 20px;color:#9ca3af;font-size:14px;line-height:1.6;">
-            Hi <strong style="color:#e2e8f0;">${name}</strong>, your TrackFlow account password was just changed successfully.
+            Hi <strong style="color:#e2e8f0;">${name}</strong>, your Thravic account password was just changed successfully.
           </p>
           <table style="background:#0f0f1a;border-radius:8px;width:100%;border-collapse:collapse;margin-bottom:8px;">
             ${infoRow('Time', timeStr)}
@@ -274,7 +274,7 @@ export async function sendPasswordChangedEmail(to: string, name: string, ip: str
               ⚠️ <strong>Wasn't you?</strong> Contact our support immediately — your account may be compromised.
             </p>
           </div>
-          ${btn('Contact Support →', 'mailto:support@trackflow.app')}
+          ${btn('Contact Support →', 'mailto:support@thravic.app')}
         `),
     });
 }
@@ -283,19 +283,19 @@ export async function sendPasswordChangedEmail(to: string, name: string, ip: str
 export async function sendAccountSuspendedEmail(to: string, name: string): Promise<void> {
     await sendEmail({
         to,
-        subject: '⚠️ Your TrackFlow account has been suspended',
-        text: `Hi ${name},\n\nYour TrackFlow account has been suspended. Please contact support@trackflow.app if you believe this is a mistake.`,
+        subject: '⚠️ Your Thravic account has been suspended',
+        text: `Hi ${name},\n\nYour Thravic account has been suspended. Please contact support@thravic.app if you believe this is a mistake.`,
         html: layout(`
           <h2 style="margin:0 0 8px;color:#fff;font-size:20px;">Account suspended ⚠️</h2>
           <p style="margin:0 0 20px;color:#9ca3af;font-size:14px;line-height:1.6;">
-            Hi <strong style="color:#e2e8f0;">${name}</strong>, your TrackFlow account has been suspended and you will no longer be able to log in.
+            Hi <strong style="color:#e2e8f0;">${name}</strong>, your Thravic account has been suspended and you will no longer be able to log in.
           </p>
           <div style="padding:14px 16px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;">
             <p style="margin:0;font-size:13px;color:#f87171;">
               If you believe this is a mistake, please contact us and we'll review your account.
             </p>
           </div>
-          ${btn('Contact Support →', 'mailto:support@trackflow.app')}
+          ${btn('Contact Support →', 'mailto:support@thravic.app')}
         `),
     });
 }
@@ -306,12 +306,12 @@ export async function sendAccountReactivatedEmail(to: string, name: string): Pro
 
     await sendEmail({
         to,
-        subject: '✅ Your TrackFlow account has been reactivated',
-        text: `Hi ${name},\n\nGreat news! Your TrackFlow account has been reactivated. You can now log in at ${frontendUrl}/login`,
+        subject: '✅ Your Thravic account has been reactivated',
+        text: `Hi ${name},\n\nGreat news! Your Thravic account has been reactivated. You can now log in at ${frontendUrl}/login`,
         html: layout(`
           <h2 style="margin:0 0 8px;color:#fff;font-size:20px;">Account reactivated ✅</h2>
           <p style="margin:0 0 20px;color:#9ca3af;font-size:14px;line-height:1.6;">
-            Hi <strong style="color:#e2e8f0;">${name}</strong>, your TrackFlow account has been reactivated and you can now sign in again.
+            Hi <strong style="color:#e2e8f0;">${name}</strong>, your Thravic account has been reactivated and you can now sign in again.
           </p>
           ${btn('Sign In →', `${frontendUrl}/login`)}
         `),
@@ -333,7 +333,7 @@ export async function sendPaymentReceiptEmail(
 
     await sendEmail({
         to,
-        subject: `🎉 TrackFlow — Payment confirmed (${planLabel} plan)`,
+        subject: `🎉 Thravic — Payment confirmed (${planLabel} plan)`,
         text: `Hi ${name},\n\nPayment confirmed! You've been upgraded to the ${planLabel} plan.\n\nAmount: $${amount} USD\nPlan: ${planLabel}\nReference: ${reference}\nNext billing: ${periodEnd.toDateString()}\n\nManage your subscription at ${frontendUrl}/dashboard/settings`,
         html: layout(`
           <h2 style="margin:0 0 8px;color:#fff;font-size:20px;">Payment confirmed 🎉</h2>

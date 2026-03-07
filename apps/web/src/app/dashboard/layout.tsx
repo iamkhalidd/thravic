@@ -265,7 +265,7 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                             }}>
                                 <TrendingUp size={15} color="white" />
                             </div>
-                            <span style={{ fontWeight: 700, fontSize: '1rem', whiteSpace: 'nowrap' }}>TrackFlow</span>
+                            <span style={{ fontWeight: 700, fontSize: '1rem', whiteSpace: 'nowrap' }}>Thravic</span>
                         </Link>
                     )}
                     {sidebarCollapsed && !isMobile && (

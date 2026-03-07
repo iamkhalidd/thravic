@@ -1,4 +1,4 @@
-// TrackFlow Analytics - Database Connection
+// Thravic Analytics - Database Connection
 // Following MVP Spec: Infrastructure & Performance
 
 import { Pool, PoolClient } from 'pg';

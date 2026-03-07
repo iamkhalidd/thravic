@@ -9,4 +9,4 @@ healthcheckTimeout = 300
 restartPolicyType = "on_failure"
 
 [service]
-name = "trackflow-api"
+name = "thravic-api"

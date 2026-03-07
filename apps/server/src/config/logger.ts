@@ -1,5 +1,5 @@
 // ──────────────────────────────────────────────
-// TrackFlow — Structured Logger
+// Thravic — Structured Logger
 // Production-grade logging with JSON output in production
 // and human-readable output in development.
 // ──────────────────────────────────────────────

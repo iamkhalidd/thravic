@@ -1,5 +1,5 @@
 # ──────────────────────────────────────────────
-# TrackFlow — Local Development Stack
+# Thravic — Local Development Stack
 # ──────────────────────────────────────────────
 # Usage:
 #   docker-compose up -d        → start postgres + redis
@@ -12,12 +12,12 @@ services:
     build:
       context: .
       dockerfile: apps/server/Dockerfile
-    container_name: trackflow-server
+    container_name: thravic-server
     restart: unless-stopped
     ports:
       - "3001:3001"
     environment:
-      - DATABASE_URL=postgresql://postgres:trackflow@postgres:5432/trackflow
+      - DATABASE_URL=postgresql://postgres:thravic@postgres:5432/thravic
       - REDIS_URL=redis://redis:6379
       - NODE_ENV=development
       - JWT_SECRET=your-safe-secret-key-for-dev
@@ -32,7 +32,7 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
-    container_name: trackflow-web
+    container_name: thravic-web
     restart: unless-stopped
     ports:
       - "3000:3000"
@@ -44,12 +44,12 @@ services:
 
   postgres:
     image: postgres:16-alpine
-    container_name: trackflow-db
+    container_name: thravic-db
     restart: unless-stopped
     environment:
-      POSTGRES_DB: trackflow
+      POSTGRES_DB: thravic
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: trackflow
+      POSTGRES_PASSWORD: thravic
     ports:
       - "5432:5432"
     volumes:
@@ -57,14 +57,14 @@ services:
       # Auto-run schema on first start
       - ./apps/server/src/db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U postgres -d trackflow" ]
+      test: [ "CMD-SHELL", "pg_isready -U postgres -d thravic" ]
       interval: 5s
       timeout: 3s
       retries: 5
 
   redis:
     image: redis:7-alpine
-    container_name: trackflow-redis
+    container_name: thravic-redis
     restart: unless-stopped
     ports:
       - "6379:6379"

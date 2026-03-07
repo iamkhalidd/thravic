@@ -1,4 +1,4 @@
-# TrackFlow Server API
+# Thravic Server API
 
 ## Authentication
 - `POST /api/auth/register` - Create account

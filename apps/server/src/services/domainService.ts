@@ -1,5 +1,5 @@
 // ──────────────────────────────────────────────
-// TrackFlow — Domain Service
+// Thravic — Domain Service
 // ──────────────────────────────────────────────
 import { query, queryOne } from '../db';
 import redisClient from '../db/redis';

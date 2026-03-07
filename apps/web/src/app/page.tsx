@@ -5,7 +5,13 @@ import {
     BarChart3, Target, MousePointer2, Video, Sparkles, Globe,
     ArrowRight, Check, Lock, PlayCircle
 } from 'lucide-react';
-import { OverviewView, SessionsView, FunnelsView, HeatmapsView } from './demo/DemoViews';
+import dynamic from 'next/dynamic';
+
+// Dynamically import Recharts-based views to prevent SSR hydration mismatches
+const OverviewView = dynamic(() => import('./demo/DemoViews').then(mod => mod.OverviewView), { ssr: false });
+const SessionsView = dynamic(() => import('./demo/DemoViews').then(mod => mod.SessionsView), { ssr: false });
+const FunnelsView = dynamic(() => import('./demo/DemoViews').then(mod => mod.FunnelsView), { ssr: false });
+const HeatmapsView = dynamic(() => import('./demo/DemoViews').then(mod => mod.HeatmapsView), { ssr: false });
 
 /* ─── DATA ─── */
 
@@ -121,7 +127,7 @@ export default function HomePage() {
                         }}>
                             <BarChart3 size={14} style={{ color: 'var(--color-bg-primary)' }} />
                         </div>
-                        <span style={{ fontSize: '0.9375rem', fontWeight: 600, letterSpacing: '-0.02em' }}>TrackFlow</span>
+                        <span style={{ fontSize: '0.9375rem', fontWeight: 600, letterSpacing: '-0.02em' }}>Thravic</span>
                     </Link>
 
                     <div className="desktop-only" style={{ display: 'flex', gap: '24px' }}>
@@ -151,7 +157,7 @@ export default function HomePage() {
                 <div style={s.container}>
                     <div className="linear-pill">
                         <Sparkles size={12} style={{ color: 'var(--color-text-muted)' }} />
-                        <span>TrackFlow Public Beta</span>
+                        <span>Thravic Public Beta</span>
                         <ArrowRight size={12} style={{ color: 'var(--color-text-muted)' }} />
                     </div>
 
@@ -161,7 +167,7 @@ export default function HomePage() {
                     </h1>
                     
                     <p style={s.heroSub}>
-                        Purpose-built for speed and clarity. TrackFlow turns overwhelming data into undeniable user insights in milliseconds.
+                        Purpose-built for speed and clarity. Thravic turns overwhelming data into undeniable user insights in milliseconds.
                     </p>
                     
                     <div style={s.ctaRow}>
@@ -197,7 +203,7 @@ export default function HomePage() {
                                     flex: 1, textAlign: 'center', fontSize: '0.75rem', 
                                     color: 'var(--color-text-muted)', fontFamily: 'var(--font-mono)' 
                                 }}>
-                                    app.trackflow.com/demo
+                                    app.thravic.com/demo
                                 </div>
                             </div>
                             <div style={{ padding: '24px', background: 'var(--color-bg-primary)' }}>
@@ -348,7 +354,7 @@ export default function HomePage() {
                     </div>
                     <h2 style={s.sectionTitle}>Build better products, faster.</h2>
                     <p style={{ ...s.sectionSub, marginBottom: '40px' }}>
-                        Join the next generation of product teams building with TrackFlow.
+                        Join the next generation of product teams building with Thravic.
                     </p>
                     <Link href="/register" className="btn-primary" style={{ padding: '12px 32px', borderRadius: '999px', fontSize: '0.9375rem', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: '8px', textDecoration: 'none' }}>
                         Get Started Free <ArrowRight size={14} />
@@ -373,7 +379,7 @@ export default function HomePage() {
                                 }}>
                                     <BarChart3 size={12} style={{ color: 'var(--color-bg-primary)' }} />
                                 </div>
-                                <span style={{ fontSize: '0.875rem', fontWeight: 600, letterSpacing: '-0.02em', color: 'var(--color-text-primary)' }}>TrackFlow</span>
+                                <span style={{ fontSize: '0.875rem', fontWeight: 600, letterSpacing: '-0.02em', color: 'var(--color-text-primary)' }}>Thravic</span>
                             </div>
                         </div>
                         {[
@@ -402,7 +408,7 @@ export default function HomePage() {
                         color: 'var(--color-text-muted)'
                     }}>
                         <p style={{ fontSize: '0.8125rem' }}>
-                            © {new Date().getFullYear()} TrackFlow
+                            © {new Date().getFullYear()} Thravic
                         </p>
                         <div style={{ display: 'flex', gap: '24px' }}>
                             <Link href="/login" style={{ color: 'var(--color-text-muted)', textDecoration: 'none', fontSize: '0.8125rem' }}>Login</Link>

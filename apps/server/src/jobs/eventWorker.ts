@@ -5,7 +5,7 @@ import { createLogger } from '../config/logger';
 
 const log = createLogger('EventWorker');
 
-const QUEUE_KEY = 'trackflow:events_queue';
+const QUEUE_KEY = 'thravic:events_queue';
 const BATCH_SIZE = 50;
 const WAIT_TIME = 1000; // 1s wait between batches if empty
 

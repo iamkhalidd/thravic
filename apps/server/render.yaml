@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: trackflow-api
+    name: thravic-api
     runtime: node
     region: oregon
     plan: free
@@ -26,7 +26,7 @@ services:
       - key: JWT_REFRESH_EXPIRES_IN
         value: 7d
       - key: CORS_ORIGIN
-        sync: false # Set to your Vercel frontend URL, e.g. https://trackflow.vercel.app
+        sync: false # Set to your Vercel frontend URL, e.g. https://thravic.vercel.app
       - key: RATE_LIMIT_WINDOW_MS
         value: 900000
       - key: RATE_LIMIT_MAX
@@ -38,7 +38,7 @@ services:
         sync: false # Same as your Paystack secret key (used for HMAC verification)
       # Frontend URL (for Paystack callback redirects)
       - key: FRONTEND_URL
-        sync: false # e.g. https://trackflow.vercel.app
+        sync: false # e.g. https://thravic.vercel.app
       # Optional — Email alerts
       # - key: SMTP_HOST
       #   sync: false

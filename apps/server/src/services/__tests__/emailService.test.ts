@@ -21,8 +21,8 @@ import nodemailer from 'nodemailer';
 const emailOptions = {
     to: 'user@example.com',
     subject: 'Welcome!',
-    text: 'Hello from TrackFlow',
-    html: '<p>Hello from TrackFlow</p>',
+    text: 'Hello from Thravic',
+    html: '<p>Hello from Thravic</p>',
 };
 
 describe('Email Service', () => {
@@ -68,8 +68,8 @@ describe('Email Service', () => {
                 expect.objectContaining({
                     to: 'user@example.com',
                     subject: 'Welcome!',
-                    text: 'Hello from TrackFlow',
-                    html: '<p>Hello from TrackFlow</p>',
+                    text: 'Hello from Thravic',
+                    html: '<p>Hello from Thravic</p>',
                 })
             );
         });

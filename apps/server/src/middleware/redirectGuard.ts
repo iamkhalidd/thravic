@@ -1,5 +1,5 @@
 // ──────────────────────────────────────────────
-// TrackFlow — Redirect Guard Middleware
+// Thravic — Redirect Guard Middleware
 // Prevents open-redirect vulnerabilities by validating every
 // redirect URL against an explicit allowlist.
 // ──────────────────────────────────────────────

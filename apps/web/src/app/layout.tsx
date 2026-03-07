@@ -3,7 +3,7 @@ import '@/styles/globals.css';
 import { ToastProvider, ErrorBoundary } from '@/components';
 
 export const metadata: Metadata = {
-    title: 'TrackFlow - Traffic Intelligence & Analytics',
+    title: 'Thravic - Traffic Intelligence & Analytics',
     description: 'Comprehensive analytics platform for tracking traffic, user behavior, funnels, heatmaps, and AI-powered insights.',
 };
 

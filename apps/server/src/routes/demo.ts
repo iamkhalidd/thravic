@@ -19,7 +19,7 @@ if (process.env.DEMO_MODE !== 'true') {
 }
 
 // Demo user credentials
-const DEMO_EMAIL = 'demo@trackflow.io';
+const DEMO_EMAIL = 'demo@thravic.io';
 const DEMO_PASSWORD = 'demo1234';
 const DEMO_NAME = 'Demo User';
 
@@ -28,9 +28,9 @@ let demoUserId: string | null = null;
 
 // Social referrers for realistic data
 const socialReferrers = [
-    'https://twitter.com/trackflow',
-    'https://linkedin.com/company/trackflow',
-    'https://facebook.com/trackflow',
+    'https://twitter.com/thravic',
+    'https://linkedin.com/company/thravic',
+    'https://facebook.com/thravic',
     'https://reddit.com/r/analytics',
     'https://youtube.com/watch?v=demo'
 ];
@@ -42,11 +42,11 @@ const searchReferrers = [
 ];
 
 const regularReferrers = [
-    'https://producthunt.com/posts/trackflow',
+    'https://producthunt.com/posts/thravic',
     'https://hackernews.com/item?id=123456',
     'https://medium.com/analytics-trends',
     'https://techcrunch.com/startups',
-    'https://dev.to/trackflow'
+    'https://dev.to/thravic'
 ];
 
 const utmCampaigns = [

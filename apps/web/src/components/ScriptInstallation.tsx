@@ -72,7 +72,7 @@ import Script from 'next/script';
 
 // Add inside your root layout <head> or component:
 <Script
-  id="trackflow"
+  id="thravic"
   strategy="afterInteractive"
   dangerouslySetInnerHTML={{
     __html: \`${script.replace(/`/g, '\\`')}\`

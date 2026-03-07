@@ -144,7 +144,7 @@ export default function DemoPage() {
                         }}>
                             <TrendingUp size={15} color="white" />
                         </div>
-                        <span style={{ fontWeight: 700, fontSize: '1rem', whiteSpace: 'nowrap' }}>TrackFlow</span>
+                        <span style={{ fontWeight: 700, fontSize: '1rem', whiteSpace: 'nowrap' }}>Thravic</span>
                     </Link>
                     <span style={{
                         padding: '2px 8px', background: 'var(--color-bg-hover)',

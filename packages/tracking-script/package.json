@@ -2,7 +2,7 @@
     "name": "tracking-script",
     "version": "1.0.0",
     "private": true,
-    "description": "Lightweight tracking script for TrackFlow Analytics",
+    "description": "Lightweight tracking script for Thravic Analytics",
     "main": "dist/v.js",
     "scripts": {
         "build": "esbuild src/index.ts --bundle --minify --outfile=dist/v.js --format=iife --global-name=TF",

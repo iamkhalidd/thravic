@@ -1,5 +1,5 @@
 // ──────────────────────────────────────────────
-// TrackFlow — Recording Service
+// Thravic — Recording Service
 // ──────────────────────────────────────────────
 import { query, queryOne } from '../db';
 

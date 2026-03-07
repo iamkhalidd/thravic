@@ -105,7 +105,7 @@ export default function AdminLogin() {
                         WebkitTextFillColor: 'transparent',
                         marginBottom: '4px'
                     }}>
-                        TrackFlow Admin
+                        Thravic Admin
                     </h1>
                     <p style={{ color: 'var(--color-text-muted)', fontSize: '14px' }}>
                         Sign in to access the admin panel
@@ -141,7 +141,7 @@ export default function AdminLogin() {
                         type="email"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        placeholder="admin@trackflow.io"
+                        placeholder="admin@thravic.io"
                         required
                     />
                 </div>

@@ -1,5 +1,5 @@
 // ──────────────────────────────────────────────
-// TrackFlow — Funnel Validators
+// Thravic — Funnel Validators
 // ──────────────────────────────────────────────
 import { z } from 'zod';
 

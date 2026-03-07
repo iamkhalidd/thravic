@@ -74,7 +74,7 @@ async function checkTrafficSpikes() {
 async function sendAlert(to: string, domain: string, type: string, message: string) {
     await sendEmail({
         to,
-        subject: `[TrackFlow] ${type} Alert for ${domain}`,
+        subject: `[Thravic] ${type} Alert for ${domain}`,
         text: `Hello,\n\nWe detected a significant traffic change for ${domain}.\n\n${message}\n\nCheck your dashboard for details.`
     });
 }

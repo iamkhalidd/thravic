@@ -1,5 +1,5 @@
 // ──────────────────────────────────────────────
-// TrackFlow — Auth Validators
+// Thravic — Auth Validators
 // ──────────────────────────────────────────────
 import { z } from 'zod';
 

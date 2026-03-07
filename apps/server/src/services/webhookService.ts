@@ -32,7 +32,7 @@ export const triggerWebhooks = async (domainId: string, event: string, data: any
             try {
                 const headers: Record<string, string> = {
                     'Content-Type': 'application/json',
-                    'User-Agent': 'TrackFlow-Webhook/1.0'
+                    'User-Agent': 'Thravic-Webhook/1.0'
                 };
 
                 if (webhook.secret) {
@@ -40,7 +40,7 @@ export const triggerWebhooks = async (domainId: string, event: string, data: any
                         .createHmac('sha256', webhook.secret)
                         .update(JSON.stringify(payload))
                         .digest('hex');
-                    headers['X-TrackFlow-Signature'] = signature;
+                    headers['X-Thravic-Signature'] = signature;
                 }
 
                 const controller = new AbortController();

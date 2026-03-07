@@ -1,5 +1,5 @@
 // ──────────────────────────────────────────────
-// TrackFlow — Funnel Service
+// Thravic — Funnel Service
 // ──────────────────────────────────────────────
 import { query, queryOne, transaction } from '../db';
 

@@ -1,5 +1,5 @@
 // ──────────────────────────────────────────────
-// TrackFlow — Refresh Token Store
+// Thravic — Refresh Token Store
 // Redis-backed (falls back to in-memory for dev without Redis)
 // ──────────────────────────────────────────────
 import * as cache from '../services/cacheService';

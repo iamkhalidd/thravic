@@ -108,9 +108,9 @@ router.get('/:id/script', authenticate, async (req: AuthRequest, res: Response) 
             log.warn('SERVER_URL and API_URL env vars are not set — tracking script will have an empty src URL. Set SERVER_URL to your production backend URL.');
         }
 
-        const script = `<!-- TrackFlow Analytics -->
+        const script = `<!-- Thravic Analytics -->
 <script async src="${apiUrl}/tf.js" data-tracking-id="${domain.tracking_id}"></script>
-<!-- End TrackFlow Analytics -->`;
+<!-- End Thravic Analytics -->`;
 
         res.json({
             trackingId: domain.tracking_id,
@@ -132,7 +132,7 @@ router.get('/:id/script', authenticate, async (req: AuthRequest, res: Response) 
 function fetchHtml(url: string): Promise<string> {
     return new Promise((resolve, reject) => {
         const lib = url.startsWith('https') ? https : http;
-        const req = lib.get(url, { timeout: 8000, headers: { 'User-Agent': 'TrackFlow-Verifier/1.0' } }, (res) => {
+        const req = lib.get(url, { timeout: 8000, headers: { 'User-Agent': 'Thravic-Verifier/1.0' } }, (res) => {
             // Follow a single redirect
             if ((res.statusCode === 301 || res.statusCode === 302) && res.headers.location) {
                 fetchHtml(res.headers.location).then(resolve).catch(reject);

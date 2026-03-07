@@ -33,7 +33,7 @@ router.get('/:domainId', authenticate, requireFeature('export'), async (req: Aut
 
         // Set headers for CSV download
         res.setHeader('Content-Type', 'text/csv');
-        res.setHeader('Content-Disposition', `attachment; filename="trackflow-${type}-${domainId}.csv"`);
+        res.setHeader('Content-Disposition', `attachment; filename="thravic-${type}-${domainId}.csv"`);
 
         if (type === 'sessions') {
             const sessions = await query(

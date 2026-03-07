@@ -1,5 +1,5 @@
 // ──────────────────────────────────────────────
-// TrackFlow — Feature Gate Middleware
+// Thravic — Feature Gate Middleware
 //
 // Gates routes by subscription plan.
 // Returns 403 { error, upgrade: true, requiredPlan }

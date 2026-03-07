@@ -1,4 +1,4 @@
-// TrackFlow Analytics - Payment Routes (Paystack Integration)
+// Thravic Analytics - Payment Routes (Paystack Integration)
 // Uses Paystack's transaction/initialize API for one-time plan upgrades.
 // Webhook fires on charge.success → upgrades user subscription in DB.
 

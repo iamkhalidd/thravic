@@ -1,4 +1,4 @@
--- TrackFlow — Paystack Migration
+-- Thravic — Paystack Migration
 -- Run this once against your production database to rename Stripe columns.
 -- Safe to run even if the columns don't exist yet (uses IF EXISTS).
 

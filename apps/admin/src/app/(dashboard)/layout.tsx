@@ -83,7 +83,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <aside className={`admin-sidebar${sidebarOpen ? ' open' : ''}`}>
                 <div className="sidebar-header">
                     <Shield size={22} color="var(--color-accent)" />
-                    <span className="sidebar-logo">TrackFlow</span>
+                    <span className="sidebar-logo">Thravic</span>
                     <span className="sidebar-badge">Admin</span>
                     {/* Close button — mobile only */}
                     <button

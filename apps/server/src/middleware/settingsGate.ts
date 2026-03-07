@@ -1,5 +1,5 @@
 // ──────────────────────────────────────────────────────────────
-// TrackFlow — Settings Gate Middleware
+// Thravic — Settings Gate Middleware
 //
 // Makes the admin settings panel actually control the server.
 // Settings are cached for 60 s in settingsService to avoid
@@ -37,7 +37,7 @@ export const maintenanceModeGate = async (
         const maintenance = await isEnabled('maintenance.enabled');
         if (maintenance) {
             res.status(503).json({
-                error: 'TrackFlow is currently under scheduled maintenance. Please try again shortly.',
+                error: 'Thravic is currently under scheduled maintenance. Please try again shortly.',
                 maintenance: true,
                 code: 'MAINTENANCE_MODE',
             });

@@ -1,5 +1,5 @@
 // ──────────────────────────────────────────────
-// TrackFlow — Plan & Feature Definitions
+// Thravic — Plan & Feature Definitions
 //
 // Single source of truth for what each plan can access.
 // Consumed by featureGate middleware and payments routes.

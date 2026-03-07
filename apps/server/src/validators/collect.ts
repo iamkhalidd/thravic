@@ -1,5 +1,5 @@
 // ──────────────────────────────────────────────
-// TrackFlow — Collect (Event) Validators
+// Thravic — Collect (Event) Validators
 // ──────────────────────────────────────────────
 import { z } from 'zod';
 

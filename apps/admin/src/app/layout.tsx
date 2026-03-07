@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import '../styles/globals.css';
 
 export const metadata: Metadata = {
-    title: 'TrackFlow Admin',
-    description: 'TrackFlow Analytics Admin Panel',
+    title: 'Thravic Admin',
+    description: 'Thravic Analytics Admin Panel',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

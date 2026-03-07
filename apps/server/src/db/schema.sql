@@ -1,4 +1,4 @@
--- TrackFlow Analytics - PostgreSQL Schema
+-- Thravic Analytics - PostgreSQL Schema
 -- Tables ordered by dependency (referenced tables created first)
 
 -- ═══════════════════════════════════════════════

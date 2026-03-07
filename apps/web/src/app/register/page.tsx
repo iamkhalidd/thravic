@@ -55,7 +55,7 @@ export default function RegisterPage() {
                     textDecoration: 'none'
                 }}>
                     <BarChart3 size={32} style={{ color: 'var(--color-accent-primary)' }} />
-                    <span style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--color-text-primary)' }}>TrackFlow</span>
+                    <span style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--color-text-primary)' }}>Thravic</span>
                 </Link>
 
                 {/* Card */}
