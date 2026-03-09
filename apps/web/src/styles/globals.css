@@ -324,6 +324,30 @@ a:hover {
   to   { transform: scaleY(1); }
 }
 
+/* Landing Page Specific Grids (Desktop) */
+@media (min-width: 768px) {
+  .lp-story-grid {
+    display: grid;
+    grid-template-columns: 1fr 1.2fr;
+    gap: 64px;
+    align-items: center;
+  }
+  .lp-story-grid-reverse {
+    display: grid;
+    grid-template-columns: 1.2fr 1fr;
+    gap: 64px;
+    align-items: center;
+  }
+  
+  /* On desktop reverse grids, mockup is left (order: 1), text is right (order: 2) */
+  .lp-story-grid-reverse .lp-story-grid-text {
+    order: 2;
+  }
+  .lp-story-grid-reverse .lp-story-grid-mockup {
+    order: 1;
+  }
+}
+
 /* ────────────────────────────────────────────────────────────
     7. LANDING PAGE REDESIGN UTILS & ANIMATIONS (PHASE 9)
    ──────────────────────────────────────────────────────────── */
@@ -639,18 +663,84 @@ a:hover {
 }
 
 
-/* Mobile: < 640px */
-@media (max-width: 640px) {
-  h1 { font-size: 1.875rem; }
-  h2 { font-size: 1.5rem; }
+/* Mobile: < 768px */
+@media (max-width: 767px) {
+  /* Dashboard overlay behavior */
+  .dash-sidebar {
+    width: 260px !important;
+  }
+  .dash-hamburger {
+    display: flex;
+  }
+  .dash-grid-4, .dash-grid-3, .dash-grid-2 {
+    grid-template-columns: 1fr;
+  }
+  .bento-item-large {
+    grid-column: span 1;
+  }
+  .bento-grid {
+    grid-template-columns: 1fr;
+  }
 
-  /* Dashboard grids — full width single column */
-  .dash-grid-4,
-  .dash-grid-3,
-  .dash-grid-2 { grid-template-columns: 1fr; }
+  /* Landing Page Utilities */
+  .lp-grid-features,
+  .lp-grid-3,
+  .lp-grid-4-stat,
+  .lp-grid-footer {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+  }
+
+  /* Storytelling Grids (Mobile Stacking) */
+  .lp-story-grid,
+  .lp-story-grid-reverse {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 40px;
+    align-items: center;
+  }
+  
+  /* Enforce visual stacking: Text on top, Mockup on Bottom */
+  .lp-story-grid-text {
+    order: 1;
+  }
+  .lp-story-grid-mockup {
+    order: 2;
+  }
+
+  /* Mobile Navigation toggle */
+  .lp-nav-links {
+    display: none;
+    position: absolute;
+    top: 56px;
+    left: 0;
+    right: 0;
+    background: var(--color-bg-primary);
+    border-bottom: 1px solid var(--color-border);
+    flex-direction: column;
+    padding: 1rem 24px;
+    align-items: flex-start;
+    box-shadow: var(--shadow-xl);
+    z-index: 40;
+  }
+  .lp-nav-links.active {
+    display: flex;
+  }
+  .lp-nav-mobile-btn {
+    display: flex;
+  }
+  .desktop-only {
+    display: none !important;
+  }
 
   /* Dashboard content — compact padding */
   .dash-content { padding: 12px; }
+
+  /* Landing Page Hero Mobile */
+  .lp-hero-mockup-wrapper {
+    margin-top: 40px !important;
+    padding: 0 12px;
+  }
 
   /* Dashboard page header — stack vertically */
   .dash-page-header {

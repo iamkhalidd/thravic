@@ -1,9 +1,10 @@
 'use client';
 
+import React, { useState } from 'react';
 import Link from 'next/link';
 import {
     BarChart3, Target, MousePointer2, Video, Sparkles, Globe,
-    ArrowRight, Check, Lock, PlayCircle
+    ArrowRight, Check, Lock, PlayCircle, Menu, X
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 
@@ -112,6 +113,8 @@ const s = {
 
 /* ─── COMPONENT ─── */
 export default function HomePage() {
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
     return (
         <div style={s.page}>
             <div className="linear-hero-grid"></div>
@@ -130,27 +133,57 @@ export default function HomePage() {
                         <span style={{ fontSize: '0.9375rem', fontWeight: 600, letterSpacing: '-0.02em' }}>Thravic</span>
                     </Link>
 
-                    <div className="desktop-only" style={{ display: 'flex', gap: '24px' }}>
-                        {[
-                            { label: 'Features', href: '#features' },
-                            { label: 'Pricing', href: '#pricing' },
-                            { label: 'Demo', href: '/demo' },
-                        ].map(link => (
-                            <Link key={link.label} href={link.href} style={{
-                                color: 'var(--color-text-secondary)', textDecoration: 'none',
-                                fontSize: '0.8125rem', fontWeight: 500, transition: 'color 0.2s'
-                            }}>{link.label}</Link>
-                        ))}
-                    </div>
+                        <div className="desktop-only" style={{ display: 'flex', gap: '24px' }}>
+                            {[
+                                { label: 'Features', href: '#features' },
+                                { label: 'Pricing', href: '#pricing' },
+                                { label: 'Demo', href: '/demo' },
+                            ].map(link => (
+                                <Link key={link.label} href={link.href} style={{
+                                    color: 'var(--color-text-secondary)', textDecoration: 'none',
+                                    fontSize: '0.8125rem', fontWeight: 500, transition: 'color 0.2s'
+                                }}>{link.label}</Link>
+                            ))}
+                        </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <Link href="/login" style={{
-                            color: 'var(--color-text-secondary)', textDecoration: 'none',
-                            fontSize: '0.8125rem', fontWeight: 500,
-                        }}>Log in</Link>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <Link href="/login" style={{
+                                color: 'var(--color-text-secondary)', textDecoration: 'none',
+                                fontSize: '0.8125rem', fontWeight: 500,
+                            }} className="desktop-only">Log in</Link>
+                            <button 
+                                className="lp-nav-mobile-btn desktop-hidden"
+                                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                                aria-label="Toggle menu"
+                            >
+                                {isMobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+                            </button>
+                        </div>
                     </div>
+                </nav>
+
+                {/* Mobile Menu Dropdown */}
+                <div className={`lp-nav-links ${isMobileMenuOpen ? 'active' : ''}`}>
+                    {[
+                        { label: 'Features', href: '#features' },
+                        { label: 'Pricing', href: '#pricing' },
+                        { label: 'Demo', href: '/demo' },
+                        { label: 'Log in', href: '/login' },
+                    ].map(link => (
+                        <Link 
+                            key={link.label} 
+                            href={link.href} 
+                            onClick={() => setIsMobileMenuOpen(false)}
+                            style={{
+                                color: 'var(--color-text-primary)', textDecoration: 'none',
+                                fontSize: '1rem', fontWeight: 500, padding: '12px 0', width: '100%',
+                                borderBottom: '1px solid rgba(255,255,255,0.05)'
+                            }}
+                        >
+                            {link.label}
+                        </Link>
+                    ))}
                 </div>
-            </nav>
 
             {/* ═══ HERO ═══ */}
             <section style={s.hero}>
@@ -180,7 +213,7 @@ export default function HomePage() {
                     </div>
 
                     {/* HERO BROWSER MOCKUP */}
-                    <div className="animate-fade-in-up" style={{ 
+                    <div className="animate-fade-in-up lp-hero-mockup-wrapper" style={{ 
                         marginTop: '80px', 
                         position: 'relative',
                         zIndex: 20
@@ -218,8 +251,8 @@ export default function HomePage() {
             <section id="features" style={{ padding: '120px 0', borderTop: '1px solid var(--color-border)' }}>
                 {/* Feature 1: Session Recordings (Text Left, Mockup Right) */}
                 <div style={{ ...s.container, marginBottom: '160px' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: '64px', alignItems: 'center' }}>
-                        <div>
+                    <div className="lp-story-grid">
+                        <div className="lp-story-grid-text">
                             <div style={s.sectionPill}><Video size={14} style={{ marginRight: '6px' }} /> Session Replays</div>
                             <h2 style={{ ...s.sectionTitle, marginBottom: '16px' }}>Understand every click.</h2>
                             <p style={{ ...s.sectionSub, margin: 0 }}>
@@ -231,7 +264,7 @@ export default function HomePage() {
                                 <li style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Check size={16} color="var(--color-text-primary)" /> See exactly how bugs occur</li>
                             </ul>
                         </div>
-                        <div style={{ position: 'relative' }}>
+                        <div className="lp-story-grid-mockup" style={{ position: 'relative' }}>
                             <div style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, background: '#34B1AA', filter: 'blur(80px)', opacity: 0.1, zIndex: -1 }} />
                             <div className="glass-panel animate-float" style={{ padding: '24px' }}>
                                 <SessionsView />
@@ -242,15 +275,15 @@ export default function HomePage() {
 
                 {/* Feature 2: Funnels (Mockup Left, Text Right) */}
                 <div style={{ ...s.container, marginBottom: '160px' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '64px', alignItems: 'center' }}>
-                        <div style={{ position: 'relative', order: 2 }}>
+                    <div className="lp-story-grid-reverse">
+                        <div className="lp-story-grid-text" style={{ position: 'relative' }}>
                             <div style={s.sectionPill}><Target size={14} style={{ marginRight: '6px' }} /> Conversion Funnels</div>
                             <h2 style={{ ...s.sectionTitle, marginBottom: '16px' }}>Funnels that convert.</h2>
                             <p style={{ ...s.sectionSub, margin: 0 }}>
                                 Build multi-step conversion funnels in seconds. Identify the exact drop-off points in your onboarding or checkout flows and fix the leaks.
                             </p>
                         </div>
-                        <div style={{ position: 'relative', order: 1 }}>
+                        <div className="lp-story-grid-mockup" style={{ position: 'relative' }}>
                             <div style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, background: 'var(--color-accent-primary)', filter: 'blur(80px)', opacity: 0.1, zIndex: -1 }} />
                             <div className="glass-panel animate-float-delayed" style={{ padding: '24px' }}>
                                 <FunnelsView />
@@ -261,15 +294,15 @@ export default function HomePage() {
 
                 {/* Feature 3: Heatmaps (Text Left, Mockup Right) */}
                 <div style={{ ...s.container }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: '64px', alignItems: 'center' }}>
-                        <div>
+                    <div className="lp-story-grid">
+                        <div className="lp-story-grid-text">
                             <div style={s.sectionPill}><MousePointer2 size={14} style={{ marginRight: '6px' }} /> Visual Heatmaps</div>
                             <h2 style={{ ...s.sectionTitle, marginBottom: '16px' }}>See what matters.</h2>
                             <p style={{ ...s.sectionSub, margin: 0 }}>
                                 Instantly see where people click, move, and scroll on your key pages. Discover which CTAs are working and which content is being ignored.
                             </p>
                         </div>
-                        <div style={{ position: 'relative' }}>
+                        <div className="lp-story-grid-mockup" style={{ position: 'relative' }}>
                             <div style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, background: '#f59e0b', filter: 'blur(80px)', opacity: 0.15, zIndex: -1 }} />
                             <div className="glass-panel animate-float-slow" style={{ padding: '24px' }}>
                                 <HeatmapsView />
