@@ -703,9 +703,25 @@ a:hover {
   /* Enforce visual stacking: Text on top, Mockup on Bottom */
   .lp-story-grid-text {
     order: 1;
+    text-align: left !important;
   }
   .lp-story-grid-mockup {
     order: 2;
+  }
+
+  /* Strict Mobile Alignment Overrides (Phase 12) */
+  .lp-mobile-left-align {
+    text-align: left !important;
+    align-items: flex-start !important;
+  }
+  
+  .lp-mobile-edge-to-edge {
+    margin-left: -16px !important;
+    margin-right: -16px !important;
+    width: calc(100% + 32px) !important;
+    border-radius: 0 !important;
+    border-left: none !important;
+    border-right: none !important;
   }
 
   /* Mobile Navigation toggle */

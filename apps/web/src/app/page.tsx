@@ -151,10 +151,18 @@ export default function HomePage() {
                                 color: 'var(--color-text-secondary)', textDecoration: 'none',
                                 fontSize: '0.8125rem', fontWeight: 500,
                             }} className="desktop-only">Log in</Link>
+                            <Link href="/register" className="btn-primary" style={{
+                                padding: '6px 14px', borderRadius: '6px', fontSize: '0.8125rem',
+                                fontWeight: 500, textDecoration: 'none', display: 'inline-flex',
+                            }}>Sign up</Link>
                             <button 
                                 className="lp-nav-mobile-btn desktop-hidden"
                                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
                                 aria-label="Toggle menu"
+                                style={{
+                                    background: 'transparent', border: 'none', color: 'var(--color-text-primary)',
+                                    cursor: 'pointer', padding: '4px',
+                                }}
                             >
                                 {isMobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
                             </button>
@@ -168,7 +176,6 @@ export default function HomePage() {
                         { label: 'Features', href: '#features' },
                         { label: 'Pricing', href: '#pricing' },
                         { label: 'Demo', href: '/demo' },
-                        { label: 'Log in', href: '/login' },
                     ].map(link => (
                         <Link 
                             key={link.label} 
@@ -194,16 +201,16 @@ export default function HomePage() {
                         <ArrowRight size={12} style={{ color: 'var(--color-text-muted)' }} />
                     </div>
 
-                    <h1 style={s.h1}>
+                    <h1 style={s.h1} className="lp-mobile-left-align">
                         The analytics system<br />
                         <span className="text-gradient">for modern teams.</span>
                     </h1>
                     
-                    <p style={s.heroSub}>
+                    <p style={s.heroSub} className="lp-mobile-left-align">
                         Purpose-built for speed and clarity. Thravic turns overwhelming data into undeniable user insights in milliseconds.
                     </p>
                     
-                    <div style={s.ctaRow}>
+                    <div style={s.ctaRow} className="lp-mobile-left-align">
                         <Link href="/register" className="btn-primary" style={{ padding: '12px 24px', borderRadius: '999px', fontSize: '0.875rem', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: '8px', textDecoration: 'none' }}>
                             Start tracking free <ArrowRight size={14} />
                         </Link>
@@ -213,7 +220,7 @@ export default function HomePage() {
                     </div>
 
                     {/* HERO BROWSER MOCKUP */}
-                    <div className="animate-fade-in-up lp-hero-mockup-wrapper" style={{ 
+                    <div className="animate-fade-in-up lp-hero-mockup-wrapper lp-mobile-edge-to-edge" style={{ 
                         marginTop: '80px', 
                         position: 'relative',
                         zIndex: 20
@@ -252,7 +259,7 @@ export default function HomePage() {
                 {/* Feature 1: Session Recordings (Text Left, Mockup Right) */}
                 <div style={{ ...s.container, marginBottom: '160px' }}>
                     <div className="lp-story-grid">
-                        <div className="lp-story-grid-text">
+                        <div className="lp-story-grid-text lp-mobile-left-align">
                             <div style={s.sectionPill}><Video size={14} style={{ marginRight: '6px' }} /> Session Replays</div>
                             <h2 style={{ ...s.sectionTitle, marginBottom: '16px' }}>Understand every click.</h2>
                             <p style={{ ...s.sectionSub, margin: 0 }}>
@@ -266,7 +273,7 @@ export default function HomePage() {
                         </div>
                         <div className="lp-story-grid-mockup" style={{ position: 'relative' }}>
                             <div style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, background: '#34B1AA', filter: 'blur(80px)', opacity: 0.1, zIndex: -1 }} />
-                            <div className="glass-panel animate-float" style={{ padding: '24px' }}>
+                            <div className="glass-panel animate-float lp-mobile-edge-to-edge" style={{ padding: '24px' }}>
                                 <SessionsView />
                             </div>
                         </div>
@@ -276,7 +283,7 @@ export default function HomePage() {
                 {/* Feature 2: Funnels (Mockup Left, Text Right) */}
                 <div style={{ ...s.container, marginBottom: '160px' }}>
                     <div className="lp-story-grid-reverse">
-                        <div className="lp-story-grid-text" style={{ position: 'relative' }}>
+                        <div className="lp-story-grid-text lp-mobile-left-align" style={{ position: 'relative' }}>
                             <div style={s.sectionPill}><Target size={14} style={{ marginRight: '6px' }} /> Conversion Funnels</div>
                             <h2 style={{ ...s.sectionTitle, marginBottom: '16px' }}>Funnels that convert.</h2>
                             <p style={{ ...s.sectionSub, margin: 0 }}>
@@ -285,7 +292,7 @@ export default function HomePage() {
                         </div>
                         <div className="lp-story-grid-mockup" style={{ position: 'relative' }}>
                             <div style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, background: 'var(--color-accent-primary)', filter: 'blur(80px)', opacity: 0.1, zIndex: -1 }} />
-                            <div className="glass-panel animate-float-delayed" style={{ padding: '24px' }}>
+                            <div className="glass-panel animate-float-delayed lp-mobile-edge-to-edge" style={{ padding: '24px' }}>
                                 <FunnelsView />
                             </div>
                         </div>
@@ -295,7 +302,7 @@ export default function HomePage() {
                 {/* Feature 3: Heatmaps (Text Left, Mockup Right) */}
                 <div style={{ ...s.container }}>
                     <div className="lp-story-grid">
-                        <div className="lp-story-grid-text">
+                        <div className="lp-story-grid-text lp-mobile-left-align">
                             <div style={s.sectionPill}><MousePointer2 size={14} style={{ marginRight: '6px' }} /> Visual Heatmaps</div>
                             <h2 style={{ ...s.sectionTitle, marginBottom: '16px' }}>See what matters.</h2>
                             <p style={{ ...s.sectionSub, margin: 0 }}>
@@ -304,7 +311,7 @@ export default function HomePage() {
                         </div>
                         <div className="lp-story-grid-mockup" style={{ position: 'relative' }}>
                             <div style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, background: '#f59e0b', filter: 'blur(80px)', opacity: 0.15, zIndex: -1 }} />
-                            <div className="glass-panel animate-float-slow" style={{ padding: '24px' }}>
+                            <div className="glass-panel animate-float-slow lp-mobile-edge-to-edge" style={{ padding: '24px' }}>
                                 <HeatmapsView />
                             </div>
                         </div>
