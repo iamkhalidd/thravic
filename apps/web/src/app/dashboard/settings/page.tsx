@@ -139,7 +139,7 @@ function SettingsPageInner() {
             if (result?.checkoutUrl) {
                 window.location.href = result.checkoutUrl;
             } else {
-                setUpgradeError('Could not start checkout. Is the server configured with a Paystack key?');
+                setUpgradeError('Something went wrong. Please try again later or contact support.');
                 setUpgradingPlan(null);
             }
         } catch {
