@@ -371,7 +371,7 @@ export default function DashboardPage() {
                             Select your platform below and follow the steps to install Thravic.
                         </p>
 
-                        <ScriptInstallation script={trackingScript || `<script async src="https://thravic-api.onrender.com/tf.js" data-tracking-id="${selectedDomain.trackingId}"></script>`} />
+                        <ScriptInstallation script={trackingScript || `<script async src="https://trackflow-7ufa.onrender.com/tf.js" data-tracking-id="${selectedDomain.trackingId}"></script>`} />
 
                         <div style={{ marginTop: 'var(--space-xl)', display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-sm)' }}>
                             <button onClick={() => setShowInstructions(false)} className="btn btn-secondary">
