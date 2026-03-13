@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: thravic-api
+    name: trackflow-api
     runtime: node
     region: oregon
     plan: free
