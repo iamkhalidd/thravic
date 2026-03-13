@@ -108,7 +108,8 @@ router.get('/current', authenticate, async (req: AuthRequest, res: Response) => 
 router.post('/checkout', authenticate, async (req: AuthRequest, res: Response) => {
     try {
         if (!PAYSTACK_SECRET) {
-            return res.status(400).json({ error: 'Paystack not configured' });
+            log.warn('Paystack secret key not configured');
+            return res.status(503).json({ error: 'Payment service temporarily unavailable. Please try again later.' });
         }
 
         const { plan } = req.body;
@@ -154,7 +155,7 @@ router.post('/checkout', authenticate, async (req: AuthRequest, res: Response) =
         res.json({ success: true, checkoutUrl: authorization_url, reference });
     } catch (error: any) {
         log.error('Error creating Paystack checkout', error?.response?.data ?? error);
-        res.status(500).json({ error: 'Failed to create checkout session' });
+        res.status(500).json({ error: 'Something went wrong. Please try again later.' });
     }
 });
 
@@ -166,7 +167,8 @@ router.post('/checkout', authenticate, async (req: AuthRequest, res: Response) =
 router.post('/verify', authenticate, async (req: AuthRequest, res: Response) => {
     try {
         if (!PAYSTACK_SECRET) {
-            return res.status(400).json({ error: 'Paystack not configured' });
+            log.warn('Paystack secret key not configured');
+            return res.status(503).json({ error: 'Payment service temporarily unavailable. Please try again later.' });
         }
 
         const { reference } = req.body;
@@ -193,7 +195,7 @@ router.post('/verify', authenticate, async (req: AuthRequest, res: Response) => 
         res.json({ success: true, plan });
     } catch (error: any) {
         log.error('Error verifying Paystack payment', error?.response?.data ?? error);
-        res.status(500).json({ error: 'Failed to verify payment' });
+        res.status(500).json({ error: 'Something went wrong. Please try again later.' });
     }
 });
 
@@ -207,7 +209,7 @@ router.post('/webhook', async (req: Request, res: Response) => {
         const secret = process.env.PAYSTACK_WEBHOOK_SECRET || PAYSTACK_SECRET;
         if (!secret) {
             log.warn('Paystack webhook secret not configured');
-            return res.status(400).json({ error: 'Webhook not configured' });
+            return res.status(503).json({ error: 'Service temporarily unavailable' });
         }
 
         // Verify signature
@@ -219,7 +221,7 @@ router.post('/webhook', async (req: Request, res: Response) => {
 
         if (hash !== signature) {
             log.warn('Paystack webhook signature mismatch');
-            return res.status(401).json({ error: 'Invalid signature' });
+            return res.status(401).json({ error: 'Unauthorized' });
         }
 
         const event = req.body as { event: string; data: any };
@@ -270,7 +272,7 @@ router.post('/webhook', async (req: Request, res: Response) => {
         res.json({ received: true });
     } catch (error) {
         log.error('Paystack webhook error', error);
-        res.status(500).json({ error: 'Webhook handler failed' });
+        res.status(500).json({ error: 'Internal error' });
     }
 });
 
