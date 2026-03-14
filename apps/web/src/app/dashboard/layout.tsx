@@ -8,6 +8,7 @@ import {
     Globe,
     TrendingUp,
     Users,
+    UsersRound,
     Target,
     MousePointer2,
     Video,
@@ -54,6 +55,7 @@ const navStructure = [
     { href: '/dashboard/heatmaps', icon: MousePointer2, label: 'Heatmaps' },
     { href: '/dashboard/sessions', icon: Video, label: 'Sessions' },
     { href: '/dashboard/insights', icon: Sparkles, label: 'AI Insights' },
+    { href: '/dashboard/team', icon: UsersRound, label: 'Team' },
     { href: '/dashboard/reports', icon: FileBarChart, label: 'Reports' },
 ];
 
