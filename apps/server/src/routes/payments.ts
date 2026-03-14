@@ -316,7 +316,7 @@ router.post('/checkout', authenticate, async (req: AuthRequest, res: Response) =
                 );
                 await query('UPDATE promo_codes SET used_count = used_count + 1 WHERE id = $1', [promoRecord.id]);
             } catch (e) {
-                log.warn('Failed to record promo redemption', e);
+                log.warn('Failed to record promo redemption', { error: e instanceof Error ? e.message : String(e) });
             }
         }
 
@@ -328,7 +328,7 @@ router.post('/checkout', authenticate, async (req: AuthRequest, res: Response) =
                 [userId, plan, amountKobo, currency, promoRecord?.id || null, reference]
             );
         } catch (e) {
-            log.warn('Failed to log payment history', e);
+            log.warn('Failed to log payment history', { error: e instanceof Error ? e.message : String(e) });
         }
 
         log.info(`Paystack checkout initiated: user=${userId}, plan=${plan}, ref=${reference}`);
