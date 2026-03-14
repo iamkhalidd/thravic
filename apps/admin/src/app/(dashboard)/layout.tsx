@@ -7,7 +7,7 @@ import { getAccessToken, clearTokens } from '@/lib/api';
 import {
     LayoutDashboard, Users, Globe, CreditCard, Activity,
     Server, FileText, Settings, Database, Menu,
-    LogOut, Shield, X
+    LogOut, Shield, X, Layers, Tag
 } from 'lucide-react';
 
 const navItems = [
@@ -22,6 +22,12 @@ const navItems = [
             { href: '/domains', icon: Globe, label: 'Domains' },
             { href: '/subscriptions', icon: CreditCard, label: 'Subscriptions' },
             { href: '/events', icon: Activity, label: 'Events' },
+        ]
+    },
+    {
+        section: 'Billing', items: [
+            { href: '/plans', icon: Layers, label: 'Plans & Pricing' },
+            { href: '/promos', icon: Tag, label: 'Promo Codes' },
         ]
     },
     {

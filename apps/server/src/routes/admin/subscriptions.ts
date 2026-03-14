@@ -43,16 +43,16 @@ router.get('/', adminAuth, async (req: AuthRequest, res: Response) => {
             params
         );
 
-        // Revenue summary
+        // Revenue summary — join plans table for dynamic pricing
         const revenue = await query(
-            `SELECT plan, COUNT(*) as count,
-                    SUM(CASE plan 
-                        WHEN 'pro' THEN 29 
-                        WHEN 'agency' THEN 79 
-                        ELSE 0 END
-                    ) as revenue
-             FROM subscriptions WHERE status = 'active'
-             GROUP BY plan ORDER BY revenue DESC`
+            `SELECT s.plan, COUNT(*) as count,
+                    SUM(COALESCE(p.price, 0)) as revenue,
+                    COALESCE(p.currency, 'NGN') as currency
+             FROM subscriptions s
+             LEFT JOIN plans p ON s.plan = p.id
+             WHERE s.status = 'active'
+             GROUP BY s.plan, p.price, p.currency
+             ORDER BY revenue DESC`
         );
 
         res.json({

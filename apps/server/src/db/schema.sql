@@ -301,6 +301,76 @@ INSERT INTO data_retention_policies (plan, events_days, sessions_days, recording
 ON CONFLICT (plan) DO NOTHING;
 
 -- ═══════════════════════════════════════════════
+-- 17. Plans (admin-managed pricing & features)
+-- ═══════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS plans (
+    id              VARCHAR(50) PRIMARY KEY,
+    name            VARCHAR(100) NOT NULL,
+    price           INTEGER NOT NULL DEFAULT 0,
+    currency        VARCHAR(3) NOT NULL DEFAULT 'NGN',
+    interval        VARCHAR(20) DEFAULT 'monthly' CHECK (interval IN ('monthly', 'yearly')),
+    events_limit    INTEGER NOT NULL,
+    domains_limit   INTEGER NOT NULL,
+    retention_days  INTEGER NOT NULL DEFAULT 30,
+    features        TEXT[] NOT NULL DEFAULT '{}',
+    active          BOOLEAN DEFAULT TRUE,
+    sort_order      INTEGER DEFAULT 0,
+    created_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+INSERT INTO plans (id, name, price, currency, events_limit, domains_limit, retention_days, features, sort_order) VALUES
+    ('free', 'Hobby', 0, 'NGN', 5000, 1, 30, ARRAY['analytics','realtime','utm'], 0),
+    ('pro', 'Pro', 45000, 'NGN', 100000, 3, 365, ARRAY['analytics','realtime','utm','heatmaps','insights','export','funnels','recordings','experiments','webhooks','team'], 1),
+    ('agency', 'Agency', 125000, 'NGN', 500000, 20, 730, ARRAY['analytics','realtime','utm','heatmaps','insights','export','funnels','recordings','experiments','webhooks','team'], 2)
+ON CONFLICT (id) DO NOTHING;
+
+-- ═══════════════════════════════════════════════
+-- 18. Promo Codes (admin-managed discounts)
+-- ═══════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS promo_codes (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    code            VARCHAR(50) UNIQUE NOT NULL,
+    discount_type   VARCHAR(20) NOT NULL CHECK (discount_type IN ('percentage', 'flat')),
+    discount_value  INTEGER NOT NULL,
+    applicable_plans TEXT[] DEFAULT '{}',
+    max_uses        INTEGER,
+    max_per_user    INTEGER DEFAULT 1,
+    used_count      INTEGER DEFAULT 0,
+    starts_at       TIMESTAMP WITH TIME ZONE,
+    expires_at      TIMESTAMP WITH TIME ZONE,
+    active          BOOLEAN DEFAULT TRUE,
+    created_by      UUID REFERENCES users(id),
+    created_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS promo_redemptions (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    promo_code_id   UUID NOT NULL REFERENCES promo_codes(id),
+    user_id         UUID NOT NULL REFERENCES users(id),
+    plan            VARCHAR(50) NOT NULL,
+    original_amount INTEGER NOT NULL,
+    discounted_amount INTEGER NOT NULL,
+    paystack_ref    VARCHAR(255),
+    created_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- ═══════════════════════════════════════════════
+-- 19. Payment History (immutable ledger)
+-- ═══════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS payment_history (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id         UUID NOT NULL REFERENCES users(id),
+    plan            VARCHAR(50) NOT NULL,
+    amount          INTEGER NOT NULL,
+    currency        VARCHAR(3) NOT NULL DEFAULT 'NGN',
+    promo_code_id   UUID REFERENCES promo_codes(id),
+    paystack_ref    VARCHAR(255),
+    status          VARCHAR(50) DEFAULT 'success',
+    created_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- ═══════════════════════════════════════════════
 -- Indexes (single block, no duplicates)
 -- ═══════════════════════════════════════════════
 CREATE INDEX IF NOT EXISTS idx_domains_tracking_id ON domains(tracking_id);

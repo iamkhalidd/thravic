@@ -580,16 +580,27 @@ export const insights = {
 // Payments API (Paystack)
 export const payments = {
     /** Initialise a Paystack checkout session. On success, redirect to checkoutUrl. */
-    async checkout(plan: string): Promise<{ checkoutUrl?: string; reference?: string; error?: string } | null> {
+    async checkout(plan: string, promoCode?: string): Promise<{ checkoutUrl?: string; reference?: string; error?: string } | null> {
         const result = await apiRequest<{ success: boolean; checkoutUrl: string; reference: string; error?: string }>(
             '/api/payments/checkout',
-            { method: 'POST', body: JSON.stringify({ plan }) }
+            { method: 'POST', body: JSON.stringify({ plan, promoCode }) }
         );
         if (result.data?.success) {
             return { checkoutUrl: result.data.checkoutUrl, reference: result.data.reference };
         }
         // Return error details so the UI can display them
         return { error: result.data?.error || result.error || 'Unknown error' };
+    },
+
+    /** Validate a promo code and get discount preview. */
+    async validatePromo(code: string, plan: string) {
+        const result = await apiRequest<{
+            valid: boolean; discount_type?: string; discount_value?: number;
+            original_price?: number; discounted_price?: number; currency?: string; error?: string;
+        }>('/api/payments/validate-promo', {
+            method: 'POST', body: JSON.stringify({ code, plan })
+        });
+        return result.data || { valid: false, error: 'Failed to validate code' };
     },
 
     /** Verify a completed Paystack payment by reference. Returns the upgraded plan name. */
