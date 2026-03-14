@@ -130,6 +130,8 @@ router.get('/current', authenticate, async (req: AuthRequest, res: Response) => 
             });
         }
 
+        const planKey = (subscription.plan || '').toLowerCase().trim() as PlanName;
+
         res.json({
             success: true,
             subscription: {
@@ -139,7 +141,7 @@ router.get('/current', authenticate, async (req: AuthRequest, res: Response) => 
                 eventsLimit: subscription.events_limit,
                 domainsLimit: subscription.domains_limit,
                 currentPeriodEnd: subscription.current_period_end,
-                features: PLAN_FEATURES[subscription.plan as PlanName] ?? PLAN_FEATURES['free'],
+                features: PLAN_FEATURES[planKey] ?? PLAN_FEATURES['free'],
             },
         });
     } catch (error) {
