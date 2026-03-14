@@ -88,14 +88,14 @@ export const PLAN_LIMITS = {
         eventsLimit: 100_000,
         domainsLimit: 3,
         retentionDays: 365,
-        price: 29,
+        price: 45_000,
     },
     agency: {
         name: 'Agency',
         eventsLimit: 500_000,
         domainsLimit: 20,
         retentionDays: 730,
-        price: 79,
+        price: 125_000,
     },
 } satisfies Record<PlanName, { name: string; eventsLimit: number; domainsLimit: number; retentionDays: number; price: number }>;
 

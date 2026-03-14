@@ -39,11 +39,10 @@ router.get('/status', (_req: Request, res: Response) => {
 });
 
 
-// Prices in the smallest currency unit (USD cents for Paystack).
-// Paystack supports USD — set your Paystack dashboard to a USD-enabled integration.
-const PLAN_PRICES_CENTS: Record<string, number> = {
-    pro:    29_00,    // $29 / month
-    agency: 79_00,    // $79 / month
+// Prices in the smallest currency unit (kobo for NGN — 100 kobo = ₦1).
+const PLAN_PRICES_KOBO: Record<string, number> = {
+    pro:    45_000_00,    // ₦45,000 / month
+    agency: 125_000_00,   // ₦125,000 / month
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -148,22 +147,22 @@ router.post('/checkout', authenticate, async (req: AuthRequest, res: Response) =
             return res.status(400).json({ error: 'Invalid plan' });
         }
 
-        const amountCents = PLAN_PRICES_CENTS[plan];
-        if (!amountCents) {
+        const amountKobo = PLAN_PRICES_KOBO[plan];
+        if (!amountKobo) {
             return res.status(400).json({ error: `Price not configured for ${plan} plan` });
         }
 
         const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
         const callbackUrl = `${frontendUrl}/dashboard/settings?payment=success`;
 
-        log.info(`Paystack init: amount=${amountCents}, currency=USD, callback=${callbackUrl}`);
+        log.info(`Paystack init: amount=${amountKobo}, currency=NGN, callback=${callbackUrl}`);
 
         const paystackRes = await axios.post(
             `${PAYSTACK_BASE}/transaction/initialize`,
             {
                 email: userEmail,
-                amount: amountCents,
-                currency: 'USD',
+                amount: amountKobo,
+                currency: 'NGN',
                 callback_url: callbackUrl,
                 metadata: {
                     userId,

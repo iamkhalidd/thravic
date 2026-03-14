@@ -25,21 +25,21 @@ const plans = [
         id: 'free',
         name: 'Hobby',
         price: 0,
-        currency: 'USD',
+        displayPrice: 'Free',
         features: ['1 domain', '5,000 events/mo', '30-day history', 'Core analytics & UTM'],
     },
     {
         id: 'pro',
         name: 'Pro',
-        price: 29,
-        currency: 'USD',
+        price: 45000,
+        displayPrice: '₦45,000',
         features: ['3 domains', '100,000 events/mo', '1-year history', 'Heatmaps & recordings', 'Funnels & AI insights', 'CSV export & team'],
     },
     {
         id: 'agency',
         name: 'Agency',
-        price: 79,
-        currency: 'USD',
+        price: 125000,
+        displayPrice: '₦125,000',
         features: ['20 domains', '500,000 events/mo', '2-year history', 'Everything in Pro', 'Unlimited team members', 'Priority support'],
     },
 ];
@@ -372,10 +372,10 @@ function SettingsPageInner() {
                                             <h4 style={{ marginBottom: 'var(--space-sm)' }}>{plan.name}</h4>
                                             <div style={{ marginBottom: 'var(--space-md)' }}>
                                                 <span style={{ fontSize: '2rem', fontWeight: 700 }}>
-                                                    ${plan.price}
+                                                    {plan.displayPrice}
                                                 </span>
                                                 <span style={{ color: 'var(--color-text-muted)' }}>
-                                                    {plan.price > 0 ? ' USD/mo' : ''}
+                                                    {plan.price > 0 ? '/mo' : ''}
                                                 </span>
                                             </div>
 
@@ -411,7 +411,7 @@ function SettingsPageInner() {
                                                 ) : isFree ? (
                                                     'Free Forever'
                                                 ) : (
-                                                    `Upgrade — $${plan.price}/mo`
+                                                    `Upgrade — ₦${plan.price.toLocaleString()}/mo`
                                                 )}
                                             </button>
                                         </div>
@@ -426,7 +426,7 @@ function SettingsPageInner() {
                                 color: 'var(--color-text-muted)',
                                 textAlign: 'center',
                             }}>
-                                <Lock size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '4px' }} /> Secure payment via Paystack · All prices in USD · Cancel anytime
+                                Payments are securely processed by <strong>Paystack</strong> in NGN.
                             </p>
                         </div>
                     )}
