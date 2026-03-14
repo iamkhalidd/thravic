@@ -69,16 +69,18 @@ export function UpgradeGate({ feature, requiredPlan, message, blurChildren, chil
                     Upgrade to unlock <strong>{feature}</strong> and more.
                 </p>
                 <Link
-                    href="/dashboard/settings/billing"
+                    href="/dashboard/settings?tab=subscription"
+                    className="btn btn-primary"
                     style={{
                         marginTop: '0.5rem',
                         padding: '0.5rem 1.25rem',
                         borderRadius: '0.5rem',
-                        background: 'var(--accent, var(--color-accent-primary))',
+                        background: '#6d5cff', // Fallback direct color matching the accent
                         color: '#fff',
                         fontWeight: 600,
                         textDecoration: 'none',
                         fontSize: '0.875rem',
+                        display: 'inline-block',
                     }}
                 >
                     Upgrade to {planLabel}
