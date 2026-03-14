@@ -4,8 +4,28 @@ import { useState, useEffect, useCallback } from 'react';
 import { useDomain } from '@/contexts/DomainContext';
 import { useSubscription } from '@/hooks/useSubscription';
 import { UpgradeGate } from '@/components/UpgradeGate';
-import { apiRequest } from '@/lib/api';
 import { Users, UserPlus, Trash2, Shield, Eye, Mail, Crown } from 'lucide-react';
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+
+async function teamApi<T>(path: string, options?: RequestInit): Promise<{ data?: T; error?: string }> {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
+    try {
+        const res = await fetch(`${API_BASE}${path}`, {
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                ...options?.headers,
+            },
+        });
+        const json = await res.json();
+        if (!res.ok) return { error: json.error || 'Request failed' };
+        return { data: json };
+    } catch (err: any) {
+        return { error: err?.message || 'Network error' };
+    }
+}
 
 interface TeamMember {
     id: string;
@@ -31,7 +51,7 @@ export default function TeamPage() {
         if (!selectedDomainId) return;
         setLoading(true);
         try {
-            const result = await apiRequest<TeamMember[]>(`/api/teams/${selectedDomainId}/members`);
+            const result = await teamApi<TeamMember[]>(`/api/teams/${selectedDomainId}/members`);
             setMembers(result.data || []);
         } catch {
             setMembers([]);
@@ -55,7 +75,7 @@ export default function TeamPage() {
         setInviting(true);
         setMessage(null);
         try {
-            const result = await apiRequest<{ message: string; error?: string }>(
+            const result = await teamApi<{ message: string; error?: string }>(
                 `/api/teams/${selectedDomainId}/invite`,
                 { method: 'POST', body: JSON.stringify({ email: inviteEmail.trim(), role: inviteRole }) }
             );
@@ -77,7 +97,7 @@ export default function TeamPage() {
         if (!selectedDomainId || !confirm('Remove this member from your domain?')) return;
         setRemovingId(memberId);
         try {
-            await apiRequest(`/api/teams/${selectedDomainId}/members/${memberId}`, { method: 'DELETE' });
+            await teamApi(`/api/teams/${selectedDomainId}/members/${memberId}`, { method: 'DELETE' });
             setMembers(prev => prev.filter(m => m.id !== memberId));
             setMessage({ type: 'success', text: 'Member removed' });
         } catch (err: any) {
