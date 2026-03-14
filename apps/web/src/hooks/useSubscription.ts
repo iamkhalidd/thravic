@@ -32,7 +32,7 @@ export interface Subscription {
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
 async function fetchSubscription(): Promise<Subscription | null> {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
     if (!token) return null;
 
     const res = await fetch(`${API_BASE}/api/payments/current`, {
