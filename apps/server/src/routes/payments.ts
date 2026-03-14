@@ -14,8 +14,30 @@ import { sendPaymentReceiptEmail } from '../services/emailService';
 const log = createLogger('Payments');
 const router = Router();
 
-const PAYSTACK_SECRET = process.env.PAYSTACK_SECRET_KEY || '';
+// Read at request time, NOT module load — ensures env changes are picked up after restart
+function getPaystackSecret(): string {
+    return process.env.PAYSTACK_SECRET_KEY || '';
+}
 const PAYSTACK_BASE  = 'https://api.paystack.co';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/payments/status  (diagnostic — no auth required)
+// Returns config status without exposing secrets
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/status', (_req: Request, res: Response) => {
+    const secret = getPaystackSecret();
+    const frontendUrl = process.env.FRONTEND_URL || 'NOT SET';
+    const serverUrl = process.env.SERVER_URL || 'NOT SET';
+    res.json({
+        paystackConfigured: !!secret,
+        paystackKeyPrefix: secret ? secret.substring(0, 8) + '...' : 'EMPTY',
+        frontendUrl,
+        serverUrl,
+        callbackUrl: `${frontendUrl}/dashboard/settings?payment=success`,
+        webhookUrl: `${serverUrl}/api/payments/webhook`,
+    });
+});
+
 
 // Prices in the smallest currency unit (USD cents for Paystack).
 // Paystack supports USD — set your Paystack dashboard to a USD-enabled integration.
@@ -107,14 +129,20 @@ router.get('/current', authenticate, async (req: AuthRequest, res: Response) => 
 // ─────────────────────────────────────────────────────────────────────────────
 router.post('/checkout', authenticate, async (req: AuthRequest, res: Response) => {
     try {
-        if (!PAYSTACK_SECRET) {
-            log.warn('Paystack secret key not configured');
-            return res.status(503).json({ error: 'Payment service temporarily unavailable. Please try again later.' });
+        const secret = getPaystackSecret();
+        if (!secret) {
+            log.warn('PAYSTACK_SECRET_KEY env var is empty or not set');
+            return res.status(503).json({
+                error: 'Payment service not configured. PAYSTACK_SECRET_KEY is missing.',
+                debug: { envKeySet: !!process.env.PAYSTACK_SECRET_KEY }
+            });
         }
 
         const { plan } = req.body;
         const userId = req.userId!;
         const userEmail = req.email!;
+
+        log.info(`Checkout request: user=${userId}, email=${userEmail}, plan=${plan}`);
 
         if (!plan || !['pro', 'agency'].includes(plan)) {
             return res.status(400).json({ error: 'Invalid plan' });
@@ -126,6 +154,9 @@ router.post('/checkout', authenticate, async (req: AuthRequest, res: Response) =
         }
 
         const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+        const callbackUrl = `${frontendUrl}/dashboard/settings?payment=success`;
+
+        log.info(`Paystack init: amount=${amountCents}, currency=USD, callback=${callbackUrl}`);
 
         const paystackRes = await axios.post(
             `${PAYSTACK_BASE}/transaction/initialize`,
@@ -133,7 +164,7 @@ router.post('/checkout', authenticate, async (req: AuthRequest, res: Response) =
                 email: userEmail,
                 amount: amountCents,
                 currency: 'USD',
-                callback_url: `${frontendUrl}/dashboard/settings?payment=success`,
+                callback_url: callbackUrl,
                 metadata: {
                     userId,
                     plan,
@@ -142,7 +173,7 @@ router.post('/checkout', authenticate, async (req: AuthRequest, res: Response) =
             },
             {
                 headers: {
-                    Authorization: `Bearer ${PAYSTACK_SECRET}`,
+                    Authorization: `Bearer ${secret}`,
                     'Content-Type': 'application/json',
                 },
             },
@@ -150,12 +181,26 @@ router.post('/checkout', authenticate, async (req: AuthRequest, res: Response) =
 
         const { authorization_url, reference } = paystackRes.data.data;
 
-        log.info(`Paystack checkout initiated for user ${userId}, plan=${plan}, ref=${reference}`);
+        log.info(`Paystack checkout initiated: user=${userId}, plan=${plan}, ref=${reference}`);
 
         res.json({ success: true, checkoutUrl: authorization_url, reference });
     } catch (error: any) {
-        log.error('Error creating Paystack checkout', error?.response?.data ?? error);
-        res.status(500).json({ error: 'Something went wrong. Please try again later.' });
+        const paystackError = error?.response?.data;
+        const statusCode = error?.response?.status;
+        log.error(`Paystack checkout FAILED [${statusCode}]:`, paystackError ?? error.message);
+        
+        // Surface the real error to help debugging
+        const userMessage = paystackError?.message
+            || paystackError?.data?.message
+            || 'Something went wrong. Please try again later.';
+        
+        res.status(500).json({
+            error: userMessage,
+            debug: {
+                paystackStatus: statusCode || null,
+                paystackMessage: paystackError?.message || null,
+            }
+        });
     }
 });
 
@@ -166,7 +211,8 @@ router.post('/checkout', authenticate, async (req: AuthRequest, res: Response) =
 // ─────────────────────────────────────────────────────────────────────────────
 router.post('/verify', authenticate, async (req: AuthRequest, res: Response) => {
     try {
-        if (!PAYSTACK_SECRET) {
+        const secret = getPaystackSecret();
+        if (!secret) {
             log.warn('Paystack secret key not configured');
             return res.status(503).json({ error: 'Payment service temporarily unavailable. Please try again later.' });
         }
@@ -178,7 +224,7 @@ router.post('/verify', authenticate, async (req: AuthRequest, res: Response) => 
 
         const verifyRes = await axios.get(
             `${PAYSTACK_BASE}/transaction/verify/${encodeURIComponent(reference)}`,
-            { headers: { Authorization: `Bearer ${PAYSTACK_SECRET}` } },
+            { headers: { Authorization: `Bearer ${secret}` } },
         );
 
         const txData = verifyRes.data.data;
@@ -206,7 +252,7 @@ router.post('/verify', authenticate, async (req: AuthRequest, res: Response) => 
 // ─────────────────────────────────────────────────────────────────────────────
 router.post('/webhook', async (req: Request, res: Response) => {
     try {
-        const secret = process.env.PAYSTACK_WEBHOOK_SECRET || PAYSTACK_SECRET;
+        const secret = process.env.PAYSTACK_WEBHOOK_SECRET || getPaystackSecret();
         if (!secret) {
             log.warn('Paystack webhook secret not configured');
             return res.status(503).json({ error: 'Service temporarily unavailable' });

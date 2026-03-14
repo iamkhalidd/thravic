@@ -139,11 +139,11 @@ function SettingsPageInner() {
             if (result?.checkoutUrl) {
                 window.location.href = result.checkoutUrl;
             } else {
-                setUpgradeError('Something went wrong. Please try again later or contact support.');
+                setUpgradeError(result?.error || 'Something went wrong. Please try again later or contact support.');
                 setUpgradingPlan(null);
             }
-        } catch {
-            setUpgradeError('Checkout failed. Please try again.');
+        } catch (err: any) {
+            setUpgradeError(err?.message || 'Checkout failed. Please try again.');
             setUpgradingPlan(null);
         }
     };
