@@ -580,15 +580,16 @@ export const insights = {
 // Payments API (Paystack)
 export const payments = {
     /** Initialise a Paystack checkout session. On success, redirect to checkoutUrl. */
-    async checkout(plan: string): Promise<{ checkoutUrl: string; reference: string } | null> {
-        const result = await apiRequest<{ success: boolean; checkoutUrl: string; reference: string }>(
+    async checkout(plan: string): Promise<{ checkoutUrl?: string; reference?: string; error?: string } | null> {
+        const result = await apiRequest<{ success: boolean; checkoutUrl: string; reference: string; error?: string }>(
             '/api/payments/checkout',
             { method: 'POST', body: JSON.stringify({ plan }) }
         );
         if (result.data?.success) {
             return { checkoutUrl: result.data.checkoutUrl, reference: result.data.reference };
         }
-        return null;
+        // Return error details so the UI can display them
+        return { error: result.data?.error || result.error || 'Unknown error' };
     },
 
     /** Verify a completed Paystack payment by reference. Returns the upgraded plan name. */
