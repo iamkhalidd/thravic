@@ -39,16 +39,43 @@ router.get('/status', (_req: Request, res: Response) => {
 });
 
 
-// Prices in the smallest currency unit (kobo for NGN — 100 kobo = ₦1).
-const PLAN_PRICES_KOBO: Record<string, number> = {
-    pro:    45_000_00,    // ₦45,000 / month
-    agency: 125_000_00,   // ₦125,000 / month
+// Fallback prices (used only if plans table doesn't exist yet)
+const FALLBACK_PRICES: Record<string, { price: number; currency: string }> = {
+    pro:    { price: 45_000_00, currency: 'NGN' },
+    agency: { price: 125_000_00, currency: 'NGN' },
 };
+
+// Helper: fetch a plan from DB with fallback
+async function getPlanFromDB(planId: string) {
+    try {
+        const plan = await queryOne<{
+            id: string; name: string; price: number; currency: string;
+            events_limit: number; domains_limit: number; retention_days: number;
+            features: string[]; active: boolean;
+        }>('SELECT * FROM plans WHERE id = $1 AND active = true', [planId]);
+        return plan;
+    } catch {
+        return null; // table might not exist yet
+    }
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/payments/plans
+// Returns active plans from the database (with fallback to config)
 // ─────────────────────────────────────────────────────────────────────────────
-router.get('/plans', (_req: Request, res: Response) => {
+router.get('/plans', async (_req: Request, res: Response) => {
+    try {
+        const dbPlans = await query(
+            'SELECT * FROM plans WHERE active = true ORDER BY sort_order ASC'
+        );
+        if (dbPlans && dbPlans.length > 0) {
+            return res.json({ success: true, plans: dbPlans });
+        }
+    } catch {
+        // plans table might not exist yet — fall through to hardcoded
+    }
+
+    // Fallback to config-based plans
     const plans = Object.entries(PLAN_LIMITS).map(([key, tier]) => ({
         id: key,
         ...tier,
@@ -122,6 +149,84 @@ router.get('/current', authenticate, async (req: AuthRequest, res: Response) => 
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// POST /api/payments/validate-promo
+// Validates a promo code and returns the discount details. Rate-limited.
+// ─────────────────────────────────────────────────────────────────────────────
+async function validatePromoCode(code: string, plan: string, userId: string) {
+    const promo = await queryOne<any>(
+        `SELECT * FROM promo_codes WHERE code = $1 AND active = true FOR UPDATE`,
+        [code.toUpperCase().trim()]
+    );
+
+    if (!promo) return { valid: false, error: 'Invalid or expired code' };
+
+    const now = new Date();
+    if (promo.starts_at && new Date(promo.starts_at) > now) {
+        return { valid: false, error: 'Invalid or expired code' };
+    }
+    if (promo.expires_at && new Date(promo.expires_at) < now) {
+        return { valid: false, error: 'Invalid or expired code' };
+    }
+    if (promo.max_uses && promo.used_count >= promo.max_uses) {
+        return { valid: false, error: 'Invalid or expired code' };
+    }
+
+    // Check applicable plans
+    if (promo.applicable_plans && promo.applicable_plans.length > 0 && !promo.applicable_plans.includes(plan)) {
+        return { valid: false, error: 'This code is not valid for the selected plan' };
+    }
+
+    // Check per-user limit
+    const userRedemptions = await queryOne<{ count: string }>(
+        'SELECT COUNT(*) as count FROM promo_redemptions WHERE promo_code_id = $1 AND user_id = $2',
+        [promo.id, userId]
+    );
+    if (parseInt(userRedemptions?.count || '0') >= promo.max_per_user) {
+        return { valid: false, error: 'You have already used this code' };
+    }
+
+    return { valid: true, promo };
+}
+
+router.post('/validate-promo', authenticate, async (req: AuthRequest, res: Response) => {
+    try {
+        const { code, plan } = req.body;
+        if (!code || !plan) {
+            return res.status(400).json({ valid: false, error: 'Code and plan are required' });
+        }
+
+        const result = await validatePromoCode(code, plan, req.userId!);
+        if (!result.valid) {
+            return res.json({ valid: false, error: result.error });
+        }
+
+        const promo = result.promo;
+        // Fetch plan price to show preview
+        const dbPlan = await getPlanFromDB(plan);
+        const originalPrice = dbPlan ? dbPlan.price : (FALLBACK_PRICES[plan]?.price || 0) / 100;
+
+        let discountedPrice = originalPrice;
+        if (promo.discount_type === 'percentage') {
+            discountedPrice = Math.round(originalPrice * (1 - promo.discount_value / 100));
+        } else {
+            discountedPrice = Math.max(0, originalPrice - promo.discount_value);
+        }
+
+        res.json({
+            valid: true,
+            discount_type: promo.discount_type,
+            discount_value: promo.discount_value,
+            original_price: originalPrice,
+            discounted_price: discountedPrice,
+            currency: dbPlan?.currency || 'NGN',
+        });
+    } catch (error) {
+        log.error('Promo validation error', error);
+        res.status(500).json({ valid: false, error: 'Failed to validate code' });
+    }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // POST /api/payments/checkout
 // Initialises a Paystack transaction. Returns { checkoutUrl } so the
 // frontend can redirect the user to Paystack's hosted payment page.
@@ -137,36 +242,57 @@ router.post('/checkout', authenticate, async (req: AuthRequest, res: Response) =
             });
         }
 
-        const { plan } = req.body;
+        const { plan, promoCode } = req.body;
         const userId = req.userId!;
         const userEmail = req.email!;
 
-        log.info(`Checkout request: user=${userId}, email=${userEmail}, plan=${plan}`);
+        log.info(`Checkout request: user=${userId}, email=${userEmail}, plan=${plan}, promo=${promoCode || 'none'}`);
 
-        if (!plan || !['pro', 'agency'].includes(plan)) {
-            return res.status(400).json({ error: 'Invalid plan' });
-        }
+        // Fetch plan from DB for dynamic pricing
+        const dbPlan = await getPlanFromDB(plan);
+        const originalPriceUnits = dbPlan ? dbPlan.price : (FALLBACK_PRICES[plan]?.price || 0) / 100;
+        const currency = dbPlan?.currency || FALLBACK_PRICES[plan]?.currency || 'NGN';
+        let amountKobo = dbPlan ? dbPlan.price * 100 : FALLBACK_PRICES[plan]?.price;
 
-        const amountKobo = PLAN_PRICES_KOBO[plan];
         if (!amountKobo) {
             return res.status(400).json({ error: `Price not configured for ${plan} plan` });
+        }
+
+        // Apply promo code discount if provided
+        let promoRecord: any = null;
+        if (promoCode) {
+            const promoResult = await validatePromoCode(promoCode, plan, userId);
+            if (!promoResult.valid) {
+                return res.status(400).json({ error: promoResult.error });
+            }
+            promoRecord = promoResult.promo;
+
+            if (promoRecord.discount_type === 'percentage') {
+                amountKobo = Math.round(amountKobo * (1 - promoRecord.discount_value / 100));
+            } else {
+                // Flat discount in whole currency units → convert to kobo
+                amountKobo = Math.max(100, amountKobo - promoRecord.discount_value * 100);
+            }
+            log.info(`Promo ${promoCode} applied: original=${originalPriceUnits}, discounted kobo=${amountKobo}`);
         }
 
         const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
         const callbackUrl = `${frontendUrl}/dashboard/settings?payment=success`;
 
-        log.info(`Paystack init: amount=${amountKobo}, currency=NGN, callback=${callbackUrl}`);
+        log.info(`Paystack init: amount=${amountKobo}, currency=${currency}, callback=${callbackUrl}`);
 
         const paystackRes = await axios.post(
             `${PAYSTACK_BASE}/transaction/initialize`,
             {
                 email: userEmail,
                 amount: amountKobo,
-                currency: 'NGN',
+                currency,
                 callback_url: callbackUrl,
                 metadata: {
                     userId,
                     plan,
+                    promoCode: promoCode || null,
+                    promoId: promoRecord?.id || null,
                     cancel_action: `${frontendUrl}/dashboard/settings?payment=canceled`,
                 },
             },
@@ -179,6 +305,31 @@ router.post('/checkout', authenticate, async (req: AuthRequest, res: Response) =
         );
 
         const { authorization_url, reference } = paystackRes.data.data;
+
+        // Record promo redemption and update usage count
+        if (promoRecord) {
+            try {
+                await query(
+                    `INSERT INTO promo_redemptions (promo_code_id, user_id, plan, original_amount, discounted_amount, paystack_ref)
+                     VALUES ($1, $2, $3, $4, $5, $6)`,
+                    [promoRecord.id, userId, plan, originalPriceUnits * 100, amountKobo, reference]
+                );
+                await query('UPDATE promo_codes SET used_count = used_count + 1 WHERE id = $1', [promoRecord.id]);
+            } catch (e) {
+                log.warn('Failed to record promo redemption', e);
+            }
+        }
+
+        // Log payment in history
+        try {
+            await query(
+                `INSERT INTO payment_history (user_id, plan, amount, currency, promo_code_id, paystack_ref, status)
+                 VALUES ($1, $2, $3, $4, $5, $6, 'pending')`,
+                [userId, plan, amountKobo, currency, promoRecord?.id || null, reference]
+            );
+        } catch (e) {
+            log.warn('Failed to log payment history', e);
+        }
 
         log.info(`Paystack checkout initiated: user=${userId}, plan=${plan}, ref=${reference}`);
 

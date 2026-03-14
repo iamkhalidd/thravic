@@ -13,6 +13,8 @@ import auditRoutes from './audit';
 import settingsRoutes from './settings';
 import retentionRoutes from './retention';
 import exportRoutes from './export';
+import planRoutes from './plans';
+import promoRoutes from './promos';
 
 const router = Router();
 
@@ -29,5 +31,7 @@ router.use('/audit', auditRoutes);
 router.use('/settings', settingsRoutes);
 router.use('/retention', retentionRoutes);
 router.use('/export', exportRoutes);
+router.use('/plans', planRoutes);
+router.use('/promos', promoRoutes);
 
 export default router;

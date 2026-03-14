@@ -67,6 +67,15 @@ function SettingsPageInner() {
     const [upgradeError, setUpgradeError] = useState<string | null>(null);
     const [paymentSuccess, setPaymentSuccess] = useState<string | null>(null); // plan name after success
 
+    // Promo code state
+    const [promoCode, setPromoCode] = useState('');
+    const [promoResult, setPromoResult] = useState<{
+        valid: boolean; discount_type?: string; discount_value?: number;
+        original_price?: number; discounted_price?: number; currency?: string; error?: string;
+    } | null>(null);
+    const [validatingPromo, setValidatingPromo] = useState(false);
+    const [showPromoInput, setShowPromoInput] = useState(false);
+
     // Form states
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
@@ -129,13 +138,25 @@ function SettingsPageInner() {
         }
     }, [searchParams]);
 
+    // ── Promo validation ─────────────────────────────────────────────────────────
+    const validatePromo = async (planId: string) => {
+        if (!promoCode.trim()) { setPromoResult(null); return; }
+        setValidatingPromo(true);
+        try {
+            const result = await payments.validatePromo(promoCode, planId);
+            setPromoResult(result);
+        } catch {
+            setPromoResult({ valid: false, error: 'Failed to validate code' });
+        } finally { setValidatingPromo(false); }
+    };
+
     // ── Upgrade handler ────────────────────────────────────────────────────────
     const handleUpgrade = async (planId: string) => {
         setUpgradeError(null);
         setUpgradingPlan(planId);
 
         try {
-            const result = await payments.checkout(planId);
+            const result = await payments.checkout(planId, promoResult?.valid ? promoCode : undefined);
             if (result?.checkoutUrl) {
                 window.location.href = result.checkoutUrl;
             } else {
@@ -349,6 +370,42 @@ function SettingsPageInner() {
                                 <p style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', marginTop: 'var(--space-xs)' }}>
                                     Payments are securely processed by <strong>Paystack</strong> in USD.
                                 </p>
+                            </div>
+
+                            {/* Promo code input */}
+                            <div style={{ marginBottom: 'var(--space-md)' }}>
+                                <button
+                                    className="btn btn-ghost btn-sm"
+                                    onClick={() => setShowPromoInput(!showPromoInput)}
+                                    style={{ fontSize: '0.85rem', padding: '4px 0' }}
+                                >
+                                    {showPromoInput ? '✕ Close' : '🏷️ Have a promo code?'}
+                                </button>
+                                {showPromoInput && (
+                                    <div style={{ display: 'flex', gap: '8px', marginTop: '8px', alignItems: 'center' }}>
+                                        <input
+                                            className="input"
+                                            value={promoCode}
+                                            placeholder="Enter promo code"
+                                            style={{ maxWidth: '200px', textTransform: 'uppercase' }}
+                                            onChange={e => { setPromoCode(e.target.value.toUpperCase()); setPromoResult(null); }}
+                                        />
+                                        <button
+                                            className="btn btn-secondary btn-sm"
+                                            disabled={!promoCode.trim() || validatingPromo}
+                                            onClick={() => validatePromo('pro')}
+                                        >
+                                            {validatingPromo ? 'Checking...' : 'Apply'}
+                                        </button>
+                                        {promoResult && (
+                                            <span style={{ fontSize: '0.85rem', color: promoResult.valid ? '#00d68f' : '#ff5555' }}>
+                                                {promoResult.valid
+                                                    ? `✓ ${promoResult.discount_type === 'percentage' ? `${promoResult.discount_value}% off` : `₦${promoResult.discount_value?.toLocaleString()} off`}`
+                                                    : promoResult.error}
+                                            </span>
+                                        )}
+                                    </div>
+                                )}
                             </div>
 
                             {/* Plan Cards */}
