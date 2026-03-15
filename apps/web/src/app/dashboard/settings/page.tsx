@@ -17,6 +17,7 @@ import {
     AlertCircle,
     X,
     Lock,
+    Mail,
 } from 'lucide-react';
 import { auth, domains, payments } from '@/lib/api';
 
@@ -49,6 +50,14 @@ interface UserData {
     name: string;
     email: string;
     subscription: string;
+    auth_provider?: string;
+    avatar_url?: string;
+    company?: string | null;
+    job_title?: string | null;
+    website?: string | null;
+    phone?: string | null;
+    country?: string | null;
+    timezone?: string | null;
     createdAt?: string;
 }
 
@@ -61,6 +70,25 @@ function SettingsPageInner() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
+    const [avatarUploading, setAvatarUploading] = useState(false);
+
+    // Notifications state
+    const [notifications, setNotifications] = useState({
+        weeklyReport: true,
+        trafficAlerts: true,
+        insightAlerts: true,
+        productUpdates: false,
+    });
+
+    // Form states
+    const [name, setName] = useState('');
+    const [email, setEmail] = useState('');
+    const [company, setCompany] = useState('');
+    const [jobTitle, setJobTitle] = useState('');
+    const [website, setWebsite] = useState('');
+    const [phone, setPhone] = useState('');
+    const [country, setCountry] = useState('');
+    const [timezone, setTimezone] = useState('');
 
     // Upgrade state
     const [upgradingPlan, setUpgradingPlan] = useState<string | null>(null);
@@ -76,28 +104,19 @@ function SettingsPageInner() {
     const [validatingPromo, setValidatingPromo] = useState(false);
     const [showPromoInput, setShowPromoInput] = useState(false);
 
-    // Form states
-    const [name, setName] = useState('');
-    const [email, setEmail] = useState('');
-    const [currentPassword, setCurrentPassword] = useState('');
-    const [newPassword, setNewPassword] = useState('');
-
-    // Notification settings
-    const [notifications, setNotifications] = useState({
-        weeklyReport: true,
-        trafficAlerts: true,
-        insightAlerts: false,
-        productUpdates: true,
-    });
-
-    // ── Load user data ─────────────────────────────────────────────────────────
+    // Load data
     const loadData = useCallback(async () => {
         const [userRes, domainsRes] = await Promise.all([auth.getMe(), domains.list()]);
-
         if (userRes.data) {
             setUser(userRes.data as UserData);
-            setName(userRes.data.name);
-            setEmail(userRes.data.email);
+            setName(userRes.data.name || '');
+            setEmail(userRes.data.email || '');
+            setCompany(userRes.data.company || '');
+            setJobTitle(userRes.data.job_title || '');
+            setWebsite(userRes.data.website || '');
+            setPhone(userRes.data.phone || '');
+            setCountry(userRes.data.country || '');
+            setTimezone(userRes.data.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || '');
         }
         if (domainsRes.data) {
             setDomainList(domainsRes.data.domains);
@@ -109,27 +128,21 @@ function SettingsPageInner() {
         loadData();
     }, [loadData]);
 
-    // ── Handle Paystack redirect-back ──────────────────────────────────────────
     useEffect(() => {
         const paymentStatus = searchParams.get('payment');
         const reference = searchParams.get('reference');
 
         if (paymentStatus === 'success' && reference) {
-            // Switch to subscription tab automatically
             setActiveTab('subscription');
-
-            // Verify the payment server-side
             (async () => {
                 const result = await payments.verify(reference);
                 if (result) {
                     setPaymentSuccess(result.plan);
-                    // Refresh user so the displayed plan updates
                     const userRes = await auth.getMe();
                     if (userRes.data) setUser(userRes.data as UserData);
                 } else {
                     setUpgradeError('Payment verification failed. Please contact support if your account was charged.');
                 }
-                // Clean up query params without full page reload
                 const url = new URL(window.location.href);
                 url.searchParams.delete('payment');
                 url.searchParams.delete('reference');
@@ -138,7 +151,6 @@ function SettingsPageInner() {
         }
     }, [searchParams]);
 
-    // ── Promo validation ─────────────────────────────────────────────────────────
     const validatePromo = async (planId: string) => {
         if (!promoCode.trim()) { setPromoResult(null); return; }
         setValidatingPromo(true);
@@ -150,11 +162,9 @@ function SettingsPageInner() {
         } finally { setValidatingPromo(false); }
     };
 
-    // ── Upgrade handler ────────────────────────────────────────────────────────
     const handleUpgrade = async (planId: string) => {
         setUpgradeError(null);
         setUpgradingPlan(planId);
-
         try {
             const result = await payments.checkout(planId, promoResult?.valid ? promoCode : undefined);
             if (result?.checkoutUrl) {
@@ -169,13 +179,47 @@ function SettingsPageInner() {
         }
     };
 
-    // ── Profile save ───────────────────────────────────────────────────────────
     const handleSaveProfile = async () => {
         setSaving(true);
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        setSaving(false);
-        setSaved(true);
-        setTimeout(() => setSaved(false), 2000);
+        try {
+            const res = await auth.updateProfile({
+                name, company, job_title: jobTitle, website, phone, country, timezone
+            });
+            if (res.data) {
+                setUser(prev => prev ? { ...prev, ...res.data as any } : null);
+                setSaved(true);
+                setTimeout(() => setSaved(false), 2000);
+            }
+        } catch (e) {
+            console.error('Failed to save profile', e);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setAvatarUploading(true);
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+            const result = await auth.uploadAvatar(reader.result as string);
+            if (result.data) {
+                setUser(prev => prev ? { ...prev, avatar_url: result.data!.avatar_url } : null);
+            }
+            setAvatarUploading(false);
+        };
+        reader.readAsDataURL(file);
+    };
+
+    const handleAvatarRemove = async () => {
+        setAvatarUploading(true);
+        const result = await auth.removeAvatar();
+        if (result.data) {
+            setUser(prev => prev ? { ...prev, avatar_url: result.data!.avatar_url } : null);
+        }
+        setAvatarUploading(false);
     };
 
     const handleExport = async (format: 'csv' | 'json') => {
@@ -208,6 +252,9 @@ function SettingsPageInner() {
     }
 
     const currentPlan = user?.subscription || 'free';
+    const avatarSrc = user?.avatar_url?.startsWith('/uploads')
+        ? `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}${user.avatar_url}`
+        : user?.avatar_url;
 
     return (
         <div>
@@ -222,17 +269,12 @@ function SettingsPageInner() {
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id as any)}
                                 style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 'var(--space-sm)',
+                                    display: 'flex', alignItems: 'center', gap: 'var(--space-sm)',
                                     padding: 'var(--space-sm) var(--space-md)',
                                     background: activeTab === tab.id ? 'var(--color-bg-hover)' : 'transparent',
-                                    border: 'none',
-                                    borderRadius: 'var(--radius-md)',
+                                    border: 'none', borderRadius: 'var(--radius-md)',
                                     color: activeTab === tab.id ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
-                                    cursor: 'pointer',
-                                    fontSize: '0.875rem',
-                                    textAlign: 'left',
+                                    cursor: 'pointer', fontSize: '0.875rem', textAlign: 'left',
                                 }}
                             >
                                 <tab.icon size={18} />
@@ -247,53 +289,148 @@ function SettingsPageInner() {
 
                     {/* ── Account Tab ── */}
                     {activeTab === 'account' && (
-                        <div className="card">
-                            <h3 style={{ marginBottom: 'var(--space-lg)' }}>Account Settings</h3>
+                        <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-xl)' }}>
+                            <h3 style={{ margin: 0 }}>Account Settings</h3>
 
-                            <div style={{ marginBottom: 'var(--space-lg)' }}>
-                                <label style={{ display: 'block', marginBottom: 'var(--space-xs)', fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
-                                    Full Name
-                                </label>
-                                <input type="text" className="input" value={name} onChange={e => setName(e.target.value)} />
+                            {/* Avatar Section */}
+                            <div>
+                                <h4 style={{ marginBottom: 'var(--space-md)', fontSize: '1rem' }}>Profile Picture</h4>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-lg)' }}>
+                                    <div style={{ position: 'relative' }}>
+                                        <img
+                                            src={avatarSrc}
+                                            alt={user?.name || 'User'}
+                                            style={{
+                                                width: '80px', height: '80px', borderRadius: '50%',
+                                                objectFit: 'cover', border: '1px solid var(--color-border)',
+                                                opacity: avatarUploading ? 0.5 : 1
+                                            }}
+                                        />
+                                        {avatarUploading && (
+                                            <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>
+                                                <Loader size={20} className="spin" color="var(--color-accent-primary)" />
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div style={{ display: 'flex', gap: 'var(--space-sm)' }}>
+                                        <div>
+                                            <input type="file" id="avatarUpload" accept="image/*" onChange={handleAvatarUpload} style={{ display: 'none' }} />
+                                            <label htmlFor="avatarUpload" className="btn btn-secondary" style={{ cursor: 'pointer' }}>
+                                                Change
+                                            </label>
+                                        </div>
+                                        <button onClick={handleAvatarRemove} className="btn" style={{ border: '1px solid var(--color-border)' }}>
+                                            Remove
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
 
-                            <div style={{ marginBottom: 'var(--space-lg)' }}>
-                                <label style={{ display: 'block', marginBottom: 'var(--space-xs)', fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
-                                    Email Address
-                                </label>
-                                <input type="email" className="input" value={email} onChange={e => setEmail(e.target.value)} />
+                            <hr style={{ border: 'none', borderTop: '1px solid var(--color-border)' }} />
+
+                            {/* Connected Accounts Section */}
+                            <div>
+                                <h4 style={{ marginBottom: 'var(--space-md)', fontSize: '1rem' }}>Connected Accounts</h4>
+                                <div style={{
+                                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                    padding: 'var(--space-md)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)'
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
+                                        {user?.auth_provider === 'github' ? (
+                                            <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" strokeWidth="2" fill="none"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path></svg>
+                                        ) : user?.auth_provider === 'google' ? (
+                                            <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" strokeWidth="2" fill="none"><circle cx="12" cy="12" r="10"></circle><path d="M12 8v8"></path><path d="M8 12h8"></path></svg>
+                                        ) : (
+                                            <Mail size={24} color="var(--color-text-secondary)" />
+                                        )}
+                                        <div>
+                                            <div style={{ fontWeight: 500, textTransform: 'capitalize' }}>{user?.auth_provider || 'Email'}</div>
+                                            <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)' }}>{user?.email}</div>
+                                        </div>
+                                    </div>
+                                    <span style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)', background: 'var(--color-bg-hover)', padding: '2px 8px', borderRadius: '12px' }}>Active Provider</span>
+                                </div>
                             </div>
 
-                            <hr style={{ border: 'none', borderTop: '1px solid var(--color-border)', margin: 'var(--space-xl) 0' }} />
+                            <hr style={{ border: 'none', borderTop: '1px solid var(--color-border)' }} />
 
-                            <h4 style={{ marginBottom: 'var(--space-md)' }}>Change Password</h4>
-
-                            <div style={{ marginBottom: 'var(--space-md)' }}>
-                                <label style={{ display: 'block', marginBottom: 'var(--space-xs)', fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
-                                    Current Password
-                                </label>
-                                <input type="password" className="input" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} />
+                            {/* Personal Information */}
+                            <div>
+                                <h4 style={{ marginBottom: 'var(--space-md)', fontSize: '1rem' }}>Personal Information</h4>
+                                <div className="grid grid-cols-2 gap-md">
+                                    <div>
+                                        <label style={{ display: 'block', marginBottom: 'var(--space-xs)', fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>Full Name</label>
+                                        <input type="text" className="input" value={name} onChange={e => setName(e.target.value)} />
+                                    </div>
+                                    <div>
+                                        <label style={{ display: 'block', marginBottom: 'var(--space-xs)', fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>Email Address</label>
+                                        <input type="email" className="input" value={email} disabled style={{ opacity: 0.7, cursor: 'not-allowed' }} title="Change email via support" />
+                                    </div>
+                                    <div>
+                                        <label style={{ display: 'block', marginBottom: 'var(--space-xs)', fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>Phone Number <span style={{ opacity: 0.5 }}>(optional)</span></label>
+                                        <input type="tel" className="input" value={phone} onChange={e => setPhone(e.target.value)} />
+                                    </div>
+                                </div>
                             </div>
 
-                            <div style={{ marginBottom: 'var(--space-lg)' }}>
-                                <label style={{ display: 'block', marginBottom: 'var(--space-xs)', fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
-                                    New Password
-                                </label>
-                                <input type="password" className="input" value={newPassword} onChange={e => setNewPassword(e.target.value)} />
+                            {/* Organization & Work */}
+                            <div>
+                                <h4 style={{ marginBottom: 'var(--space-md)', fontSize: '1rem' }}>Organization & Work</h4>
+                                <div className="grid grid-cols-2 gap-md">
+                                    <div>
+                                        <label style={{ display: 'block', marginBottom: 'var(--space-xs)', fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>Company <span style={{ opacity: 0.5 }}>(optional)</span></label>
+                                        <input type="text" className="input" value={company} onChange={e => setCompany(e.target.value)} />
+                                    </div>
+                                    <div>
+                                        <label style={{ display: 'block', marginBottom: 'var(--space-xs)', fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>Job Title <span style={{ opacity: 0.5 }}>(optional)</span></label>
+                                        <input type="text" className="input" value={jobTitle} onChange={e => setJobTitle(e.target.value)} />
+                                    </div>
+                                    <div style={{ gridColumn: 'span 2' }}>
+                                        <label style={{ display: 'block', marginBottom: 'var(--space-xs)', fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>Website URL <span style={{ opacity: 0.5 }}>(optional)</span></label>
+                                        <input type="url" className="input" value={website} onChange={e => setWebsite(e.target.value)} placeholder="https://" />
+                                    </div>
+                                </div>
                             </div>
 
-                            <button onClick={handleSaveProfile} className="btn btn-primary" disabled={saving}>
-                                {saved ? <Check size={18} /> : <Save size={18} />}
-                                {saving ? 'Saving...' : saved ? 'Saved!' : 'Save Changes'}
-                            </button>
+                            {/* Demographics */}
+                            <div>
+                                <h4 style={{ marginBottom: 'var(--space-md)', fontSize: '1rem' }}>Demographics</h4>
+                                <div className="grid grid-cols-2 gap-md">
+                                    <div>
+                                        <label style={{ display: 'block', marginBottom: 'var(--space-xs)', fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>Country <span style={{ opacity: 0.5 }}>(optional)</span></label>
+                                        <input type="text" className="input" value={country} onChange={e => setCountry(e.target.value)} />
+                                    </div>
+                                    <div>
+                                        <label style={{ display: 'block', marginBottom: 'var(--space-xs)', fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>Timezone</label>
+                                        <select className="input" value={timezone} onChange={e => setTimezone(e.target.value)}>
+                                            <option value="">Select Timezone</option>
+                                            {Intl.supportedValuesOf?.('timeZone').map(tz => (
+                                                <option key={tz} value={tz}>{tz}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
 
-                            <hr style={{ border: 'none', borderTop: '1px solid var(--color-border)', margin: 'var(--space-xl) 0' }} />
+                            <div>
+                                <button onClick={handleSaveProfile} className="btn btn-primary" disabled={saving}>
+                                    {saved ? <Check size={18} /> : <Save size={18} />}
+                                    {saving ? 'Saving...' : saved ? 'Saved!' : 'Save Profile'}
+                                </button>
+                            </div>
 
-                            <h4 style={{ marginBottom: 'var(--space-md)', color: 'var(--color-error)' }}>Danger Zone</h4>
-                            <button className="btn" style={{ background: 'rgba(239, 68, 68, 0.1)', color: 'var(--color-error)', border: '1px solid var(--color-error)' }}>
-                                <Trash2 size={18} />
-                                Delete Account
-                            </button>
+                            <hr style={{ border: 'none', borderTop: '1px solid var(--color-border)' }} />
+
+                            <div>
+                                <h4 style={{ color: 'var(--color-error)' }}>Danger Zone</h4>
+                                <p style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-md)' }}>
+                                    Permanently delete your account and all associated traffic data. This action cannot be undone.
+                                </p>
+                                <button className="btn" style={{ background: 'rgba(239, 68, 68, 0.1)', color: 'var(--color-error)', border: '1px solid var(--color-error)' }}>
+                                    <Trash2 size={18} />
+                                    Delete Account
+                                </button>
+                            </div>
                         </div>
                     )}
 

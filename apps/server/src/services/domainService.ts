@@ -12,6 +12,7 @@ export interface DomainRow {
     tracking_id: string;
     verified: boolean;
     created_at: Date;
+    owner_plan?: string;
 }
 
 export async function create(
@@ -31,12 +32,20 @@ export async function create(
 
 export async function listByUser(userId: string): Promise<DomainRow[]> {
     return query<DomainRow>(
-        `SELECT * FROM domains WHERE user_id = $1
-         UNION
-         SELECT d.* FROM domains d
-         JOIN domain_members dm ON d.id = dm.domain_id
-         WHERE dm.user_id = $1
-         ORDER BY created_at DESC`,
+        `WITH user_domains AS (
+             SELECT * FROM domains WHERE user_id = $1
+             UNION
+             SELECT d.* FROM domains d
+             JOIN domain_members dm ON d.id = dm.domain_id
+             WHERE dm.user_id = $1
+         )
+         SELECT ud.*, 
+            COALESCE(
+                (SELECT plan FROM subscriptions s WHERE s.user_id = ud.user_id AND status = 'active' ORDER BY created_at DESC LIMIT 1),
+                'free'
+            ) as owner_plan
+         FROM user_domains ud
+         ORDER BY ud.created_at DESC`,
         [userId]
     );
 }

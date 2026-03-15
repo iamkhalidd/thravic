@@ -156,7 +156,7 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
     const router = useRouter();
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
     const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
-    const [user, setUser] = useState<{ name: string; email: string; subscription: string } | null>(null);
+    const [user, setUser] = useState<{ name: string; email: string; subscription: string; avatar_url?: string } | null>(null);
     const [domainDropdownOpen, setDomainDropdownOpen] = useState(false);
     const [expandedSections, setExpandedSections] = useState<string[]>(['Traffic', 'Behavior']);
     const { domains: domainList, selectedDomainId: selectedDomain, setSelectedDomainId: setSelectedDomain } = useDomain();
@@ -410,14 +410,14 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                             justifyContent: (sidebarCollapsed && !isMobile) ? 'center' : 'flex-start',
                             marginTop: '4px',
                         }}>
-                            <div style={{
-                                width: '28px', height: '28px', borderRadius: '50%',
-                                background: 'var(--color-accent-primary)', display: 'flex', alignItems: 'center',
-                                justifyContent: 'center', color: 'white',
-                                fontWeight: 700, fontSize: '0.75rem', flexShrink: 0,
-                            }}>
-                                {user.name.charAt(0).toUpperCase()}
-                            </div>
+                            <img
+                                src={user.avatar_url?.startsWith('/uploads') ? `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}${user.avatar_url}` : user.avatar_url}
+                                alt={user.name}
+                                style={{
+                                    width: '28px', height: '28px', borderRadius: '50%',
+                                    objectFit: 'cover', flexShrink: 0, border: '1px solid var(--color-border)'
+                                }}
+                            />
                             {!(sidebarCollapsed && !isMobile) && (
                                 <>
                                     <div style={{ flex: 1, minWidth: 0 }}>

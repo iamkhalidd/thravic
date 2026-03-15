@@ -63,7 +63,10 @@ export function useSubscription() {
         return () => { cancelled = true; };
     }, []);
 
-    const hasFeature = (feature: PlanFeature): boolean => {
+    const hasFeature = (feature: PlanFeature, domainFeatures?: string[]): boolean => {
+        if (domainFeatures && domainFeatures.length > 0) {
+            return domainFeatures.includes(feature as string);
+        }
         if (!subscription) return false;
         return subscription.features.includes(feature);
     };
