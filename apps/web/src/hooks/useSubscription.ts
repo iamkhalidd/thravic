@@ -33,7 +33,7 @@ import { payments } from '@/lib/api';
 
 async function fetchSubscription(): Promise<Subscription | null> {
     try {
-        const res = await payments.current();
+        const res = await payments.getCurrent();
         if (res?.data?.subscription) {
             return res.data.subscription as unknown as Subscription;
         }
