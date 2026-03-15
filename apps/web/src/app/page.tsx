@@ -114,6 +114,36 @@ const s = {
 /* ─── COMPONENT ─── */
 export default function HomePage() {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    const [tiers, setTiers] = useState(pricingTiers);
+
+    React.useEffect(() => {
+        const fetchPlans = async () => {
+            try {
+                const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+                const res = await fetch(`${API_BASE}/api/payments/plans`);
+                const data = await res.json();
+                
+                if (data.success && data.plans) {
+                    const currencyMap: Record<string, string> = { NGN: '₦', USD: '$', GBP: '£', EUR: '€' };
+                    
+                    setTiers(prev => prev.map(tier => {
+                        const dbPlan = data.plans.find((p: any) => p.name.toLowerCase() === tier.name.toLowerCase());
+                        if (dbPlan) {
+                            const symbol = currencyMap[dbPlan.currency] || dbPlan.currency;
+                            return {
+                                ...tier,
+                                price: dbPlan.price > 0 ? `${symbol}${dbPlan.price.toLocaleString()}` : 'Free'
+                            };
+                        }
+                        return tier;
+                    }));
+                }
+            } catch (err) {
+                console.error('Failed to load dynamic pricing', err);
+            }
+        };
+        fetchPlans();
+    }, []);
 
     return (
         <div style={s.page}>
@@ -332,7 +362,7 @@ export default function HomePage() {
                     </div>
 
                     <div className="lp-grid-3" style={{ maxWidth: '960px', margin: '0 auto' }}>
-                        {pricingTiers.map((tier, i) => (
+                        {tiers.map((tier, i) => (
                             <div key={i} style={{
                                 background: 'transparent',
                                 borderTop: '1px solid var(--color-border)',
