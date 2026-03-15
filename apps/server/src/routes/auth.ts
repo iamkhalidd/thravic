@@ -123,8 +123,8 @@ router.post('/login', async (req: Request, res: Response) => {
         const { email, password } = loginSchema.parse(req.body);
 
         const user = await userService.findByEmail(email);
-        if (!user) {
-            return res.status(401).json({ error: 'Invalid credentials' });
+        if (!user || !user.password) {
+            return res.status(401).json({ error: 'Invalid credentials. Please use your social login provider if you registered via one.' });
         }
 
         const isMatch = await bcrypt.compare(password, user.password);
