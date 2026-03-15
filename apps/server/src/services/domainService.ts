@@ -31,7 +31,12 @@ export async function create(
 
 export async function listByUser(userId: string): Promise<DomainRow[]> {
     return query<DomainRow>(
-        `SELECT * FROM domains WHERE user_id = $1 ORDER BY created_at DESC`,
+        `SELECT * FROM domains WHERE user_id = $1
+         UNION
+         SELECT d.* FROM domains d
+         JOIN domain_members dm ON d.id = dm.domain_id
+         WHERE dm.user_id = $1
+         ORDER BY created_at DESC`,
         [userId]
     );
 }
@@ -41,6 +46,16 @@ export async function getById(id: string): Promise<DomainRow | null> {
         `SELECT * FROM domains WHERE id = $1`,
         [id]
     );
+}
+
+export async function hasAccess(domainId: string, userId: string): Promise<boolean> {
+    const row = await queryOne(
+        `SELECT 1 FROM domains WHERE id = $1 AND user_id = $2
+         UNION
+         SELECT 1 FROM domain_members WHERE domain_id = $1 AND user_id = $2`,
+        [domainId, userId]
+    );
+    return !!row;
 }
 
 export async function getByTrackingId(trackingId: string): Promise<DomainRow | null> {

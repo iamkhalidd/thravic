@@ -76,7 +76,7 @@ router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
     try {
         const domain = await domainService.getById(req.params.id);
 
-        if (!domain || domain.user_id !== req.userId) {
+        if (!domain || !(await domainService.hasAccess(domain.id, req.userId!))) {
             return res.status(404).json({ error: 'Domain not found' });
         }
 
@@ -99,7 +99,7 @@ router.get('/:id/script', authenticate, async (req: AuthRequest, res: Response) 
     try {
         const domain = await domainService.getById(req.params.id);
 
-        if (!domain || domain.user_id !== req.userId) {
+        if (!domain || !(await domainService.hasAccess(domain.id, req.userId!))) {
             return res.status(404).json({ error: 'Domain not found' });
         }
 
@@ -158,7 +158,7 @@ router.post('/:id/verify', authenticate, async (req: AuthRequest, res: Response)
     try {
         const domain = await domainService.getById(req.params.id);
 
-        if (!domain || domain.user_id !== req.userId) {
+        if (!domain || !(await domainService.hasAccess(domain.id, req.userId!))) {
             return res.status(404).json({ error: 'Domain not found' });
         }
 
@@ -207,7 +207,7 @@ router.patch('/:id/settings', authenticate, async (req: AuthRequest, res: Respon
     try {
         const domain = await domainService.getById(req.params.id);
 
-        if (!domain || domain.user_id !== req.userId) {
+        if (!domain || !(await domainService.hasAccess(domain.id, req.userId!))) {
             return res.status(404).json({ error: 'Domain not found' });
         }
 

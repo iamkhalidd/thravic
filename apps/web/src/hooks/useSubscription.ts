@@ -29,19 +29,18 @@ export interface Subscription {
     features: PlanFeature[];
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+import { payments } from '@/lib/api';
 
 async function fetchSubscription(): Promise<Subscription | null> {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
-    if (!token) return null;
-
-    const res = await fetch(`${API_BASE}/api/payments/current`, {
-        headers: { Authorization: `Bearer ${token}` },
-    });
-
-    if (!res.ok) return null;
-    const json = await res.json();
-    return json.subscription ?? null;
+    try {
+        const res = await payments.current();
+        if (res?.data?.subscription) {
+            return res.data.subscription as unknown as Subscription;
+        }
+        return null;
+    } catch {
+        return null;
+    }
 }
 
 /**

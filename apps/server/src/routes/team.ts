@@ -46,11 +46,16 @@ router.get('/:domainId/members', authenticate, requireFeature('team'), async (re
     if (!hasAccess) return res.status(403).json({ error: 'Access denied' });
 
     const members = await query(
-        `SELECT u.id, u.name, u.email, dm.role, dm.created_at
+        `SELECT u.id, u.name, u.email, 'owner' as role, d.created_at
+         FROM domains d
+         JOIN users u ON d.user_id = u.id
+         WHERE d.id = $1
+         UNION
+         SELECT u.id, u.name, u.email, dm.role, dm.created_at
          FROM domain_members dm
          JOIN users u ON dm.user_id = u.id
          WHERE dm.domain_id = $1
-         ORDER BY dm.created_at DESC`,
+         ORDER BY created_at ASC`,
         [domainId]
     );
 

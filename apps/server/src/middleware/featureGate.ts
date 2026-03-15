@@ -53,7 +53,8 @@ export const requireFeature = (feature: PlanFeature) =>
                 [userId]
             );
 
-            const plan = (row?.plan ?? 'free') as keyof typeof PLAN_FEATURES;
+            const rawPlan = row?.plan ?? 'free';
+            const plan = rawPlan.toLowerCase().trim() as keyof typeof PLAN_FEATURES;
             const allowedFeatures = PLAN_FEATURES[plan] ?? PLAN_FEATURES['free'];
 
             if (!allowedFeatures.includes(feature)) {
