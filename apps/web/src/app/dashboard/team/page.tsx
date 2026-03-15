@@ -31,7 +31,7 @@ interface TeamMember {
     id: string;
     name: string;
     email: string;
-    role: 'admin' | 'viewer';
+    role: 'owner' | 'admin' | 'viewer';
     created_at: string;
 }
 
@@ -243,10 +243,10 @@ export default function TeamPage() {
                                     display: 'flex', alignItems: 'center', gap: '4px',
                                     padding: '4px 10px', borderRadius: '12px',
                                     fontSize: '0.8rem', fontWeight: 600,
-                                    background: member.role === 'admin' ? 'rgba(109,92,255,0.15)' : 'rgba(255,255,255,0.05)',
-                                    color: member.role === 'admin' ? 'var(--color-accent)' : 'var(--color-text-secondary)',
+                                    background: member.role === 'owner' ? 'rgba(255,170,0,0.15)' : member.role === 'admin' ? 'rgba(109,92,255,0.15)' : 'rgba(255,255,255,0.05)',
+                                    color: member.role === 'owner' ? '#ffaa00' : member.role === 'admin' ? 'var(--color-accent)' : 'var(--color-text-secondary)',
                                 }}>
-                                    {member.role === 'admin' ? <Shield size={12} /> : <Eye size={12} />}
+                                    {member.role === 'owner' ? <Crown size={12} /> : member.role === 'admin' ? <Shield size={12} /> : <Eye size={12} />}
                                     {member.role.charAt(0).toUpperCase() + member.role.slice(1)}
                                 </div>
 
@@ -256,15 +256,17 @@ export default function TeamPage() {
                                 </div>
 
                                 {/* Remove button */}
-                                <button
-                                    className="btn btn-ghost btn-sm"
-                                    onClick={() => handleRemove(member.id)}
-                                    disabled={removingId === member.id}
-                                    title="Remove member"
-                                    style={{ color: '#ff5555' }}
-                                >
-                                    <Trash2 size={14} />
-                                </button>
+                                {member.role !== 'owner' ? (
+                                    <button
+                                        className="btn btn-ghost btn-sm"
+                                        onClick={() => handleRemove(member.id)}
+                                        disabled={removingId === member.id}
+                                        title="Remove member"
+                                        style={{ color: '#ff5555' }}
+                                    >
+                                        <Trash2 size={14} />
+                                    </button>
+                                ) : <div style={{ width: 32 }}></div>}
                             </div>
                         ))}
                     </div>
