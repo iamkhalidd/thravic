@@ -15,6 +15,7 @@ export interface Domain {
     verified: boolean;
     createdAt?: string;
     settings?: DomainSettings;
+    features?: string[];
 }
 
 export interface DomainSettings {

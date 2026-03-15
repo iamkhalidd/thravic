@@ -321,40 +321,323 @@ router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
         return res.status(404).json({ error: 'User not found' });
     }
 
+    // Generate DiceBear fallback if no avatar set
+    const avatarFallback = `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(user.name)}&backgroundColor=000000&textColor=f4f5f6`;
+
     res.json({
         id: user.id,
         email: user.email,
         name: user.name,
         subscription: user.subscription,
         preferences: user.preferences || {},
+        auth_provider: user.auth_provider || 'email',
+        avatar_url: user.avatar_url || avatarFallback,
+        company: user.company || null,
+        job_title: user.job_title || null,
+        website: user.website || null,
+        phone: user.phone || null,
+        country: user.country || null,
+        timezone: user.timezone || null,
         createdAt: user.created_at
     });
 });
 
-// PATCH /api/auth/me
+// PATCH /api/auth/me — update profile fields and/or preferences
 router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
     try {
-        const { preferences } = req.body;
+        const { preferences, name, company, job_title, website, phone, country, timezone } = req.body;
 
-        if (!preferences || typeof preferences !== 'object') {
-            return res.status(400).json({ error: 'Preferences must be an object' });
+        // Update preferences if provided
+        if (preferences && typeof preferences === 'object') {
+            await userService.updatePreferences(req.userId!, preferences);
         }
 
-        const user = await userService.updatePreferences(req.userId!, preferences);
+        // Update profile fields if any provided
+        const profileFields = { name, company, job_title, website, phone, country, timezone };
+        const hasProfileFields = Object.values(profileFields).some(v => v !== undefined);
 
+        if (hasProfileFields) {
+            await userService.updateProfile(req.userId!, profileFields);
+        }
+
+        // Return updated user
+        const user = await userService.findById(req.userId!);
         if (!user) {
             return res.status(404).json({ error: 'User not found' });
         }
 
+        const avatarFallback = `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(user.name)}&backgroundColor=000000&textColor=f4f5f6`;
+
         res.json({
             id: user.id,
-            preferences: user.preferences
+            name: user.name,
+            email: user.email,
+            avatar_url: user.avatar_url || avatarFallback,
+            company: user.company,
+            job_title: user.job_title,
+            website: user.website,
+            phone: user.phone,
+            country: user.country,
+            timezone: user.timezone,
+            preferences: user.preferences,
         });
     } catch (error) {
-        log.error('Update preferences error', error);
-        res.status(500).json({ error: 'Failed to update preferences' });
+        log.error('Update profile error', error);
+        res.status(500).json({ error: 'Failed to update profile' });
+    }
+});
+
+// POST /api/auth/avatar — upload avatar image
+router.post('/avatar', authenticate, async (req: AuthRequest, res: Response) => {
+    try {
+        // Accept base64-encoded image from JSON body
+        const { image } = req.body;
+        if (!image || typeof image !== 'string') {
+            return res.status(400).json({ error: 'Image data required' });
+        }
+
+        // Validate base64 data URL
+        const match = image.match(/^data:image\/(png|jpe?g|gif|webp);base64,(.+)$/);
+        if (!match) {
+            return res.status(400).json({ error: 'Invalid image format. Use PNG, JPEG, GIF, or WebP.' });
+        }
+
+        const ext = match[1] === 'jpeg' ? 'jpg' : match[1];
+        const buffer = Buffer.from(match[2], 'base64');
+
+        // Max 2MB
+        if (buffer.length > 2 * 1024 * 1024) {
+            return res.status(400).json({ error: 'Image must be under 2MB' });
+        }
+
+        // Save to disk
+        const fs = await import('fs/promises');
+        const path = await import('path');
+        const uploadDir = path.join(process.cwd(), 'uploads', 'avatars');
+        await fs.mkdir(uploadDir, { recursive: true });
+
+        const filename = `${req.userId}.${ext}`;
+        await fs.writeFile(path.join(uploadDir, filename), buffer);
+
+        // Store relative URL
+        const avatarUrl = `/uploads/avatars/${filename}`;
+        await userService.updateAvatar(req.userId!, avatarUrl);
+
+        res.json({ avatar_url: avatarUrl });
+    } catch (error) {
+        log.error('Avatar upload error', error);
+        res.status(500).json({ error: 'Failed to upload avatar' });
+    }
+});
+
+// DELETE /api/auth/avatar — remove custom avatar
+router.delete('/avatar', authenticate, async (req: AuthRequest, res: Response) => {
+    try {
+        await userService.updateAvatar(req.userId!, null);
+        const user = await userService.findById(req.userId!);
+        const fallback = `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(user?.name || 'U')}&backgroundColor=000000&textColor=f4f5f6`;
+        res.json({ avatar_url: fallback });
+    } catch (error) {
+        log.error('Avatar delete error', error);
+        res.status(500).json({ error: 'Failed to remove avatar' });
+    }
+});
+
+// ── OAuth: GitHub ────────────────────────────────────────────────────────────
+
+const GITHUB_CLIENT_ID = process.env.GITHUB_CLIENT_ID || '';
+const GITHUB_CLIENT_SECRET = process.env.GITHUB_CLIENT_SECRET || '';
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
+const API_URL = process.env.API_URL || process.env.RENDER_EXTERNAL_URL || 'http://localhost:3001';
+
+// GET /api/auth/github — redirect to GitHub authorization
+router.get('/github', (req: Request, res: Response) => {
+    if (!GITHUB_CLIENT_ID) {
+        return res.status(503).json({ error: 'GitHub OAuth not configured' });
+    }
+
+    const redirectUri = `${API_URL}/api/auth/github/callback`;
+    const scope = 'read:user user:email';
+    const url = `https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scope)}`;
+
+    res.redirect(url);
+});
+
+// GET /api/auth/github/callback — exchange code for tokens
+router.get('/github/callback', async (req: Request, res: Response) => {
+    try {
+        const { code } = req.query;
+        if (!code) return res.redirect(`${FRONTEND_URL}/login?error=missing_code`);
+
+        // Exchange code for access token
+        const tokenRes = await fetch('https://github.com/login/oauth/access_token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+            body: JSON.stringify({
+                client_id: GITHUB_CLIENT_ID,
+                client_secret: GITHUB_CLIENT_SECRET,
+                code,
+            }),
+        });
+        const tokenData = await tokenRes.json() as any;
+
+        if (!tokenData.access_token) {
+            log.error('GitHub OAuth token exchange failed', tokenData);
+            return res.redirect(`${FRONTEND_URL}/login?error=oauth_failed`);
+        }
+
+        // Fetch user profile
+        const [profileRes, emailsRes] = await Promise.all([
+            fetch('https://api.github.com/user', {
+                headers: { Authorization: `Bearer ${tokenData.access_token}`, Accept: 'application/json' },
+            }),
+            fetch('https://api.github.com/user/emails', {
+                headers: { Authorization: `Bearer ${tokenData.access_token}`, Accept: 'application/json' },
+            }),
+        ]);
+
+        const profile = await profileRes.json() as any;
+        const emails = await emailsRes.json() as any[];
+
+        const primaryEmail = emails?.find((e: any) => e.primary && e.verified)?.email
+            || emails?.[0]?.email
+            || profile.email;
+
+        if (!primaryEmail) {
+            return res.redirect(`${FRONTEND_URL}/login?error=no_email`);
+        }
+
+        const githubId = String(profile.id);
+        const name = profile.name || profile.login || 'GitHub User';
+        const avatarUrl = profile.avatar_url || null;
+
+        // Find or create user
+        let user = await userService.findByOAuthId('github', githubId);
+
+        if (!user) {
+            // Check if email already exists (link accounts)
+            const existingUser = await userService.findByEmail(primaryEmail);
+            if (existingUser) {
+                user = await userService.linkOAuth(existingUser.id, 'github', githubId, avatarUrl);
+            } else {
+                user = await userService.createOAuthUser(primaryEmail, name, 'github', githubId, avatarUrl);
+                // Send welcome email (non-blocking)
+                sendWelcomeEmail(primaryEmail, name).catch(err =>
+                    log.warn('Welcome email failed', err)
+                );
+            }
+        }
+
+        if (!user) {
+            return res.redirect(`${FRONTEND_URL}/login?error=account_creation_failed`);
+        }
+
+        // Generate JWT tokens
+        const tokens = await generateTokens(user.id, user.email);
+
+        // Redirect to frontend callback page with tokens
+        const params = new URLSearchParams({
+            accessToken: tokens.accessToken,
+            refreshToken: tokens.refreshToken,
+        });
+
+        res.redirect(`${FRONTEND_URL}/auth/callback?${params.toString()}`);
+    } catch (error) {
+        log.error('GitHub OAuth callback error', error);
+        res.redirect(`${FRONTEND_URL}/login?error=oauth_error`);
+    }
+});
+
+// ── OAuth: Google ────────────────────────────────────────────────────────────
+
+// GET /api/auth/google — redirect to Google authorization
+router.get('/google', (req: Request, res: Response) => {
+    if (!GOOGLE_CLIENT_ID) {
+        return res.status(503).json({ error: 'Google OAuth not configured' });
+    }
+
+    const redirectUri = `${API_URL}/api/auth/google/callback`;
+    const scope = 'openid email profile';
+    const url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GOOGLE_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent(scope)}&access_type=offline&prompt=consent`;
+
+    res.redirect(url);
+});
+
+// GET /api/auth/google/callback — exchange code for tokens
+router.get('/google/callback', async (req: Request, res: Response) => {
+    try {
+        const { code } = req.query;
+        if (!code) return res.redirect(`${FRONTEND_URL}/login?error=missing_code`);
+
+        const redirectUri = `${API_URL}/api/auth/google/callback`;
+
+        // Exchange code for access token
+        const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+                code: code as string,
+                client_id: GOOGLE_CLIENT_ID,
+                client_secret: GOOGLE_CLIENT_SECRET,
+                redirect_uri: redirectUri,
+                grant_type: 'authorization_code',
+            }).toString(),
+        });
+        const tokenData = await tokenRes.json() as any;
+
+        if (!tokenData.access_token) {
+            log.error('Google OAuth token exchange failed', tokenData);
+            return res.redirect(`${FRONTEND_URL}/login?error=oauth_failed`);
+        }
+
+        // Fetch user profile
+        const profileRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+            headers: { Authorization: `Bearer ${tokenData.access_token}` },
+        });
+        const profile = await profileRes.json() as any;
+
+        if (!profile.email) {
+            return res.redirect(`${FRONTEND_URL}/login?error=no_email`);
+        }
+
+        const googleId = String(profile.id);
+        const name = profile.name || 'Google User';
+        const avatarUrl = profile.picture || null;
+
+        // Find or create user
+        let user = await userService.findByOAuthId('google', googleId);
+
+        if (!user) {
+            const existingUser = await userService.findByEmail(profile.email);
+            if (existingUser) {
+                user = await userService.linkOAuth(existingUser.id, 'google', googleId, avatarUrl);
+            } else {
+                user = await userService.createOAuthUser(profile.email, name, 'google', googleId, avatarUrl);
+                sendWelcomeEmail(profile.email, name).catch(err =>
+                    log.warn('Welcome email failed', err)
+                );
+            }
+        }
+
+        if (!user) {
+            return res.redirect(`${FRONTEND_URL}/login?error=account_creation_failed`);
+        }
+
+        const tokens = await generateTokens(user.id, user.email);
+        const params = new URLSearchParams({
+            accessToken: tokens.accessToken,
+            refreshToken: tokens.refreshToken,
+        });
+
+        res.redirect(`${FRONTEND_URL}/auth/callback?${params.toString()}`);
+    } catch (error) {
+        log.error('Google OAuth callback error', error);
+        res.redirect(`${FRONTEND_URL}/login?error=oauth_error`);
     }
 });
 
 
 export default router;
+

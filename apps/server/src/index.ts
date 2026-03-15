@@ -220,6 +220,10 @@ app.use('/api/admin', adminLimiter);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
+// Serve uploaded files (avatars, etc.)
+import path from 'path';
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+
 // Request logging
 app.use(requestLogger);
 

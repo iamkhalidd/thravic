@@ -145,7 +145,44 @@ export const auth = {
             email: string;
             name: string;
             subscription: string;
+            auth_provider: string;
+            avatar_url: string;
+            company: string | null;
+            job_title: string | null;
+            website: string | null;
+            phone: string | null;
+            country: string | null;
+            timezone: string | null;
         }>('/api/auth/me');
+    },
+
+    async updateProfile(data: {
+        name?: string;
+        company?: string;
+        job_title?: string;
+        website?: string;
+        phone?: string;
+        country?: string;
+        timezone?: string;
+        preferences?: Record<string, any>;
+    }) {
+        return apiRequest('/api/auth/me', {
+            method: 'PATCH',
+            body: JSON.stringify(data)
+        });
+    },
+
+    async uploadAvatar(base64Image: string) {
+        return apiRequest<{ avatar_url: string }>('/api/auth/avatar', {
+            method: 'POST',
+            body: JSON.stringify({ image: base64Image })
+        });
+    },
+
+    async removeAvatar() {
+        return apiRequest<{ avatar_url: string }>('/api/auth/avatar', {
+            method: 'DELETE'
+        });
     },
 
     isAuthenticated() {

@@ -7,6 +7,7 @@ import { authenticate, AuthRequest } from '../middleware/auth';
 import * as domainService from '../services/domainService';
 import { createDomainSchema, updateSettingsSchema } from '../validators/domains';
 import { createLogger } from '../config/logger';
+import { PLAN_FEATURES, PlanName } from '../config/plans';
 
 const log = createLogger('Domains');
 
@@ -24,14 +25,18 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
         const userDomains = await domainService.listByUser(req.userId!);
 
         res.json({
-            domains: userDomains.map(d => ({
-                id: d.id,
-                domain: d.domain,
-                name: d.name,
-                trackingId: d.tracking_id,
-                verified: d.verified,
-                createdAt: d.created_at
-            }))
+            domains: userDomains.map(d => {
+                const planKey = (d.owner_plan || 'free').toLowerCase() as PlanName;
+                return {
+                    id: d.id,
+                    domain: d.domain,
+                    name: d.name,
+                    trackingId: d.tracking_id,
+                    verified: d.verified,
+                    createdAt: d.created_at,
+                    features: PLAN_FEATURES[planKey] || PLAN_FEATURES['free']
+                };
+            })
         });
     } catch (error) {
         log.error('List domains error', error);

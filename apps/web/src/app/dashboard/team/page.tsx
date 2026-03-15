@@ -61,7 +61,7 @@ export default function TeamPage() {
     }, [selectedDomainId]);
 
     useEffect(() => {
-        if (hasFeature('team') && selectedDomainId) {
+        if (hasFeature('team', selectedDomain?.features || undefined) && selectedDomainId) {
             loadMembers();
         } else {
             setLoading(false);
@@ -108,7 +108,7 @@ export default function TeamPage() {
     };
 
     // Gate: team feature requires Pro+
-    if (!subLoading && !hasFeature('team')) {
+    if (!subLoading && !hasFeature('team', selectedDomain?.features || undefined)) {
         return (
             <div className="page-container">
                 <div className="page-header">

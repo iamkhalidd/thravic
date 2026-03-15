@@ -44,13 +44,29 @@ export const requireFeature = (feature: PlanFeature) =>
                 return;
             }
 
-            // Fetch the user's current plan from DB
+            // Determine whose subscription to check.
+            // If domainId is present (e.g., /api/heatmaps/:domainId), check the DOMAIN OWNER's subscription.
+            // This ensures invited team members can access pro features of the domains they are invited to.
+            const domainId = req.params?.domainId || req.query?.domainId;
+            let targetUserId = userId;
+
+            if (domainId && typeof domainId === 'string') {
+                const domainRow = await queryOne<{ user_id: string }>(
+                    'SELECT user_id FROM domains WHERE id = $1',
+                    [domainId]
+                );
+                if (domainRow) {
+                    targetUserId = domainRow.user_id;
+                }
+            }
+
+            // Fetch the target user's current plan from DB
             const row = await queryOne<{ plan: string }>(
                 `SELECT COALESCE(
                     (SELECT plan FROM subscriptions WHERE user_id = $1 AND status = 'active' ORDER BY created_at DESC LIMIT 1),
                     'free'
                 ) AS plan`,
-                [userId]
+                [targetUserId]
             );
 
             const rawPlan = row?.plan ?? 'free';

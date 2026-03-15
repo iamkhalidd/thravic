@@ -7,15 +7,31 @@
 CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     email VARCHAR(255) UNIQUE NOT NULL,
-    password VARCHAR(255) NOT NULL,
+    password VARCHAR(255),
     name VARCHAR(255) NOT NULL,
     subscription VARCHAR(50) DEFAULT 'free' CHECK (subscription IN ('free', 'pro', 'agency')),
     paystack_customer_code VARCHAR(255),
     paystack_subscription_code VARCHAR(255),
     preferences JSONB DEFAULT '{}',
+    -- OAuth fields
+    auth_provider VARCHAR(20) DEFAULT 'email',
+    auth_provider_id VARCHAR(255),
+    -- Profile fields
+    avatar_url TEXT,
+    company VARCHAR(255),
+    job_title VARCHAR(255),
+    website VARCHAR(500),
+    phone VARCHAR(50),
+    country VARCHAR(100),
+    timezone VARCHAR(100),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Prevent duplicate OAuth accounts per provider
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_oauth
+  ON users (auth_provider, auth_provider_id)
+  WHERE auth_provider != 'email';
 
 -- ═══════════════════════════════════════════════
 -- 2. Domains (Multi-domain support)
