@@ -120,31 +120,31 @@ function layout(bodyHtml: string): string {
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Thravic</title>
 </head>
-<body style="margin:0;padding:0;background:#0f0f1a;font-family:'Segoe UI',Arial,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0f0f1a;padding:40px 0;">
+<body style="margin:0;padding:0;background:#000000;font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#000000;padding:40px 0;">
     <tr>
       <td align="center">
-        <table width="560" cellpadding="0" cellspacing="0" style="background:#1a1a2e;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.4);">
+        <table width="560" cellpadding="0" cellspacing="0" style="background:#08090a;border:1px solid rgba(255,255,255,0.08);border-radius:8px;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,0.8);">
           <!-- Header -->
           <tr>
-            <td style="background:linear-gradient(135deg,#6366f1,#8b5cf6);padding:28px 36px;">
-              <h1 style="margin:0;color:#fff;font-size:22px;font-weight:700;letter-spacing:-0.5px;">
-                📊 Thravic
+            <td style="background:#08090a;padding:24px 32px;border-bottom:1px solid rgba(255,255,255,0.08);">
+              <h1 style="margin:0;color:#f4f5f6;font-size:20px;font-weight:600;letter-spacing:-0.5px;">
+                <span style="color:#ffffff;">📊 Thravic</span>
               </h1>
             </td>
           </tr>
           <!-- Body -->
           <tr>
-            <td style="padding:32px 36px;color:#e2e8f0;">
+            <td style="padding:32px;color:#f4f5f6;">
               ${bodyHtml}
             </td>
           </tr>
           <!-- Footer -->
           <tr>
-            <td style="padding:20px 36px;border-top:1px solid #2a2a3e;text-align:center;">
-              <p style="margin:0;font-size:12px;color:#6b7280;">
+            <td style="padding:20px 32px;border-top:1px solid rgba(255,255,255,0.08);text-align:center;">
+              <p style="margin:0;font-size:12px;color:#575c66;">
                 Thravic Analytics · You're receiving this because you have an account with us.<br/>
-                If you didn't perform this action, please <a href="mailto:support@thravic.app" style="color:#8b5cf6;">contact support</a> immediately.
+                If you didn't perform this action, please <a href="mailto:support@thravic.app" style="color:#f4f5f6;">contact support</a> immediately.
               </p>
             </td>
           </tr>
@@ -157,13 +157,13 @@ function layout(bodyHtml: string): string {
 }
 
 function btn(text: string, url: string): string {
-    return `<a href="${url}" style="display:inline-block;margin-top:20px;padding:12px 28px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;text-decoration:none;border-radius:8px;font-weight:600;font-size:14px;">${text}</a>`;
+    return `<a href="${url}" style="display:inline-block;margin-top:20px;padding:12px 24px;background:#f4f5f6;color:#000000;text-decoration:none;border-radius:6px;font-weight:500;font-size:14px;box-shadow:0 2px 4px rgba(0,0,0,0.2);">${text}</a>`;
 }
 
 function infoRow(label: string, value: string): string {
     return `<tr>
-      <td style="padding:8px 12px;color:#9ca3af;font-size:13px;width:130px;">${label}</td>
-      <td style="padding:8px 12px;color:#e2e8f0;font-size:13px;">${value}</td>
+      <td style="padding:10px 12px;color:#8a8f98;font-size:13px;width:130px;border-bottom:1px solid rgba(255,255,255,0.04);">${label}</td>
+      <td style="padding:10px 12px;color:#f4f5f6;font-size:13px;border-bottom:1px solid rgba(255,255,255,0.04);">${value}</td>
     </tr>`;
 }
 
