@@ -150,6 +150,20 @@ export const auth = {
 
     isAuthenticated() {
         return !!getTokens().accessToken;
+    },
+
+    async forgotPassword(email: string) {
+        return apiRequest<{ message: string }>('/api/auth/forgot-password', {
+            method: 'POST',
+            body: JSON.stringify({ email })
+        });
+    },
+
+    async resetPassword(token: string, password: string) {
+        return apiRequest<{ message: string }>('/api/auth/reset-password', {
+            method: 'POST',
+            body: JSON.stringify({ token, password })
+        });
     }
 };
 
