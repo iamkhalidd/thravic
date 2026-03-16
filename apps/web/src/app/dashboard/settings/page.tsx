@@ -174,7 +174,7 @@ function SettingsPageInner() {
                 setUpgradingPlan(null);
             }
         } catch (err: any) {
-            setUpgradeError(err?.message || 'Checkout failed. Please try again.');
+            setUpgradeError('Checkout failed. Please check your network or payment details and try again.');
             setUpgradingPlan(null);
         }
     };

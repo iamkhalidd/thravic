@@ -23,7 +23,7 @@ async function teamApi<T>(path: string, options?: RequestInit): Promise<{ data?:
         if (!res.ok) return { error: json.error || 'Request failed' };
         return { data: json };
     } catch (err: any) {
-        return { error: err?.message || 'Network error' };
+        return { error: 'Service temporarily unavailable. Please try again.' };
     }
 }
 
@@ -87,7 +87,7 @@ export default function TeamPage() {
                 loadMembers();
             }
         } catch (err: any) {
-            setMessage({ type: 'error', text: err?.message || 'Failed to invite member' });
+            setMessage({ type: 'error', text: 'Failed to invite member. Please ensure the email is correct and try again.' });
         } finally {
             setInviting(false);
         }
@@ -101,7 +101,7 @@ export default function TeamPage() {
             setMembers(prev => prev.filter(m => m.id !== memberId));
             setMessage({ type: 'success', text: 'Member removed' });
         } catch (err: any) {
-            setMessage({ type: 'error', text: err?.message || 'Failed to remove member' });
+            setMessage({ type: 'error', text: 'Failed to remove member. Please try again.' });
         } finally {
             setRemovingId(null);
         }
