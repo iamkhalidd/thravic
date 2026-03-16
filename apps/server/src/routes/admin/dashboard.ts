@@ -240,7 +240,7 @@ router.get('/actions', adminAuth, async (req: AuthRequest, res: Response) => {
                 type: 'recent_upgrades',
                 severity: 'success',
                 title: `${upgraded} new subscription${upgraded > 1 ? 's' : ''} this week`,
-                detail: `+$${newMrr.toLocaleString()} new MRR in the last 7 days.`,
+                detail: `+₦${newMrr.toLocaleString()} new MRR in the last 7 days.`,
                 count: upgraded,
                 link: '/subscriptions',
             });

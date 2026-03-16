@@ -84,7 +84,7 @@ export default function AdminDashboard() {
         { label: 'Total Users', value: stats.stats.totalUsers.toLocaleString(), icon: Users, color: 'var(--color-text-primary)', bg: 'rgba(255,255,255,0.05)' },
         { label: 'Active Domains', value: stats.stats.totalDomains.toLocaleString(), icon: Globe, color: 'var(--color-text-secondary)', bg: 'rgba(255,255,255,0.05)' },
         { label: 'Events Today', value: stats.stats.eventsToday.toLocaleString(), icon: Activity, color: 'var(--color-text-primary)', bg: 'rgba(255,255,255,0.05)' },
-        { label: 'MRR', value: `$${stats.stats.mrr.toLocaleString()}`, icon: DollarSign, color: 'var(--color-text-secondary)', bg: 'rgba(255,255,255,0.05)' },
+        { label: 'MRR', value: `₦${stats.stats.mrr.toLocaleString()}`, icon: DollarSign, color: 'var(--color-text-secondary)', bg: 'rgba(255,255,255,0.05)' },
         { label: 'Paid Subscriptions', value: stats.stats.paidSubscriptions.toLocaleString(), icon: TrendingUp, color: 'var(--color-text-primary)', bg: 'rgba(255,255,255,0.05)' },
     ] : [];
 

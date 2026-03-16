@@ -78,7 +78,7 @@ export default function SubscriptionsPage() {
                         <DollarSign size={22} color="#ffaa00" />
                     </div>
                     <div>
-                        <div className="stat-value">${totalMRR.toLocaleString()}</div>
+                        <div className="stat-value">₦{totalMRR.toLocaleString()}</div>
                         <div className="stat-label">Monthly Recurring Revenue</div>
                     </div>
                 </div>
