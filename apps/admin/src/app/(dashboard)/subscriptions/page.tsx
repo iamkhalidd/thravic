@@ -183,9 +183,20 @@ export default function SubscriptionsPage() {
                                 <label style={{ display: 'block', fontSize: '13px', color: 'var(--color-text-secondary)', marginBottom: '4px' }}>Domains Limit</label>
                                 <input className="input" type="number" value={editForm.domains_limit} onChange={e => setEditForm(f => ({ ...f, domains_limit: parseInt(e.target.value) }))} />
                             </div>
-                            <div style={{ display: 'flex', gap: 'var(--space-sm)', justifyContent: 'flex-end', marginTop: 'var(--space-md)' }}>
-                                <button className="btn btn-ghost" onClick={() => setEditSub(null)}>Cancel</button>
-                                <button className="btn btn-primary" onClick={handleSave}>Save Changes</button>
+                            <div style={{ display: 'flex', gap: 'var(--space-sm)', justifyContent: 'space-between', marginTop: 'var(--space-md)' }}>
+                                <button className="btn btn-danger btn-sm" onClick={async () => {
+                                    if (confirm('Cancel this subscription at Paystack immediately?')) {
+                                        try {
+                                            await api.post(`/api/admin/subscriptions/${editSub.id}/cancel`, {});
+                                            setEditSub(null);
+                                            loadData();
+                                        } catch (err: any) { alert(err.message); }
+                                    }
+                                }}>Cancel Paystack Sub</button>
+                                <div style={{ display: 'flex', gap: 'var(--space-sm)' }}>
+                                    <button className="btn btn-ghost" onClick={() => setEditSub(null)}>Close</button>
+                                    <button className="btn btn-primary" onClick={handleSave}>Save Changes</button>
+                                </div>
                             </div>
                         </div>
                     </div>

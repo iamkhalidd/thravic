@@ -6,7 +6,7 @@ import { query, queryOne } from '../../db';
 import { logAction } from '../../services/auditService';
 import { createLogger } from '../../config/logger';
 import { updateUserSchema, adminResetPasswordSchema } from '../../validators/admin';
-import { sendAccountSuspendedEmail, sendAccountReactivatedEmail } from '../../services/emailService';
+import { sendAccountSuspendedEmail, sendAccountReactivatedEmail, sendEmail } from '../../services/emailService';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
@@ -214,6 +214,44 @@ router.post('/:id/suspend', adminAuth, async (req: AuthRequest, res: Response) =
     } catch (error) {
         log.error('User suspend error', error);
         res.status(500).json({ error: 'Failed to toggle user status' });
+    }
+});
+
+// POST /api/admin/users/:id/email — direct email from dashboard
+router.post('/:id/email', adminAuth, async (req: AuthRequest, res: Response) => {
+    try {
+        const { subject, message } = req.body;
+        if (!subject || !message) {
+            return res.status(400).json({ error: 'Subject and message are required' });
+        }
+
+        const user = await queryOne<{ email: string; name: string }>(
+            'SELECT email, name FROM users WHERE id = $1',
+            [req.params.id]
+        );
+
+        if (!user) return res.status(404).json({ error: 'User not found' });
+
+        await sendEmail({
+            to: user.email,
+            subject: subject,
+            text: message,
+            html: message.replace(/\n/g, '<br>')
+        });
+
+        await logAction({
+            adminId: req.userId!,
+            action: 'user.email_sent',
+            targetType: 'user',
+            targetId: req.params.id,
+            details: { subject },
+            ipAddress: req.ip
+        });
+
+        res.json({ message: 'Email sent successfully' });
+    } catch (error) {
+        log.error('Direct email error', error);
+        res.status(500).json({ error: 'Failed to send direct email' });
     }
 });
 
