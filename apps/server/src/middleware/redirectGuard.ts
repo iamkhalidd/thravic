@@ -16,6 +16,10 @@ function buildAllowedHosts(): Set<string> {
     // Always allow redirects to the API's own origin
     hosts.add(''); // relative paths (no host)
 
+    // Explicitly allow OAuth provider endpoints
+    hosts.add('github.com');
+    hosts.add('accounts.google.com');
+
     const corsOrigins = (process.env.CORS_ORIGIN || 'http://localhost:3000,http://localhost:3002')
         .split(',')
         .map(s => s.trim())
