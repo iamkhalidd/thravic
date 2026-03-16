@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
-import { Search, ChevronLeft, ChevronRight, Edit, Trash2, Ban, KeyRound, LogIn } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, Edit, Trash2, Ban, KeyRound, LogIn, Download, Mail } from 'lucide-react';
 
 interface User {
     id: string;
@@ -24,6 +24,9 @@ export default function UsersPage() {
     const [loading, setLoading] = useState(true);
     const [editUser, setEditUser] = useState<User | null>(null);
     const [editForm, setEditForm] = useState({ name: '', email: '', subscription: '', role: '' });
+    const [emailUser, setEmailUser] = useState<User | null>(null);
+    const [emailForm, setEmailForm] = useState({ subject: '', message: '' });
+    const [emailSending, setEmailSending] = useState(false);
     const [isSuperAdmin, setIsSuperAdmin] = useState(false);
     const limit = 25;
 
@@ -82,12 +85,41 @@ export default function UsersPage() {
     };
 
     const handleDelete = async (user: User) => {
-        if (!confirm(`Delete user ${user.email}? This cannot be undone.`)) return;
+        if (!confirm(`Delete user ${user.email} and all their data? This is irreversible.`)) return;
         try {
             await api.delete(`/api/admin/users/${user.id}`);
             loadUsers();
+        } catch (err: any) { alert(err.message); }
+    };
+
+    const handleSendEmail = async () => {
+        if (!emailUser || !emailForm.subject.trim() || !emailForm.message.trim()) return;
+        setEmailSending(true);
+        try {
+            await api.post(`/api/admin/users/${emailUser.id}/email`, emailForm);
+            setEmailUser(null);
+            setEmailForm({ subject: '', message: '' });
+            alert('Email sent successfully');
         } catch (err: any) {
-            alert(err.message);
+            alert('Failed to send email: ' + err.message);
+        } finally {
+            setEmailSending(false);
+        }
+    };
+
+    const handleExport = async (user: User) => {
+        try {
+            // Note: api.post returns parsed JSON data natively based on our api hook implementation
+            const data = await api.post(`/api/admin/export/user/${user.id}`, {});
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `export_user_${user.id}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        } catch (err: any) {
+            alert('Export failed: ' + err.message);
         }
     };
 
@@ -182,6 +214,12 @@ export default function UsersPage() {
                                                     <LogIn size={14} />
                                                 </button>
                                             )}
+                                            <button className="btn btn-primary btn-sm" onClick={() => { setEmailUser(user); setEmailForm({ subject: '', message: '' }); }} title="Email User">
+                                                <Mail size={14} />
+                                            </button>
+                                            <button className="btn btn-ghost btn-sm" onClick={() => handleExport(user)} title="Export GDPR Data">
+                                                <Download size={14} />
+                                            </button>
                                             <button className="btn btn-danger btn-sm" onClick={() => handleDelete(user)} title="Delete">
                                                 <Trash2 size={14} />
                                             </button>
@@ -240,6 +278,31 @@ export default function UsersPage() {
                             <div style={{ display: 'flex', gap: 'var(--space-sm)', justifyContent: 'flex-end', marginTop: 'var(--space-md)' }}>
                                 <button className="btn btn-ghost" onClick={() => setEditUser(null)}>Cancel</button>
                                 <button className="btn btn-primary" onClick={handleSave}>Save Changes</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Email modal */}
+            {emailUser && (
+                <div className="modal-overlay" onClick={() => !emailSending && setEmailUser(null)}>
+                    <div className="modal" onClick={e => e.stopPropagation()}>
+                        <h3 className="modal-title">Email User: {emailUser.email}</h3>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '13px', color: 'var(--color-text-secondary)', marginBottom: '4px' }}>Subject</label>
+                                <input className="input" placeholder="e.g. Action Required on your Account" value={emailForm.subject} onChange={e => setEmailForm(f => ({ ...f, subject: e.target.value }))} disabled={emailSending} />
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '13px', color: 'var(--color-text-secondary)', marginBottom: '4px' }}>Message body</label>
+                                <textarea className="input" rows={6} placeholder="Type your message here..." value={emailForm.message} onChange={e => setEmailForm(f => ({ ...f, message: e.target.value }))} style={{ resize: 'vertical', fontFamily: 'inherit' }} disabled={emailSending} />
+                            </div>
+                            <div style={{ display: 'flex', gap: 'var(--space-sm)', justifyContent: 'flex-end', marginTop: 'var(--space-md)' }}>
+                                <button className="btn btn-ghost" onClick={() => setEmailUser(null)} disabled={emailSending}>Cancel</button>
+                                <button className="btn btn-primary" onClick={handleSendEmail} disabled={emailSending}>
+                                    {emailSending ? 'Sending...' : 'Send Email'}
+                                </button>
                             </div>
                         </div>
                     </div>

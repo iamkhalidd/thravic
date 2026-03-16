@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
-import { Save, Megaphone, X } from 'lucide-react';
+import { Save, Megaphone, X, Shield } from 'lucide-react';
 
 interface Setting {
     key: string;
@@ -33,6 +33,10 @@ export default function SettingsPage() {
     const [announcementActive, setAnnouncementActive] = useState(false);
     const [announcementSaving, setAnnouncementSaving] = useState(false);
 
+    // Security Blocklist state
+    const [blockedIps, setBlockedIps] = useState('');
+    const [blockedRefs, setBlockedRefs] = useState('');
+
     const loadSettings = async () => {
         setLoading(true);
         try {
@@ -61,6 +65,13 @@ export default function SettingsPage() {
                 setAnnouncementMsg(typeof msg === 'string' ? msg : '');
                 setAnnouncementSeverity(sev as any);
                 setAnnouncementActive(active === true || active === 'true');
+
+                // Restore security state
+                const bIps = list.find(s => s.key === 'security.blocked_ips')?.value;
+                if (bIps && Array.isArray(bIps.ips)) setBlockedIps(bIps.ips.join(', '));
+
+                const bRefs = list.find(s => s.key === 'security.blocked_referrers')?.value;
+                if (bRefs && Array.isArray(bRefs.referrers)) setBlockedRefs(bRefs.referrers.join(', '));
             }
         } catch (err) { console.error(err); }
         finally { setLoading(false); }
@@ -105,11 +116,31 @@ export default function SettingsPage() {
     const clearAnnouncement = async () => {
         setAnnouncementSaving(true);
         try {
-            await api.put('/api/admin/settings/announcement.enabled', { value: false });
-            setAnnouncementMsg('');
+            await Promise.all([
+                api.put('/api/admin/settings/announcement.enabled', { value: false }),
+                api.put('/api/admin/settings/announcement.message', { value: '' }),
+            ]);
             setAnnouncementActive(false);
+            setAnnouncementMsg('');
         } catch (err: any) { alert(err.message); }
         finally { setAnnouncementSaving(false); }
+    };
+
+    const saveSecurity = async () => {
+        setSaving('security');
+        try {
+            const ipsArray = blockedIps.split(',').map(s => s.trim()).filter(Boolean);
+            const refsArray = blockedRefs.split(',').map(s => s.trim()).filter(Boolean);
+            
+            await api.put('/api/admin/settings/security.blocked_ips', { 
+                value: { ips: ipsArray }
+            });
+            await api.put('/api/admin/settings/security.blocked_referrers', {
+                value: { referrers: refsArray }
+            });
+            alert('Security rules updated successfully');
+        } catch (e: any) { alert(e.message); }
+        finally { setSaving(null); }
     };
 
     if (loading) return <div className="loading"><div className="spinner" /></div>;
@@ -239,6 +270,51 @@ export default function SettingsPage() {
                     })}
                 </div>
             )}
+
+            {/* Security Blocklist */}
+            <div className="card" style={{ marginTop: 'var(--space-xl)' }}>
+                <div className="card-title" style={{ marginBottom: 'var(--space-md)', color: 'var(--color-danger)' }}>
+                    <Shield size={18} style={{ display: 'inline', marginRight: '8px', verticalAlign: 'text-bottom' }} /> 
+                    Global Security Blocklist
+                </div>
+                <p style={{ fontSize: '14px', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-lg)' }}>
+                    Immediately drop incoming tracking events from specific IPs or referral domains globally across all user domains.
+                    Comma-separate multiple entries. Use carefully.
+                </p>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
+                    <div>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '4px' }}>Blocked Payload IPs</label>
+                        <textarea 
+                            className="input" 
+                            rows={3} 
+                            placeholder="e.g. 192.168.1.1, 10.0.0.5" 
+                            value={blockedIps} 
+                            onChange={e => setBlockedIps(e.target.value)} 
+                            style={{ resize: 'vertical', fontFamily: 'monospace' }} 
+                            disabled={saving === 'security'}
+                        />
+                    </div>
+                    <div>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '4px' }}>Blocked Referrer Domains</label>
+                        <textarea 
+                            className="input" 
+                            rows={3} 
+                            placeholder="e.g. spam-bot.com, fake-traffic.xyz" 
+                            value={blockedRefs} 
+                            onChange={e => setBlockedRefs(e.target.value)} 
+                            style={{ resize: 'vertical', fontFamily: 'monospace' }} 
+                            disabled={saving === 'security'}
+                        />
+                    </div>
+                </div>
+
+                <div style={{ marginTop: 'var(--space-lg)', display: 'flex', justifyContent: 'flex-end' }}>
+                    <button className="btn btn-primary" onClick={saveSecurity} disabled={saving === 'security'}>
+                        {saving === 'security' ? 'Saving...' : 'Save Security Rules'}
+                    </button>
+                </div>
+            </div>
         </div>
     );
 }

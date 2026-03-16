@@ -10,6 +10,7 @@ import { eventSchema, batchSchema } from '../validators/collect';
 import { triggerWebhooks } from '../services/webhookService';
 import { createLogger } from '../config/logger';
 import redisClient from '../db/redis';
+import { blocklistGate } from '../middleware/blocklistGate';
 
 const log = createLogger('Collect');
 
@@ -36,6 +37,8 @@ const openCors = (req: Request, res: Response, next: NextFunction): void => {
 // Apply open CORS to all collect sub-routes
 router.use(openCors);
 
+// Apply Security Blocklist
+router.use(blocklistGate);
 
 // ── POST /api/collect/:trackingId ───────────
 router.post('/:trackingId', async (req: Request, res: Response) => {

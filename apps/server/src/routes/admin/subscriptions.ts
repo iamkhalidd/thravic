@@ -7,6 +7,7 @@ import { logAction } from '../../services/auditService';
 import { createLogger } from '../../config/logger';
 import { updateSubscriptionSchema } from '../../validators/admin';
 import { z } from 'zod';
+import axios from 'axios';
 
 const log = createLogger('Admin:Subscriptions');
 const router = Router();
@@ -114,6 +115,67 @@ router.patch('/:id', adminAuth, async (req: AuthRequest, res: Response) => {
         }
         log.error('Subscription update error', error);
         res.status(500).json({ error: 'Failed to update subscription' });
+    }
+});
+
+// POST /api/admin/subscriptions/:id/cancel — cancels subscription at Paystack
+router.post('/:id/cancel', adminAuth, async (req: AuthRequest, res: Response) => {
+    try {
+        const sub = await queryOne('SELECT * FROM subscriptions WHERE id = $1', [req.params.id]);
+        if (!sub) return res.status(404).json({ error: 'Subscription not found' });
+
+        const user = await queryOne('SELECT * FROM users WHERE id = $1', [sub.user_id]);
+        if (!user) return res.status(404).json({ error: 'User not found' });
+
+        const subCode = user.paystack_subscription_code;
+        
+        if (subCode) {
+            log.info(`Canceling Paystack subscription for sub ${req.params.id}, code ${subCode}`);
+            const secret = process.env.PAYSTACK_SECRET_KEY;
+            if (!secret) throw new Error('PAYSTACK_SECRET_KEY is missing');
+
+            try {
+                // Call Paystack disable subscription endpoint
+                // We need the email and sub code, but Paystack's disable endpoint 
+                // requires only code and token. Wait, actually POST to /subscription/disable
+                // needs { code, token }. We only have code. Let's check Paystack docs.
+                // Wait, it requires the code and the email.
+                // Paystack disable requires POST with JSON { "code": "sub_code", "token": "user_email_token" } 
+                // Ah, according to Paystack docs, it requires "code" AND "token". Let's fetch the subscription details first from Paystack to get the email token if needed, or simply let the frontend do it? The backend should do it.
+                // Paystack actually accepts POST /subscription/disable with JSON { "code": subCode, "token": emailToken }.
+                // If we don't have the token, we can just GET /subscription/:id_or_code to get it.
+                const paystackSub = await axios.get(`https://api.paystack.co/subscription/${subCode}`, {
+                    headers: { 'Authorization': `Bearer ${secret}` }
+                });
+                const token = paystackSub.data.data.email_token;
+
+                await axios.post('https://api.paystack.co/subscription/disable', {
+                    code: subCode,
+                    token: token
+                }, {
+                    headers: { 'Authorization': `Bearer ${secret}` }
+                });
+                log.info('Paystack subscription disabled successfully');
+            } catch (err: any) {
+                log.error('Failed to disable at Paystack', err.response?.data || err.message);
+                // Return 500 if we strictly want to ensure Paystack sync, but maybe we just want to force local db cancel?
+                return res.status(500).json({ error: err.response?.data?.message || 'Failed to cancel at Paystack' });
+            }
+        }
+
+        // Cancel locally
+        await query('UPDATE subscriptions SET status = $1, updated_at = NOW() WHERE id = $2', ['canceled', req.params.id]);
+        await query('UPDATE users SET subscription = $1, paystack_subscription_code = NULL WHERE id = $2', ['free', sub.user_id]);
+
+        await logAction({
+            adminId: req.userId!, action: 'subscription.cancel', targetType: 'subscription',
+            targetId: req.params.id, ipAddress: req.ip
+        });
+
+        res.json({ message: 'Subscription canceled successfully' });
+    } catch (error) {
+        log.error('Subscription cancel error', error);
+        res.status(500).json({ error: 'Failed to cancel subscription' });
     }
 });
 

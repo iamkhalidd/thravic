@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
-import { Search, ChevronLeft, ChevronRight, Edit, Trash2, ArrowRightLeft, CheckCircle, XCircle } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, Edit, Trash2, ArrowRightLeft, CheckCircle, XCircle, Download } from 'lucide-react';
 
 interface Domain {
     id: string;
@@ -69,6 +69,21 @@ export default function DomainsPage() {
         } catch (err: any) { alert(err.message); }
     };
 
+    const handleExport = async (domain: Domain) => {
+        try {
+            const data = await api.post(`/api/admin/export/domain/${domain.id}`, {});
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `export_domain_${domain.domain}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        } catch (err: any) {
+            alert('Export failed: ' + err.message);
+        }
+    };
+
     return (
         <div>
             <form onSubmit={handleSearch} className="search-bar" style={{ marginBottom: 'var(--space-lg)' }}>
@@ -112,6 +127,9 @@ export default function DomainsPage() {
                                             </button>
                                             <button className="btn btn-ghost btn-sm" onClick={() => handleTransfer(d)} title="Transfer">
                                                 <ArrowRightLeft size={14} />
+                                            </button>
+                                            <button className="btn btn-ghost btn-sm" onClick={() => handleExport(d)} title="Export Domain Data">
+                                                <Download size={14} />
                                             </button>
                                             <button className="btn btn-danger btn-sm" onClick={() => handleDelete(d)} title="Delete">
                                                 <Trash2 size={14} />
