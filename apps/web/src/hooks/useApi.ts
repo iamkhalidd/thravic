@@ -38,7 +38,7 @@ export function useApi<T>(
             }
         } catch (e) {
             if (!mountedRef.current) return;
-            setError(e instanceof Error ? e.message : 'An unexpected error occurred');
+            setError('An unexpected error occurred. Please try again later.');
             setData(null);
         } finally {
             if (mountedRef.current) setLoading(false);

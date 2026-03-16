@@ -71,7 +71,9 @@ export class ErrorBoundary extends Component<Props, State> {
                         fontSize: '0.875rem',
                         maxWidth: '400px',
                     }}>
-                        {this.state.error?.message || 'An unexpected error occurred.'}
+                       <div style={{ marginTop: 'var(--space-md)', padding: 'var(--space-md)', background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-md)', color: 'var(--color-primary-light)' }}>
+                        We encountered an unexpected error displaying this page. Please try refreshing.
+                    </div>
                     </p>
                     <button
                         className="btn btn-primary"
