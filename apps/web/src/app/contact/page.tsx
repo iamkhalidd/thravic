@@ -24,11 +24,34 @@ const s = {
 export default function ContactPage() {
     const [formState, setFormState] = useState({ name: '', email: '', type: 'Technical Support', subject: '', message: '' });
     const [isSubmitted, setIsSubmitted] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        setIsSubmitted(true);
-        // In a real app, you'd send this to your API
+        setIsLoading(true);
+        setError(null);
+
+        try {
+            const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+            const res = await fetch(`${API_BASE}/api/contact`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(formState),
+            });
+
+            const data = await res.json();
+
+            if (!res.ok) {
+                throw new Error(data.error || 'Failed to send message');
+            }
+
+            setIsSubmitted(true);
+        } catch (err: any) {
+            setError(err.message || 'Something went wrong. Please try again.');
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     if (isSubmitted) {
@@ -144,8 +167,23 @@ export default function ContactPage() {
                                 <textarea required style={{ ...s.input, minHeight: '120px', resize: 'vertical' }} placeholder="How can we help you?" value={formState.message} onChange={e => setFormState({...formState, message: e.target.value})} />
                             </div>
 
-                            <button type="submit" className="btn-primary" style={{ width: '100%', padding: '14px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontSize: '0.9375rem' }}>
-                                <Send size={16} /> Send Message
+                            {error && (
+                                <div style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.2)', color: '#f87171', padding: '12px', borderRadius: '8px', marginBottom: '20px', fontSize: '0.875rem' }}>
+                                    {error}
+                                </div>
+                            )}
+
+                            <button type="submit" disabled={isLoading} className="btn-primary" style={{ width: '100%', padding: '14px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontSize: '0.9375rem', opacity: isLoading ? 0.7 : 1, cursor: isLoading ? 'not-allowed' : 'pointer' }}>
+                                {isLoading ? (
+                                    <>
+                                        <div className="spinner-small" style={{ width: '16px', height: '16px', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                                        Sending...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Send size={16} /> Send Message
+                                    </>
+                                )}
                             </button>
                         </form>
                     </div>
