@@ -76,7 +76,7 @@ export default function ContactPage() {
                                 <div style={s.iconBox}><Mail size={18} /></div>
                                 <div>
                                     <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', marginBottom: '4px' }}>General Support</div>
-                                    <div style={{ fontWeight: 500 }}>support@thravic.com</div>
+                                    <div style={{ fontWeight: 500 }}>thravic247@gmail.com</div>
                                 </div>
                             </div>
 
@@ -84,7 +84,7 @@ export default function ContactPage() {
                                 <div style={s.iconBox}><Mail size={18} /></div>
                                 <div>
                                     <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', marginBottom: '4px' }}>Sales & Partnerships</div>
-                                    <div style={{ fontWeight: 500 }}>partners@thravic.com</div>
+                                    <div style={{ fontWeight: 500 }}>thravic247@gmail.com</div>
                                 </div>
                             </div>
 
@@ -93,9 +93,7 @@ export default function ContactPage() {
                                 <div>
                                     <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', marginBottom: '4px' }}>Office Address</div>
                                     <div style={{ fontWeight: 500, lineHeight: 1.5 }}>
-                                        123 Tech Innovation Way<br />
-                                        Floor 4, Silicon Quarter<br />
-                                        London, EC1V 4AD, UK
+                                        Lagos Mainland
                                     </div>
                                 </div>
                             </div>

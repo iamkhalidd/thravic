@@ -92,7 +92,7 @@ export default function PrivacyPage() {
 
                 <footer style={{ marginTop: '80px', paddingTop: '40px', borderTop: '1px solid var(--color-border)', textAlign: 'center' }}>
                     <p style={{ color: 'var(--color-text-muted)', fontSize: '0.875rem' }}>
-                        Questions about our privacy practices? Contact us at support@thravic.com
+                        Questions about our privacy practices? Contact us at thravic247@gmail.com
                     </p>
                 </footer>
             </div>
