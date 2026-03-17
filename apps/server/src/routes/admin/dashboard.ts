@@ -34,15 +34,12 @@ router.get('/stats', adminAuth, async (req: AuthRequest, res: Response) => {
             ),
         ]);
 
-        // MRR calculation
+        // MRR calculation — read actual prices from plans table
         const mrr = await queryOne<{ total: string }>(
-            `SELECT COALESCE(SUM(
-                CASE plan 
-                    WHEN 'pro' THEN 29 
-                    WHEN 'agency' THEN 79 
-                    ELSE 0 
-                END
-            ), 0) as total FROM subscriptions WHERE status = 'active'`
+            `SELECT COALESCE(SUM(p.price), 0) as total
+             FROM subscriptions s
+             JOIN plans p ON p.id = s.plan
+             WHERE s.status = 'active' AND s.plan != 'free'`
         );
 
         // Plan distribution
@@ -165,14 +162,12 @@ router.get('/actions', adminAuth, async (req: AuthRequest, res: Response) => {
             queryOne<{ count: string; mrr: string }>(`
                 SELECT
                     COUNT(*) as count,
-                    SUM(CASE plan
-                        WHEN 'pro' THEN 29
-                        WHEN 'agency' THEN 79
-                        ELSE 0 END) as mrr
-                FROM subscriptions
-                WHERE status = 'active'
-                  AND plan != 'free'
-                  AND created_at >= NOW() - INTERVAL '7 days'`),
+                    COALESCE(SUM(p.price), 0) as mrr
+                FROM subscriptions s
+                JOIN plans p ON p.id = s.plan
+                WHERE s.status = 'active'
+                  AND s.plan != 'free'
+                  AND s.created_at >= NOW() - INTERVAL '7 days'`),
         ]);
 
         const actions: Array<{
