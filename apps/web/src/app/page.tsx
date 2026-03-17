@@ -455,7 +455,7 @@ export default function HomePage() {
                         {[
                             { title: 'Product', links: [{ label: 'Features', href: '#features' }, { label: 'Pricing', href: '#pricing' }, { label: 'Demo', href: '/demo' }] },
                             { title: 'Company', links: [{ label: 'About', href: '/about' }, { label: 'Blog', href: '#' }, { label: 'Contact', href: '/contact' }] },
-                            { title: 'Legal', links: [{ label: 'Privacy', href: '/privacy' }, { label: 'Terms', href: '#' }, { label: 'GDPR', href: '/gdpr' }] },
+                            { title: 'Legal', links: [{ label: 'Privacy', href: '/privacy' }, { label: 'Terms', href: '#' }, { label: 'GDPR', href: '/gdpr' }, { label: 'Cookies', href: '/cookies' }] },
                         ].map((group, i) => (
                             <div key={i}>
                                 <h5 style={{
