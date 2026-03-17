@@ -12,7 +12,7 @@ const pool = new Pool({
     ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
     max: 20, // Maximum connections in pool
     idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 2000,
+    connectionTimeoutMillis: 10000, // 10s — Neon cold starts can take 5-8s
 });
 
 // Test connection
@@ -62,28 +62,43 @@ export async function transaction<T>(callback: (client: PoolClient) => Promise<T
     }
 }
 
-// Initialize database (run migrations)
+// Helper: wait ms
+function sleep(ms: number) { return new Promise(resolve => setTimeout(resolve, ms)); }
+
+// Initialize database with retry (handles Neon cold starts)
 export async function initDatabase(): Promise<void> {
-    console.log('[DB] Initializing database...');
+    const MAX_RETRIES = 3;
+    const BASE_DELAY = 3000; // 3s, then 6s, then 12s
 
-    try {
-        // Check connection
-        await pool.query('SELECT NOW()');
-        console.log('[DB] Connection successful');
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        try {
+            console.log(`[DB] Initializing database... (attempt ${attempt}/${MAX_RETRIES})`);
 
-        // Run schema (in production, use proper migrations)
-        const fs = await import('fs');
-        const path = await import('path');
-        const schemaPath = path.join(__dirname, 'schema.sql');
+            // Check connection
+            await pool.query('SELECT NOW()');
+            console.log('[DB] Connection successful');
 
-        if (fs.existsSync(schemaPath)) {
-            const schema = fs.readFileSync(schemaPath, 'utf-8');
-            await pool.query(schema);
-            console.log('[DB] Schema applied successfully');
+            // Run schema (in production, use proper migrations)
+            const fs = await import('fs');
+            const path = await import('path');
+            const schemaPath = path.join(__dirname, 'schema.sql');
+
+            if (fs.existsSync(schemaPath)) {
+                const schema = fs.readFileSync(schemaPath, 'utf-8');
+                await pool.query(schema);
+                console.log('[DB] Schema applied successfully');
+            }
+            return; // Success — exit the retry loop
+        } catch (error) {
+            console.error(`[DB] Attempt ${attempt}/${MAX_RETRIES} failed:`, (error as Error).message);
+            if (attempt === MAX_RETRIES) {
+                console.error('[DB] All connection attempts exhausted. Giving up.');
+                throw error;
+            }
+            const delay = BASE_DELAY * Math.pow(2, attempt - 1);
+            console.log(`[DB] Retrying in ${delay / 1000}s...`);
+            await sleep(delay);
         }
-    } catch (error) {
-        console.error('[DB] Initialization failed:', error);
-        throw error;
     }
 }
 
