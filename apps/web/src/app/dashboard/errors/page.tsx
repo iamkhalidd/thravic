@@ -22,6 +22,14 @@ export default function ErrorsPage() {
         if (selectedDomainId) load();
     }, [selectedDomainId]);
 
+    if (!selectedDomainId && !domainLoading) {
+        return (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-xl)', color: 'var(--color-text-secondary)' }}>
+                <p>Please select a domain to view error tracking</p>
+            </div>
+        );
+    }
+
     if (domainLoading || loading) {
         return (
             <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-xl)' }}>
