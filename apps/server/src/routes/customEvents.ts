@@ -4,7 +4,7 @@
 // ──────────────────────────────────────────────
 import { Router, Request, Response } from 'express';
 import { query, queryOne } from '../db';
-import { authenticate } from '../middleware/authenticate';
+import { authenticate } from '../middleware/auth';
 import { createLogger } from '../config/logger';
 
 const log = createLogger('CustomEvents');
