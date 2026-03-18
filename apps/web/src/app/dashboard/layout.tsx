@@ -38,7 +38,7 @@ import { AnnouncementBanner } from '@/components/AnnouncementBanner';
 import { ImpersonationBanner } from '@/components/ImpersonationBanner';
 
 const navStructure = [
-    { href: '/dashboard', icon: LayoutDashboard, label: 'Overview', exact: true },
+    { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', exact: true },
     {
         label: 'Traffic', icon: Globe,
         children: [
@@ -55,9 +55,6 @@ const navStructure = [
             { href: '/dashboard/behavior/devices', label: 'Devices' }
         ]
     },
-    { href: '/dashboard/funnels', icon: Target, label: 'Funnels' },
-    { href: '/dashboard/heatmaps', icon: MousePointer2, label: 'Heatmaps' },
-    { href: '/dashboard/sessions', icon: Video, label: 'Sessions' },
     {
         label: 'Monitoring', icon: Gauge,
         children: [
@@ -66,11 +63,12 @@ const navStructure = [
             { href: '/dashboard/forms', label: 'Forms' },
         ]
     },
+    { href: '/dashboard/funnels', icon: Target, label: 'Funnels' },
+    { href: '/dashboard/heatmaps', icon: MousePointer2, label: 'Heatmaps' },
+    { href: '/dashboard/sessions', icon: Video, label: 'Sessions' },
     { href: '/dashboard/insights', icon: Sparkles, label: 'AI Insights' },
-    { href: '/dashboard/team', icon: UsersRound, label: 'Team' },
     { href: '/dashboard/reports', icon: FileBarChart, label: 'Reports' },
 ];
-
 interface NavItemProps {
     item: any;
     pathname: string;
@@ -393,6 +391,26 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                     padding: (sidebarCollapsed && !isMobile) ? '8px 4px' : '8px 0',
                     flexShrink: 0,
                 }}>
+                    {/* Team link */}
+                    <Link
+                        href="/dashboard/team"
+                        title={(sidebarCollapsed && !isMobile) ? 'Team' : undefined}
+                        style={{
+                            display: 'flex', alignItems: 'center',
+                            gap: (sidebarCollapsed && !isMobile) ? '0' : '10px',
+                            padding: (sidebarCollapsed && !isMobile) ? '10px 0' : '8px 12px',
+                            justifyContent: (sidebarCollapsed && !isMobile) ? 'center' : 'flex-start',
+                            color: pathname.startsWith('/dashboard/team') ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
+                            fontWeight: pathname.startsWith('/dashboard/team') ? 500 : 400,
+                            textDecoration: 'none', fontSize: '0.8125rem',
+                            background: 'transparent',
+                            whiteSpace: 'nowrap', overflow: 'hidden',
+                        }}
+                    >
+                        <UsersRound size={18} style={{ flexShrink: 0 }} />
+                        {!(sidebarCollapsed && !isMobile) && <span>Team</span>}
+                    </Link>
+
                     {/* Settings link */}
                     <Link
                         href="/dashboard/settings"
