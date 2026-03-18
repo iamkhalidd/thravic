@@ -43,6 +43,7 @@ import experimentRoutes from './routes/experiments';
 import adminRoutes from './routes/admin';
 import announcementRoutes from './routes/announcements';
 import contactRoutes from './routes/contact';
+import customEventsRoutes from './routes/customEvents';
 import { maintenanceModeGate, registrationGate, trackingGate } from './middleware/settingsGate';
 
 
@@ -264,6 +265,7 @@ app.use('/api/experiments', experimentRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/announcements', announcementRoutes);
 app.use('/api/contact', contactRoutes);
+app.use('/api/custom-events', customEventsRoutes);
 
 // ── Thravic Client Tracker Script ────────────────────────────────────────
 // Serves the analytics tracking script. Customer sites load this via <script>.

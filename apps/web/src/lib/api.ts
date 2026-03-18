@@ -682,3 +682,66 @@ export const payments = {
     },
 };
 
+// Custom Events API (Errors, Performance, Forms, Rage Clicks)
+export const customEvents = {
+    async getErrors(domainId: string) {
+        return apiRequest<{
+            totalErrors: number;
+            errors: Array<{
+                message: string;
+                source: string | null;
+                count: number;
+                first_seen: string;
+                last_seen: string;
+            }>;
+            trend: Array<{ day: string; count: number }>;
+        }>(`/api/custom-events/${domainId}/errors`);
+    },
+
+    async getPerformance(domainId: string) {
+        return apiRequest<{
+            metrics: {
+                avg_lcp: number;
+                avg_fid: number;
+                avg_cls: number;
+                avg_ttfb: number;
+                avg_fcp: number;
+                avg_load_time: number;
+                sample_count: number;
+            };
+            trend: Array<{ day: string; avg_lcp: number; avg_fcp: number }>;
+            byPage: Array<{ url: string; avg_lcp: number; avg_fcp: number; count: number }>;
+        }>(`/api/custom-events/${domainId}/performance`);
+    },
+
+    async getForms(domainId: string) {
+        return apiRequest<{
+            totalSubmissions: number;
+            forms: Array<{
+                form_id: string | null;
+                form_name: string | null;
+                action: string | null;
+                method: string | null;
+                submissions: number;
+                avg_fields: number;
+                pages: number;
+            }>;
+            trend: Array<{ day: string; count: number }>;
+        }>(`/api/custom-events/${domainId}/forms`);
+    },
+
+    async getRageClicks(domainId: string) {
+        return apiRequest<{
+            totalRageClicks: number;
+            rageClicks: Array<{
+                tag: string | null;
+                element_id: string | null;
+                text: string | null;
+                url: string;
+                count: number;
+                avg_click_count: number;
+            }>;
+        }>(`/api/custom-events/${domainId}/rage-clicks`);
+    },
+};
+

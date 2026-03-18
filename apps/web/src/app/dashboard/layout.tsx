@@ -25,7 +25,11 @@ import {
     PanelLeftClose,
     PanelLeftOpen,
     Menu,
-    X
+    X,
+    AlertTriangle,
+    Gauge,
+    FileInput,
+    MousePointerClick
 } from 'lucide-react';
 import { auth } from '@/lib/api';
 import { DomainProvider, useDomain } from '@/contexts/DomainContext';
@@ -54,6 +58,14 @@ const navStructure = [
     { href: '/dashboard/funnels', icon: Target, label: 'Funnels' },
     { href: '/dashboard/heatmaps', icon: MousePointer2, label: 'Heatmaps' },
     { href: '/dashboard/sessions', icon: Video, label: 'Sessions' },
+    {
+        label: 'Monitoring', icon: Gauge,
+        children: [
+            { href: '/dashboard/errors', label: 'Errors' },
+            { href: '/dashboard/performance', label: 'Performance' },
+            { href: '/dashboard/forms', label: 'Forms' },
+        ]
+    },
     { href: '/dashboard/insights', icon: Sparkles, label: 'AI Insights' },
     { href: '/dashboard/team', icon: UsersRound, label: 'Team' },
     { href: '/dashboard/reports', icon: FileBarChart, label: 'Reports' },

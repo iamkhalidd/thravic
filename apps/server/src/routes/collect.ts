@@ -5,8 +5,10 @@ import * as eventService from '../services/eventService';
 import * as sessionService from '../services/sessionService';
 import { classifySource } from '../services/sessionService';
 import * as domainService from '../services/domainService';
+import * as recordingService from '../services/recordingService';
 
 import { eventSchema, batchSchema } from '../validators/collect';
+import { startRecordingSchema, appendEventsSchema } from '../validators/recordings';
 import { triggerWebhooks } from '../services/webhookService';
 import { createLogger } from '../config/logger';
 import redisClient from '../db/redis';
@@ -205,6 +207,90 @@ router.get('/realtime/:trackingId', async (req: Request, res: Response) => {
     } catch (error) {
         log.error('Realtime error', error);
         res.status(500).json({ error: 'Failed to get realtime data' });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// Session Recording — unauthenticated endpoints (validated by trackingId)
+// These mirror the authenticated /api/recordings routes but use the
+// trackingId for domain lookup, so the tracking script can call them
+// directly from the customer's website without an auth token.
+// ═══════════════════════════════════════════════════════════════════════
+
+// ── POST /api/collect/:trackingId/recording/start ──
+router.post('/:trackingId/recording/start', async (req: Request, res: Response) => {
+    try {
+        const domain = await domainService.getByTrackingId(req.params.trackingId);
+        if (!domain) {
+            return res.status(404).json({ error: 'Invalid tracking ID' });
+        }
+
+        const { sessionId, url } = startRecordingSchema.parse(req.body);
+        const recording = await recordingService.create(domain.id, sessionId || null, url);
+
+        res.status(201).json({
+            id: recording.id,
+            startedAt: recording.started_at,
+            status: 'recording',
+        });
+    } catch (error) {
+        if (error instanceof z.ZodError) {
+            return res.status(400).json({ error: 'Invalid recording data', details: error.errors });
+        }
+        log.error('Collect recording start error', error);
+        res.status(500).json({ error: 'Failed to start recording' });
+    }
+});
+
+// ── POST /api/collect/:trackingId/recording/:recordingId/events ──
+router.post('/:trackingId/recording/:recordingId/events', async (req: Request, res: Response) => {
+    try {
+        const domain = await domainService.getByTrackingId(req.params.trackingId);
+        if (!domain) {
+            return res.status(404).json({ error: 'Invalid tracking ID' });
+        }
+
+        const { events } = appendEventsSchema.parse(req.body);
+
+        const recording = await recordingService.getById(req.params.recordingId);
+        if (!recording || recording.domain_id !== domain.id) {
+            return res.status(404).json({ error: 'Recording not found' });
+        }
+
+        await recordingService.appendEvents(recording.id, events);
+
+        res.status(202).json({ success: true, appended: events.length });
+    } catch (error) {
+        if (error instanceof z.ZodError) {
+            return res.status(400).json({ error: 'Invalid recording events', details: error.errors });
+        }
+        log.error('Collect recording events error', error);
+        res.status(500).json({ error: 'Failed to append recording events' });
+    }
+});
+
+// ── POST /api/collect/:trackingId/recording/:recordingId/end ──
+router.post('/:trackingId/recording/:recordingId/end', async (req: Request, res: Response) => {
+    try {
+        const domain = await domainService.getByTrackingId(req.params.trackingId);
+        if (!domain) {
+            return res.status(404).json({ error: 'Invalid tracking ID' });
+        }
+
+        const recording = await recordingService.endRecording(req.params.recordingId);
+        if (!recording || recording.domain_id !== domain.id) {
+            return res.status(404).json({ error: 'Recording not found' });
+        }
+
+        res.json({
+            id: recording.id,
+            duration: recording.duration,
+            eventsCount: recording.events_count,
+            status: 'completed',
+        });
+    } catch (error) {
+        log.error('Collect recording end error', error);
+        res.status(500).json({ error: 'Failed to end recording' });
     }
 });
 

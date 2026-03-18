@@ -10,6 +10,11 @@
  * - Batch event sending via sendBeacon / fetch
  * - Privacy-respecting: no fingerprinting, DNT respected
  * - Consent mode: optionally delay tracking until user accepts
+ * - Form submission tracking
+ * - Error / crash tracking (window.onerror + unhandledrejection)
+ * - Performance metrics (Web Vitals: LCP, FID, CLS, TTFB, FCP)
+ * - Rage-click detection
+ * - Session recording capture (mouse moves, clicks, scrolls, inputs, resizes)
  */
 
 interface TFConfig {
@@ -37,6 +42,16 @@ interface TFConfig {
      * Default: 50
      */
     clickTextMaxLength: number;
+    /** Track form submissions. Default: true */
+    trackForms: boolean;
+    /** Track JavaScript errors & unhandled promise rejections. Default: true */
+    trackErrors: boolean;
+    /** Capture Web Vitals performance metrics. Default: true */
+    trackPerformance: boolean;
+    /** Capture session recordings (mouse, input, scroll, resize). Default: false — opt-in, heavier */
+    trackRecordings: boolean;
+    /** Maximum recording duration in ms. Default: 600 000 (10 min) */
+    recordingMaxDuration: number;
 }
 
 interface TFEvent {
@@ -56,6 +71,13 @@ interface TFEvent {
     data?: Record<string, unknown>;
 }
 
+// ── Recording event shape (sent to /recording/:id/events) ──
+interface RecordingEvent {
+    type: 'mousemove' | 'click' | 'scroll' | 'input' | 'resize' | 'pageview';
+    timestamp: number;
+    data: Record<string, unknown>;
+}
+
 // Storage keys
 const VISITOR_KEY = '_tf_vid';
 const SESSION_KEY = '_tf_sid';
@@ -71,7 +93,21 @@ const defaultConfig: TFConfig = {
     respectDoNotTrack: true,
     requireConsent: false,
     clickTextMaxLength: 50,
+    trackForms: true,
+    trackErrors: true,
+    trackPerformance: true,
+    trackRecordings: false,
+    recordingMaxDuration: 600_000,
 };
+
+// ── Rage-click constants ──
+const RAGE_CLICK_THRESHOLD = 3;      // clicks needed
+const RAGE_CLICK_WINDOW   = 800;     // ms
+
+// ── Recording constants ──
+const REC_MOUSEMOVE_THROTTLE = 50;   // ms between mousemove captures
+const REC_FLUSH_INTERVAL     = 3000; // ms between recording event flushes
+const REC_FLUSH_SIZE          = 100;  // max events before auto-flush
 
 class ThravicAnalytics {
     private trackingId: string = '';
@@ -83,7 +119,24 @@ class ThravicAnalytics {
     /** When requireConsent=true, tracking is paused until consent is granted */
     private consentGranted: boolean = false;
 
-    // Generate a random ID
+    // ── Rage-click state ──
+    private rageClickMap = new WeakMap<EventTarget, number[]>();
+
+    // ── Recording state ──
+    private recordingId: string | null = null;
+    private recordingEvents: RecordingEvent[] = [];
+    private recordingStartTime: number = 0;
+    private recordingFlushTimer: number | null = null;
+    private lastMoveTs: number = 0;
+
+    // ── Performance state ──
+    private perfSent: boolean = false;
+
+    // ────────────────────────────────────
+    //  Utility helpers
+    // ────────────────────────────────────
+
+    // Generate a random UUID-v4-like ID
     private generateId(): string {
         return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
             const r = (Math.random() * 16) | 0;
@@ -172,6 +225,10 @@ class ThravicAnalytics {
         this.eventQueue = [];
     }
 
+    // ────────────────────────────────────
+    //  Event creation & dispatch
+    // ────────────────────────────────────
+
     // Create base event object
     private createEvent(type: TFEvent['type'], data?: Record<string, unknown>): TFEvent {
         const utm = this.getUtmParams();
@@ -204,7 +261,7 @@ class ThravicAnalytics {
         }
     }
 
-    // Send events to server
+    // Send analytics events to server
     private flush(): void {
         if (this.eventQueue.length === 0) return;
         if (!this.shouldTrack()) return;
@@ -238,10 +295,17 @@ class ThravicAnalytics {
         }).catch(() => { /* silent — best-effort delivery */ });
     }
 
-    // Track page view
+    // ────────────────────────────────────
+    //  Page View tracking
+    // ────────────────────────────────────
+
     private trackPageView(): void {
         this.queueEvent(this.createEvent('pageview'));
     }
+
+    // ────────────────────────────────────
+    //  Click tracking  (existing)
+    // ────────────────────────────────────
 
     // Sanitise element text — strips whitespace and caps length to avoid PII capture
     private sanitiseText(raw: string | null | undefined): string | undefined {
@@ -252,10 +316,12 @@ class ThravicAnalytics {
         return cleaned.slice(0, maxLen) || undefined;
     }
 
-    // Track click
     private trackClick(e: MouseEvent): void {
         const target = e.target as HTMLElement;
         if (!target) return;
+
+        // ── Rage-click detection ──────────────────
+        this.detectRageClick(e);
 
         const data: Record<string, unknown> = {
             x: e.clientX,
@@ -285,7 +351,10 @@ class ThravicAnalytics {
         this.queueEvent(this.createEvent('click', data));
     }
 
-    // Track scroll depth
+    // ────────────────────────────────────
+    //  Scroll depth tracking  (existing)
+    // ────────────────────────────────────
+
     private trackScroll(): void {
         const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
         const docHeight = document.documentElement.scrollHeight - window.innerHeight;
@@ -298,7 +367,412 @@ class ThravicAnalytics {
         }
     }
 
-    // Setup event listeners
+    // ────────────────────────────────────
+    //  Form tracking  (NEW)
+    // ────────────────────────────────────
+
+    private trackFormSubmit(e: Event): void {
+        const form = e.target as HTMLFormElement;
+        if (!form || form.tagName !== 'FORM') return;
+
+        let actionPath: string | undefined;
+        try {
+            const url = new URL(form.action, window.location.origin);
+            actionPath = url.pathname;
+        } catch {
+            actionPath = form.getAttribute('action') || undefined;
+        }
+
+        const data: Record<string, unknown> = {
+            formId: form.id || undefined,
+            formName: form.name || undefined,
+            action: actionPath,
+            method: (form.method || 'get').toUpperCase(),
+            fieldCount: form.elements.length,
+        };
+
+        this.queueEvent(this.createEvent('form', data));
+    }
+
+    // ────────────────────────────────────
+    //  Error / Crash tracking  (NEW)
+    // ────────────────────────────────────
+
+    private trackError(
+        message: string,
+        source?: string,
+        line?: number,
+        col?: number,
+        stack?: string
+    ): void {
+        const data: Record<string, unknown> = {
+            event: 'error',
+            message: typeof message === 'string' ? message.slice(0, 200) : String(message),
+            source: source || undefined,
+            line: line || undefined,
+            col: col || undefined,
+            // Truncate stack to 500 chars to avoid PII leakage & large payloads
+            stack: stack ? stack.slice(0, 500) : undefined,
+        };
+
+        this.queueEvent(this.createEvent('custom', data));
+        // Flush immediately — the page might be about to crash
+        this.flush();
+    }
+
+    private setupErrorTracking(): void {
+        // Global error handler
+        window.addEventListener('error', (e: ErrorEvent) => {
+            this.trackError(
+                e.message,
+                e.filename,
+                e.lineno,
+                e.colno,
+                e.error?.stack
+            );
+        });
+
+        // Unhandled promise rejections
+        window.addEventListener('unhandledrejection', (e: PromiseRejectionEvent) => {
+            const reason = e.reason;
+            const message = reason instanceof Error ? reason.message : String(reason);
+            const stack = reason instanceof Error ? reason.stack : undefined;
+            this.trackError(message, undefined, undefined, undefined, stack);
+        });
+    }
+
+    // ────────────────────────────────────
+    //  Performance Metrics / Web Vitals  (NEW)
+    // ────────────────────────────────────
+
+    private setupPerformanceTracking(): void {
+        // Wait for the page to fully load before collecting metrics
+        if (document.readyState === 'complete') {
+            this.collectPerfMetrics();
+        } else {
+            window.addEventListener('load', () => {
+                // Give the browser a moment to settle, then collect
+                setTimeout(() => this.collectPerfMetrics(), 1000);
+            });
+        }
+    }
+
+    private collectPerfMetrics(): void {
+        if (this.perfSent) return;
+
+        const metrics: Record<string, unknown> = {
+            event: 'performance',
+        };
+
+        // ── Navigation Timing (TTFB) ──
+        try {
+            const [nav] = performance.getEntriesByType('navigation') as PerformanceNavigationTiming[];
+            if (nav) {
+                metrics.ttfb = Math.round(nav.responseStart - nav.requestStart);
+                metrics.domContentLoaded = Math.round(nav.domContentLoadedEventEnd - nav.startTime);
+                metrics.loadTime = Math.round(nav.loadEventEnd - nav.startTime);
+            }
+        } catch { /* not supported */ }
+
+        // ── Paint Timing (FCP) ──
+        try {
+            const paints = performance.getEntriesByType('paint');
+            for (const entry of paints) {
+                if (entry.name === 'first-contentful-paint') {
+                    metrics.fcp = Math.round(entry.startTime);
+                }
+            }
+        } catch { /* not supported */ }
+
+        // ── LCP via PerformanceObserver ──
+        this.observeLCP(metrics);
+        // ── FID via PerformanceObserver ──
+        this.observeFID(metrics);
+        // ── CLS via PerformanceObserver ──
+        this.observeCLS(metrics);
+
+        // After a delay, send whatever metrics we've gathered (observers may not fire on every page)
+        setTimeout(() => {
+            if (this.perfSent) return;
+            this.perfSent = true;
+            this.queueEvent(this.createEvent('custom', { ...metrics }));
+        }, 5000);
+    }
+
+    private observeLCP(metrics: Record<string, unknown>): void {
+        try {
+            const obs = new PerformanceObserver((list) => {
+                const entries = list.getEntries();
+                if (entries.length > 0) {
+                    metrics.lcp = Math.round(entries[entries.length - 1].startTime);
+                }
+            });
+            obs.observe({ type: 'largest-contentful-paint', buffered: true });
+        } catch { /* not supported */ }
+    }
+
+    private observeFID(metrics: Record<string, unknown>): void {
+        try {
+            const obs = new PerformanceObserver((list) => {
+                const entries = list.getEntries() as PerformanceEventTiming[];
+                if (entries.length > 0) {
+                    metrics.fid = Math.round(entries[0].processingStart - entries[0].startTime);
+                }
+            });
+            obs.observe({ type: 'first-input', buffered: true });
+        } catch { /* not supported */ }
+    }
+
+    private observeCLS(metrics: Record<string, unknown>): void {
+        try {
+            let clsValue = 0;
+            const obs = new PerformanceObserver((list) => {
+                for (const entry of list.getEntries() as any[]) {
+                    if (!entry.hadRecentInput) {
+                        clsValue += entry.value;
+                    }
+                }
+                metrics.cls = Math.round(clsValue * 1000) / 1000; // 3 decimal places
+            });
+            obs.observe({ type: 'layout-shift', buffered: true });
+        } catch { /* not supported */ }
+    }
+
+    // ────────────────────────────────────
+    //  Rage-Click Detection  (NEW)
+    // ────────────────────────────────────
+
+    private detectRageClick(e: MouseEvent): void {
+        const target = e.target;
+        if (!target) return;
+
+        const now = Date.now();
+        let timestamps = this.rageClickMap.get(target);
+
+        if (!timestamps) {
+            timestamps = [];
+            this.rageClickMap.set(target, timestamps);
+        }
+
+        timestamps.push(now);
+
+        // Prune old timestamps outside the window
+        const cutoff = now - RAGE_CLICK_WINDOW;
+        while (timestamps.length > 0 && timestamps[0] < cutoff) {
+            timestamps.shift();
+        }
+
+        if (timestamps.length >= RAGE_CLICK_THRESHOLD) {
+            const el = target as HTMLElement;
+            this.queueEvent(this.createEvent('custom', {
+                event: 'rage_click',
+                x: e.clientX,
+                y: e.clientY,
+                tag: el.tagName?.toLowerCase(),
+                id: el.id || undefined,
+                className: typeof el.className === 'string'
+                    ? el.className.slice(0, 100) || undefined
+                    : undefined,
+                text: this.sanitiseText(el.textContent),
+                clickCount: timestamps.length,
+            }));
+            // Reset so we don't spam
+            this.rageClickMap.set(target, []);
+        }
+    }
+
+    // ────────────────────────────────────
+    //  Session Recording  (NEW)
+    // ────────────────────────────────────
+
+    private async startRecording(): Promise<void> {
+        if (this.recordingId) return; // already recording
+
+        try {
+            const url = `${this.config.endpoint}/${this.trackingId}/recording/start`;
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    sessionId: this.getSessionId(),
+                    url: window.location.href,
+                }),
+            });
+
+            if (!res.ok) return;
+
+            const data = await res.json();
+            this.recordingId = data.id;
+            this.recordingStartTime = Date.now();
+            this.recordingEvents = [];
+
+            // Push initial pageview recording event
+            this.pushRecordingEvent('pageview', {
+                url: window.location.href,
+                screenWidth: window.screen.width,
+                screenHeight: window.screen.height,
+                viewportWidth: window.innerWidth,
+                viewportHeight: window.innerHeight,
+            });
+
+            // Set up recording-specific listeners
+            this.setupRecordingListeners();
+
+            // Set up periodic flush
+            this.recordingFlushTimer = window.setInterval(
+                () => this.flushRecordingEvents(),
+                REC_FLUSH_INTERVAL
+            );
+        } catch {
+            /* silent — recording is best-effort */
+        }
+    }
+
+    private pushRecordingEvent(type: RecordingEvent['type'], data: Record<string, unknown>): void {
+        if (!this.recordingId) return;
+
+        // Enforce max recording duration
+        if (Date.now() - this.recordingStartTime > this.config.recordingMaxDuration) {
+            this.endRecording();
+            return;
+        }
+
+        this.recordingEvents.push({
+            type,
+            timestamp: Date.now() - this.recordingStartTime,
+            data,
+        });
+
+        if (this.recordingEvents.length >= REC_FLUSH_SIZE) {
+            this.flushRecordingEvents();
+        }
+    }
+
+    private flushRecordingEvents(): void {
+        if (!this.recordingId || this.recordingEvents.length === 0) return;
+
+        const events = [...this.recordingEvents];
+        this.recordingEvents = [];
+
+        const url = `${this.config.endpoint}/${this.trackingId}/recording/${this.recordingId}/events`;
+        const payload = { events };
+
+        if (navigator.sendBeacon) {
+            const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+            const sent = navigator.sendBeacon(url, blob);
+            if (!sent) {
+                fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                    keepalive: true,
+                }).catch(() => {});
+            }
+        } else {
+            fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+                keepalive: true,
+            }).catch(() => {});
+        }
+    }
+
+    private endRecording(): void {
+        if (!this.recordingId) return;
+
+        // Flush remaining events first
+        this.flushRecordingEvents();
+
+        // Clear the periodic flush timer
+        if (this.recordingFlushTimer) {
+            clearInterval(this.recordingFlushTimer);
+            this.recordingFlushTimer = null;
+        }
+
+        const url = `${this.config.endpoint}/${this.trackingId}/recording/${this.recordingId}/end`;
+        if (navigator.sendBeacon) {
+            navigator.sendBeacon(url, new Blob([JSON.stringify({})], { type: 'application/json' }));
+        } else {
+            fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: '{}',
+                keepalive: true,
+            }).catch(() => {});
+        }
+
+        this.recordingId = null;
+    }
+
+    private setupRecordingListeners(): void {
+        // ── Mouse move (throttled) ──
+        document.addEventListener('mousemove', (e: MouseEvent) => {
+            const now = Date.now();
+            if (now - this.lastMoveTs < REC_MOUSEMOVE_THROTTLE) return;
+            this.lastMoveTs = now;
+
+            this.pushRecordingEvent('mousemove', {
+                x: e.clientX,
+                y: e.clientY,
+            });
+        }, { passive: true });
+
+        // ── Clicks ──
+        document.addEventListener('click', (e: MouseEvent) => {
+            const target = e.target as HTMLElement;
+            this.pushRecordingEvent('click', {
+                x: e.clientX,
+                y: e.clientY,
+                tag: target?.tagName?.toLowerCase(),
+                id: target?.id || undefined,
+            });
+        }, { passive: true });
+
+        // ── Scroll ──
+        let recScrollTimeout: number;
+        window.addEventListener('scroll', () => {
+            if (recScrollTimeout) return;
+            recScrollTimeout = window.setTimeout(() => {
+                this.pushRecordingEvent('scroll', {
+                    scrollX: window.scrollX,
+                    scrollY: window.scrollY,
+                });
+                recScrollTimeout = 0;
+            }, 100);
+        }, { passive: true });
+
+        // ── Input changes (capture value length only, NOT the actual value, for privacy) ──
+        document.addEventListener('input', (e: Event) => {
+            const target = e.target as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
+            if (!target) return;
+            this.pushRecordingEvent('input', {
+                tag: target.tagName?.toLowerCase(),
+                inputType: (target as HTMLInputElement).type || undefined,
+                id: target.id || undefined,
+                name: target.name || undefined,
+                valueLength: target.value?.length ?? 0,
+            });
+        }, { passive: true });
+
+        // ── Resize ──
+        let recResizeTimeout: number;
+        window.addEventListener('resize', () => {
+            if (recResizeTimeout) return;
+            recResizeTimeout = window.setTimeout(() => {
+                this.pushRecordingEvent('resize', {
+                    viewportWidth: window.innerWidth,
+                    viewportHeight: window.innerHeight,
+                });
+                recResizeTimeout = 0;
+            }, 200);
+        }, { passive: true });
+    }
+
+    // ────────────────────────────────────
+    //  Listener setup
+    // ────────────────────────────────────
+
     private setupListeners(): void {
         // Click tracking
         if (this.config.trackClicks) {
@@ -317,15 +791,36 @@ class ThravicAnalytics {
             }, { passive: true });
         }
 
+        // Form tracking
+        if (this.config.trackForms) {
+            document.addEventListener('submit', (e) => this.trackFormSubmit(e), { passive: true });
+        }
+
+        // Error tracking
+        if (this.config.trackErrors) {
+            this.setupErrorTracking();
+        }
+
+        // Performance tracking
+        if (this.config.trackPerformance) {
+            this.setupPerformanceTracking();
+        }
+
         // Flush on page unload
         window.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'hidden') {
                 this.flush();
+                if (this.recordingId) {
+                    this.endRecording();
+                }
             }
         });
 
         window.addEventListener('beforeunload', () => {
             this.flush();
+            if (this.recordingId) {
+                this.endRecording();
+            }
         });
 
         // Track SPA navigation
@@ -342,7 +837,10 @@ class ThravicAnalytics {
         });
     }
 
-    // Public API
+    // ────────────────────────────────────
+    //  Public API
+    // ────────────────────────────────────
+
     public init(config?: Partial<TFConfig>): void {
         if (this.initialized) return;
 
@@ -380,6 +878,11 @@ class ThravicAnalytics {
 
         // Track initial page view (noop if consent not yet granted)
         this.trackPageView();
+
+        // Start session recording if enabled
+        if (this.config.trackRecordings && this.shouldTrack()) {
+            this.startRecording();
+        }
     }
 
     // Manual event tracking
