@@ -157,7 +157,7 @@ export default function HeatmapsPage() {
                                 padding: 'var(--space-sm) var(--space-md)',
                                 background: heatmapType === 'click' ? 'var(--color-accent-primary)' : 'transparent',
                                 border: 'none',
-                                color: 'var(--color-text-primary)',
+                                color: heatmapType === 'click' ? 'var(--color-bg-primary)' : 'var(--color-text-primary)',
                                 cursor: 'pointer',
                                 display: 'flex',
                                 alignItems: 'center',
@@ -173,7 +173,7 @@ export default function HeatmapsPage() {
                                 padding: 'var(--space-sm) var(--space-md)',
                                 background: heatmapType === 'scroll' ? 'var(--color-accent-primary)' : 'transparent',
                                 border: 'none',
-                                color: 'var(--color-text-primary)',
+                                color: heatmapType === 'scroll' ? 'var(--color-bg-primary)' : 'var(--color-text-primary)',
                                 cursor: 'pointer',
                                 display: 'flex',
                                 alignItems: 'center',
@@ -205,7 +205,7 @@ export default function HeatmapsPage() {
                                     padding: 'var(--space-sm)',
                                     background: viewport === v.value ? 'var(--color-accent-primary)' : 'transparent',
                                     border: 'none',
-                                    color: 'var(--color-text-primary)',
+                                    color: viewport === v.value ? 'var(--color-bg-primary)' : 'var(--color-text-primary)',
                                     cursor: 'pointer'
                                 }}
                             >

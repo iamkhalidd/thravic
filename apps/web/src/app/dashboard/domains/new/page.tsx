@@ -107,6 +107,7 @@ export default function NewDomainPage() {
                                 height: '32px',
                                 borderRadius: 'var(--radius-full)',
                                 background: isPast || isActive ? 'var(--color-accent-primary)' : 'var(--color-bg-tertiary)',
+                                color: isPast || isActive ? 'var(--color-bg-primary)' : 'var(--color-text-primary)',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',

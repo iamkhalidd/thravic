@@ -8,6 +8,7 @@ import { createLogger } from '../config/logger';
 
 const log = createLogger('Insights');
 import { v4 as uuidv4 } from 'uuid';
+import { GoogleGenAI } from '@google/genai';
 
 const router = Router();
 
@@ -16,6 +17,75 @@ function percentChange(current: number, previous: number): number {
     if (previous === 0) return current > 0 ? 100 : 0;
     return Math.round(((current - previous) / previous) * 100);
 }
+
+// GET /api/insights/:domainId/trends - Get historical data and forecast trends
+router.get('/:domainId/trends', authenticate, requireFeature('insights'), async (req: AuthRequest, res: Response) => {
+    try {
+        const domain = await domainService.getById(req.params.domainId);
+        if (!domain || domain.user_id !== req.userId) {
+            return res.status(404).json({ error: 'Domain not found' });
+        }
+
+        const now = new Date();
+        const start = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000); // last 14 days
+        const timeseries = await eventService.getTimeseries(domain.id, start, now, 'day');
+
+        const historical: any[] = [];
+        let runningViews = 0;
+        let runningVisitors = 0;
+
+        for (let i = 13; i >= 0; i--) {
+            const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+            const dateString = date.toISOString().split('T')[0];
+            const dataPoint = timeseries.find(t => t.bucket.startsWith(dateString));
+            
+            const pv = dataPoint?.pageviews || 0;
+            const vis = dataPoint?.visitors || 0;
+            
+            // Simple moving average
+            runningViews = (runningViews * 0.7) + (pv * 0.3);
+            runningVisitors = (runningVisitors * 0.7) + (vis * 0.3);
+
+            historical.push({
+                date: dateString,
+                pageviews: pv,
+                visitors: vis,
+                pageviewsMA: Math.round(runningViews),
+                visitorsMA: Math.round(runningVisitors)
+            });
+        }
+
+        const forecast: any[] = [];
+        let lastPv = historical[historical.length - 1].pageviewsMA;
+        const trendFactor = (historical[historical.length - 1].pageviewsMA - historical[0].pageviewsMA) / 14;
+
+        for (let i = 1; i <= 7; i++) {
+            const date = new Date(now.getTime() + i * 24 * 60 * 60 * 1000);
+            const dateString = date.toISOString().split('T')[0];
+            const predicted = Math.max(0, Math.round(lastPv + (trendFactor * i)));
+            
+            forecast.push({
+                date: dateString,
+                predicted,
+                confidence: Math.max(0, 100 - (i * 10))
+            });
+        }
+
+        const trendDirection = trendFactor > 1 ? 'up' : trendFactor < -1 ? 'down' : 'stable';
+
+        res.json({
+            historical,
+            forecast,
+            trend: {
+                direction: trendDirection,
+                strength: Math.abs(trendFactor)
+            }
+        });
+    } catch (error) {
+        log.error('Trends error', error);
+        res.status(500).json({ error: 'Failed to generate trends' });
+    }
+});
 
 // GET /api/insights/:domainId - Get AI-generated insights
 router.get('/:domainId', authenticate, requireFeature('insights'), async (req: AuthRequest, res: Response) => {
@@ -58,7 +128,64 @@ router.get('/:domainId', authenticate, requireFeature('insights'), async (req: A
             sessionService.getAvgDuration(domain.id, previousStart, previousEnd),
         ]);
 
-        const insights: any[] = [];
+        let insights: any[] = [];
+
+        // Try AI generation if API key exists
+        if (process.env.GEMINI_API_KEY) {
+            try {
+                const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+                const prompt = `You are an expert web analytics AI. I will provide you with analytics data for the past 7 days compared to the previous 7 days.
+Please analyze this data and return exactly 3 insightful recommendations in JSON array format.
+Each insight MUST match this interface exactly:
+{
+    "type": "trend" | "anomaly" | "performance" | "opportunity" | "warning",
+    "priority": "high" | "medium" | "low",
+    "title": "Short catchy title",
+    "description": "Clear explanation of what happened",
+    "metric": "Which metric this relates to e.g. 'pageviews', 'bounceRate', 'avgSessionDuration'",
+    "recommendation": "Actionable advice on what to do"
+}
+
+Data for last 7 days vs previous 7 days:
+- Pageviews: ${currentPageviews} (was ${previousPageviews})
+- Unique Visitors: ${currentVisitors} (was ${previousVisitors})
+- Sessions: ${currentSessions} (was ${previousSessions})
+- Bounce Rate: ${currentBounceRate}% (was ${previousBounceRate}%)
+- Avg Session Duration: ${currentAvgDuration}s (was ${previousAvgDuration}s)
+
+Return ONLY a valid JSON array, do not include markdown blocks.`;
+
+                const response = await ai.models.generateContent({
+                    model: 'gemini-1.5-flash',
+                    contents: prompt,
+                    config: {
+                        responseMimeType: 'application/json',
+                        temperature: 0.7
+                    }
+                });
+
+                const text = response.text || "[]";
+                const parsedInsights = JSON.parse(text);
+                
+                insights = parsedInsights.map((insight: any) => ({
+                    id: uuidv4(),
+                    ...insight,
+                    createdAt: new Date()
+                }));
+
+                return res.json({
+                    insights,
+                    period: {
+                        current: { start: currentStart, end: currentEnd },
+                        previous: { start: previousStart, end: previousEnd }
+                    },
+                    generatedAt: new Date(),
+                    aiGenerated: true
+                });
+            } catch (err) {
+                log.error('Gemini error, falling back to basic insights', err);
+            }
+        }
 
         // Traffic trend
         const pvChange = percentChange(currentPageviews, previousPageviews);
@@ -147,7 +274,8 @@ router.get('/:domainId', authenticate, requireFeature('insights'), async (req: A
                 current: { start: currentStart, end: currentEnd },
                 previous: { start: previousStart, end: previousEnd }
             },
-            generatedAt: new Date()
+            generatedAt: new Date(),
+            aiGenerated: false
         });
     } catch (error) {
         log.error('Insights error', error);
