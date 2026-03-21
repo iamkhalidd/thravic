@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import '@/styles/globals.css';
 import { ToastProvider, ErrorBoundary } from '@/components';
 import CookieConsentBanner from '@/components/CookieConsentBanner';
+import { ThemeProvider } from '@/components/ThemeProvider';
 
 export const metadata: Metadata = {
     title: 'Thravic - Traffic Intelligence & Analytics',
@@ -24,12 +25,14 @@ export default function RootLayout({
                 />
             </head>
             <body>
-                <ToastProvider>
-                    <ErrorBoundary>
-                        {children}
-                    </ErrorBoundary>
-                </ToastProvider>
-                <CookieConsentBanner />
+                <ThemeProvider attribute="data-theme" defaultTheme="dark">
+                    <ToastProvider>
+                        <ErrorBoundary>
+                            {children}
+                        </ErrorBoundary>
+                    </ToastProvider>
+                    <CookieConsentBanner />
+                </ThemeProvider>
             </body>
         </html>
     );

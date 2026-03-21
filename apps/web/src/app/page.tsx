@@ -7,6 +7,7 @@ import {
     ArrowRight, Check, Lock, PlayCircle, Menu, X
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
+import { ThemeToggle } from '@/components/ThemeToggle';
 
 // Dynamically import Recharts-based views to prevent SSR hydration mismatches
 const OverviewView = dynamic(() => import('./demo/DemoViews').then(mod => mod.OverviewView), { ssr: false });
@@ -177,6 +178,7 @@ export default function HomePage() {
                         </div>
 
                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <ThemeToggle />
                             <Link href="/login" style={{
                                 color: 'var(--color-text-secondary)', textDecoration: 'none',
                                 fontSize: '0.8125rem', fontWeight: 500,

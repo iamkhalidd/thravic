@@ -5,7 +5,8 @@ import {
     Globe, RefreshCw, ArrowRight, ArrowUpRight, ArrowDownRight,
     Target, Video, Sparkles, FileBarChart, Download, Mail, Lightbulb,
     Play, Monitor, Smartphone, Tablet, AlertTriangle, Zap,
-    Search, Filter, Eye, ExternalLink, Calendar, CheckCircle
+    Search, Filter, Eye, ExternalLink, Calendar, CheckCircle,
+    Gauge, FileInput, UsersRound, Settings as SettingsIcon, GitCommit
 } from 'lucide-react';
 import {
     LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -655,6 +656,208 @@ export function ReportsView() {
                         </div>
                     </div>
                 ))}
+            </div>
+        </>
+    );
+}
+
+// ── Behavior Paths ──
+export function BehaviorPathsView() {
+    return (
+        <>
+            <h2 style={{ margin: '0 0 var(--space-lg)', fontSize: '1.25rem' }}>User Paths</h2>
+            <div style={cardStyle}>
+                <div style={{ textAlign: 'center', padding: 'var(--space-2xl)', color: 'var(--color-text-muted)' }}>
+                    <GitCommit size={48} style={{ margin: '0 auto var(--space-md)', opacity: 0.5 }} />
+                    <h3>User Flow</h3>
+                    <p>Upgrade to Pro to visualize how users navigate through your site.</p>
+                </div>
+            </div>
+        </>
+    );
+}
+
+// ── Behavior Devices ──
+export function BehaviorDevicesView() {
+    return (
+        <>
+            <h2 style={{ margin: '0 0 var(--space-lg)', fontSize: '1.25rem' }}>Devices & Browsers</h2>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-lg)' }}>
+                <div style={cardStyle}>
+                    <h4 style={{ margin: '0 0 var(--space-md)' }}>Device Usage</h4>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
+                        {[
+                            { name: 'Mobile', value: 65, icon: Smartphone },
+                            { name: 'Desktop', value: 30, icon: Monitor },
+                            { name: 'Tablet', value: 5, icon: Tablet }
+                        ].map((d, i) => (
+                            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
+                                <d.icon size={20} style={{ color: 'var(--color-text-secondary)' }} />
+                                <div style={{ flex: 1 }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', marginBottom: '4px' }}>
+                                        <span>{d.name}</span>
+                                        <strong>{d.value}%</strong>
+                                    </div>
+                                    <div style={{ height: '8px', background: 'var(--color-bg-tertiary)', borderRadius: '4px', overflow: 'hidden' }}>
+                                        <div style={{ width: `${d.value}%`, height: '100%', background: 'var(--color-accent-primary)' }} />
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+                <div style={cardStyle}>
+                    <h4 style={{ margin: '0 0 var(--space-md)' }}>Top Browsers</h4>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
+                        {[
+                            { name: 'Chrome', value: '45.2%' },
+                            { name: 'Safari', value: '32.8%' },
+                            { name: 'Firefox', value: '12.4%' },
+                            { name: 'Edge', value: '7.1%' },
+                        ].map((b, i) => (
+                            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--color-border)', fontSize: '0.875rem' }}>
+                                <span>{b.name}</span>
+                                <strong>{b.value}</strong>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        </>
+    );
+}
+
+// ── Errors ──
+export function ErrorsView() {
+    return (
+        <>
+            <h2 style={{ margin: '0 0 var(--space-lg)', fontSize: '1.25rem' }}>Error Tracking</h2>
+            <div style={cardStyle}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-md)' }}>
+                    <h4 style={{ margin: 0 }}>Recent JavaScript Errors</h4>
+                </div>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead><tr><th style={thStyle}>Error Message</th><th style={thStyle}>File</th><th style={thStyle}>Browser</th><th style={thStyle}>Occurrences</th></tr></thead>
+                    <tbody>
+                        {[
+                            { msg: 'TypeError: Cannot read properties of undefined', file: '/js/main.js:42', browser: 'Chrome', count: 124 },
+                            { msg: 'ReferenceError: $ is not defined', file: '/js/vendor.js:12', browser: 'Safari', count: 89 },
+                            { msg: 'NetworkError: Failed to fetch', file: '/api/data', browser: 'Firefox', count: 45 },
+                        ].map((e, i) => (
+                            <tr key={i}>
+                                <td style={{ ...tdStyle, color: 'var(--color-error)' }}>{e.msg}</td>
+                                <td style={{ ...tdStyle, fontFamily: 'monospace', fontSize: '0.75rem' }}>{e.file}</td>
+                                <td style={tdStyle}>{e.browser}</td>
+                                <td style={tdStyle}>
+                                    <span style={{ ...badgeStyle, background: 'rgba(239, 68, 68, 0.1)', color: 'var(--color-error)' }}>{e.count}</span>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </>
+    );
+}
+
+// ── Performance ──
+export function PerformanceView() {
+    return (
+        <>
+            <h2 style={{ margin: '0 0 var(--space-lg)', fontSize: '1.25rem' }}>Performance Metrics</h2>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 'var(--space-md)' }}>
+                {[
+                    { label: 'LCP (Largest Contentful Paint)', value: '1.2s', status: 'Good', color: 'var(--color-success)' },
+                    { label: 'FID (First Input Delay)', value: '42ms', status: 'Good', color: 'var(--color-success)' },
+                    { label: 'CLS (Cumulative Layout Shift)', value: '0.15', status: 'Needs Improvement', color: 'var(--color-warning)' },
+                ].map((s, i) => (
+                    <div key={i} style={cardStyle}>
+                        <div style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-xs)' }}>{s.label}</div>
+                        <div style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: 'var(--space-xs)' }}>{s.value}</div>
+                        <span style={{ ...badgeStyle, color: s.color, border: `1px solid ${s.color}` }}>{s.status}</span>
+                    </div>
+                ))}
+            </div>
+        </>
+    );
+}
+
+// ── Forms ──
+export function FormsView() {
+    return (
+        <>
+            <h2 style={{ margin: '0 0 var(--space-lg)', fontSize: '1.25rem' }}>Form Analytics</h2>
+            <div style={cardStyle}>
+                <div style={{ textAlign: 'center', padding: 'var(--space-2xl)', color: 'var(--color-text-muted)' }}>
+                    <FileInput size={48} style={{ margin: '0 auto var(--space-md)', opacity: 0.5 }} />
+                    <h3>Form Abandonment Tracking</h3>
+                    <p>Track which inputs cause users to drop off. Premium feature.</p>
+                </div>
+            </div>
+        </>
+    );
+}
+
+// ── Team ──
+export function TeamView() {
+    return (
+        <>
+            <h2 style={{ margin: '0 0 var(--space-lg)', fontSize: '1.25rem' }}>Team Management</h2>
+            <div style={cardStyle}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-lg)' }}>
+                    <h4 style={{ margin: 0 }}>Team Members</h4>
+                    <button style={{ padding: 'var(--space-sm) var(--space-md)', background: 'var(--color-primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontSize: '0.875rem', fontWeight: 600 }}>Invite Member</button>
+                </div>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead><tr><th style={thStyle}>User</th><th style={thStyle}>Role</th><th style={thStyle}>Status</th></tr></thead>
+                    <tbody>
+                        <tr>
+                            <td style={tdStyle}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'var(--color-accent-primary)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>D</div>
+                                    <div>
+                                        <div style={{ fontWeight: 500 }}>Demo User</div>
+                                        <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>demo@example.com</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td style={tdStyle}><span style={badgeStyle}>Owner</span></td>
+                            <td style={tdStyle}><span style={{ ...badgeStyle, background: 'rgba(34, 197, 94, 0.1)', color: 'var(--color-success)' }}>Active</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </>
+    );
+}
+
+// ── Settings ──
+export function SettingsView() {
+    return (
+        <>
+            <h2 style={{ margin: '0 0 var(--space-lg)', fontSize: '1.25rem' }}>Project Settings</h2>
+            <div style={cardStyle}>
+                <h4 style={{ margin: '0 0 var(--space-lg)' }}>Tracking Settings</h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 'var(--space-md)', borderBottom: '1px solid var(--color-border)' }}>
+                        <div>
+                            <div style={{ fontWeight: 500 }}>Session Recording</div>
+                            <div style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>Record user sessions automatically.</div>
+                        </div>
+                        <div style={{ width: '40px', height: '24px', background: 'var(--color-success)', borderRadius: '12px', position: 'relative' }}>
+                            <div style={{ width: '20px', height: '20px', background: 'white', borderRadius: '50%', position: 'absolute', top: '2px', right: '2px' }} />
+                        </div>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 'var(--space-md)', borderBottom: '1px solid var(--color-border)' }}>
+                        <div>
+                            <div style={{ fontWeight: 500 }}>IP Anonymization</div>
+                            <div style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>Mask visitor IPs for GDPR compliance.</div>
+                        </div>
+                        <div style={{ width: '40px', height: '24px', background: 'var(--color-success)', borderRadius: '12px', position: 'relative' }}>
+                            <div style={{ width: '20px', height: '20px', background: 'white', borderRadius: '50%', position: 'absolute', top: '2px', right: '2px' }} />
+                        </div>
+                    </div>
+                </div>
             </div>
         </>
     );

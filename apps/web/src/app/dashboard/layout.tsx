@@ -36,6 +36,7 @@ import { DomainProvider, useDomain } from '@/contexts/DomainContext';
 import { DateRangeProvider, useDateRange, datePresets } from '@/contexts/DateRangeContext';
 import { AnnouncementBanner } from '@/components/AnnouncementBanner';
 import { ImpersonationBanner } from '@/components/ImpersonationBanner';
+import { ThemeToggle } from '@/components/ThemeToggle';
 
 const navStructure = [
     { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', exact: true },
@@ -571,6 +572,8 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
 
                     {/* Right: actions — Live and Export desktop only, theme always */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                        <ThemeToggle />
+                        
                         {/* Live — desktop only */}
                         <button
                             className="desktop-only"
@@ -615,7 +618,7 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
 
             {/* Mobile overlay backdrop */}
             <div
-                className={`dash-overlay${mobileSidebarOpen ? ' active' : ''}`}
+                className={`dash-sidebar-overlay${mobileSidebarOpen ? ' active' : ''}`}
                 onClick={() => setMobileSidebarOpen(false)}
             />
         </div>

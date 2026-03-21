@@ -5,19 +5,21 @@ import Link from 'next/link';
 import {
     LayoutDashboard, Globe, Users, Target, MousePointer2,
     Video, Sparkles, FileBarChart, Settings, ChevronDown, ChevronRight,
-    ArrowRight, TrendingUp, Calendar
+    ArrowRight, TrendingUp, Calendar, PanelLeftClose, PanelLeftOpen, Gauge, UsersRound
 } from 'lucide-react';
 import {
     OverviewView, TrafficSourcesView, CampaignsView, TrendsView,
     BehaviorPagesView, FunnelsView, HeatmapsView, SessionsView,
-    InsightsView, ReportsView
+    InsightsView, ReportsView, BehaviorPathsView, BehaviorDevicesView,
+    ErrorsView, PerformanceView, FormsView, TeamView, SettingsView
 } from './DemoViews';
 
 type DemoView = 'overview' | 'traffic-sources' | 'traffic-campaigns' | 'traffic-trends'
-    | 'behavior-pages' | 'funnels' | 'heatmaps' | 'sessions' | 'insights' | 'reports';
+    | 'behavior-pages' | 'behavior-paths' | 'behavior-devices' | 'funnels' | 'heatmaps' | 'sessions' | 'insights' | 'reports'
+    | 'monitoring-errors' | 'monitoring-performance' | 'monitoring-forms' | 'team' | 'settings';
 
 const navStructure = [
-    { id: 'overview' as DemoView, icon: LayoutDashboard, label: 'Overview' },
+    { id: 'overview' as DemoView, icon: LayoutDashboard, label: 'Dashboard' },
     {
         label: 'Traffic', icon: Globe, children: [
             { id: 'traffic-sources' as DemoView, label: 'Sources' },
@@ -28,6 +30,15 @@ const navStructure = [
     {
         label: 'Behavior', icon: Users, children: [
             { id: 'behavior-pages' as DemoView, label: 'Pages' },
+            { id: 'behavior-paths' as DemoView, label: 'Paths' },
+            { id: 'behavior-devices' as DemoView, label: 'Devices' },
+        ]
+    },
+    {
+        label: 'Monitoring', icon: Gauge, children: [
+            { id: 'monitoring-errors' as DemoView, label: 'Errors' },
+            { id: 'monitoring-performance' as DemoView, label: 'Performance' },
+            { id: 'monitoring-forms' as DemoView, label: 'Forms' },
         ]
     },
     { id: 'funnels' as DemoView, icon: Target, label: 'Funnels' },
@@ -43,11 +54,18 @@ const viewComponents: Record<DemoView, React.ComponentType> = {
     'traffic-campaigns': CampaignsView,
     'traffic-trends': TrendsView,
     'behavior-pages': BehaviorPagesView,
+    'behavior-paths': BehaviorPathsView,
+    'behavior-devices': BehaviorDevicesView,
+    'monitoring-errors': ErrorsView,
+    'monitoring-performance': PerformanceView,
+    'monitoring-forms': FormsView,
     'funnels': FunnelsView,
     'heatmaps': HeatmapsView,
     'sessions': SessionsView,
     'insights': InsightsView,
     'reports': ReportsView,
+    'team': TeamView,
+    'settings': SettingsView,
 };
 
 const datePresets = [
@@ -59,9 +77,11 @@ const datePresets = [
 
 export default function DemoPage() {
     const [activeView, setActiveView] = useState<DemoView>('overview');
-    const [expandedSections, setExpandedSections] = useState<string[]>(['Traffic', 'Behavior']);
+    const [expandedSections, setExpandedSections] = useState<string[]>(['Traffic', 'Behavior', 'Monitoring']);
     const [dateRange, setDateRange] = useState('7d');
     const [dateDropdownOpen, setDateDropdownOpen] = useState(false);
+    const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+    const [comparisonEnabled, setComparisonEnabled] = useState(false);
 
     const toggleSection = (label: string) => {
         setExpandedSections(prev =>
@@ -80,8 +100,9 @@ export default function DemoPage() {
         width: '100%',
         display: 'flex',
         alignItems: 'center',
-        gap: '10px',
-        padding: '8px 12px',
+        justifyContent: sidebarCollapsed ? 'center' : 'flex-start',
+        gap: sidebarCollapsed ? '0' : '10px',
+        padding: sidebarCollapsed ? '10px 0' : '8px 12px',
         background: 'transparent',
         border: 'none',
         borderRadius: '6px',
@@ -120,16 +141,17 @@ export default function DemoPage() {
 
             {/* Sidebar — matches real dashboard layout.tsx */}
             <aside style={{
-                width: '240px',
+                width: sidebarCollapsed ? '56px' : '240px',
                 background: 'var(--color-sidebar-bg, var(--color-bg-secondary))',
                 borderRight: '1px solid var(--color-sidebar-border, var(--color-border))',
                 display: 'flex', flexDirection: 'column',
-                position: 'fixed', top: '40px', left: 0, height: 'calc(100vh - 40px)', zIndex: 50
+                position: 'fixed', top: '40px', left: 0, height: 'calc(100vh - 40px)', zIndex: 50,
+                transition: 'width 150ms ease'
             }}>
                 {/* Logo — matches real dashboard */}
                 <div style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    padding: '0 12px 0 16px', height: '56px',
+                    display: 'flex', alignItems: 'center', justifyContent: sidebarCollapsed ? 'center' : 'space-between',
+                    padding: sidebarCollapsed ? '0' : '0 12px 0 16px', height: '56px',
                     borderBottom: '1px solid var(--color-sidebar-border, var(--color-border))',
                     flexShrink: 0,
                 }}>
@@ -144,38 +166,40 @@ export default function DemoPage() {
                         }}>
                             <TrendingUp size={15} color="white" />
                         </div>
-                        <span style={{ fontWeight: 700, fontSize: '1rem', whiteSpace: 'nowrap' }}>Thravic</span>
+                        {!sidebarCollapsed && <span style={{ fontWeight: 700, fontSize: '1rem', whiteSpace: 'nowrap' }}>Thravic</span>}
                     </Link>
-                    <span style={{
+                    {!sidebarCollapsed && <span style={{
                         padding: '2px 8px', background: 'var(--color-bg-hover)',
                         color: 'var(--color-accent-primary)', borderRadius: 'var(--radius-full)',
                         fontSize: '0.6875rem', fontWeight: 600
-                    }}>DEMO</span>
+                    }}>DEMO</span>}
                 </div>
 
                 {/* Domain Selector — matches real dashboard */}
-                <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--color-sidebar-border, var(--color-border))', flexShrink: 0 }}>
-                    <div style={{ position: 'relative' }}>
-                        <button style={{
-                            width: '100%', display: 'flex', alignItems: 'center',
-                            justifyContent: 'space-between',
-                            padding: '7px 10px',
-                            background: 'var(--color-bg-primary)',
-                            border: '1px solid var(--color-border)',
-                            borderRadius: '6px', cursor: 'pointer',
-                            fontSize: '0.8125rem', color: 'var(--color-text-primary)',
-                        }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <Globe size={13} />
-                                <span>demo-site.com</span>
-                            </div>
-                            <ChevronDown size={12} />
-                        </button>
+                {!sidebarCollapsed && (
+                    <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--color-sidebar-border, var(--color-border))', flexShrink: 0 }}>
+                        <div style={{ position: 'relative' }}>
+                            <button style={{
+                                width: '100%', display: 'flex', alignItems: 'center',
+                                justifyContent: 'space-between',
+                                padding: '7px 10px',
+                                background: 'var(--color-bg-primary)',
+                                border: '1px solid var(--color-border)',
+                                borderRadius: '6px', cursor: 'pointer',
+                                fontSize: '0.8125rem', color: 'var(--color-text-primary)',
+                            }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <Globe size={13} />
+                                    <span>demo-site.com</span>
+                                </div>
+                                <ChevronDown size={12} />
+                            </button>
+                        </div>
                     </div>
-                </div>
+                )}
 
                 {/* Navigation — matches real dashboard */}
-                <nav style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '8px 0' }}>
+                <nav style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: sidebarCollapsed ? '8px 4px' : '8px 0' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                         {navStructure.map((item, i) => {
                             const Icon = item.icon;
@@ -186,12 +210,12 @@ export default function DemoPage() {
                             if (hasChildren) {
                                 return (
                                     <div key={i}>
-                                        <button onClick={() => toggleSection(item.label)} style={navItemStyle(itemActive)}>
+                                        <button onClick={() => toggleSection(item.label)} style={navItemStyle(itemActive)} title={sidebarCollapsed ? item.label : undefined}>
                                             <Icon size={18} style={{ flexShrink: 0 }} />
-                                            <span style={{ flex: 1 }}>{item.label}</span>
-                                            {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                                            {!sidebarCollapsed && <span style={{ flex: 1 }}>{item.label}</span>}
+                                            {!sidebarCollapsed && (isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />)}
                                         </button>
-                                        {isExpanded && (
+                                        {isExpanded && !sidebarCollapsed && (
                                             <div style={{ marginLeft: '15px', marginTop: '2px' }}>
                                                 {item.children!.map((child, j) => {
                                                     const childActive = isActive(child.id);
@@ -218,9 +242,9 @@ export default function DemoPage() {
                             }
 
                             return (
-                                <button key={i} onClick={() => setActiveView(item.id!)} style={navItemStyle(itemActive)}>
+                                <button key={i} onClick={() => setActiveView(item.id!)} style={navItemStyle(itemActive)} title={sidebarCollapsed ? item.label : undefined}>
                                     <Icon size={18} style={{ flexShrink: 0 }} />
-                                    <span>{item.label}</span>
+                                    {!sidebarCollapsed && <span>{item.label}</span>}
                                 </button>
                             );
                         })}
@@ -230,18 +254,23 @@ export default function DemoPage() {
                 {/* Bottom — Settings + User (matches real dashboard) */}
                 <div style={{
                     borderTop: '1px solid var(--color-sidebar-border, var(--color-border))',
-                    padding: '8px 0', flexShrink: 0,
+                    padding: sidebarCollapsed ? '8px 4px' : '8px 0', flexShrink: 0,
                 }}>
-                    {/* Settings link */}
-                    <button onClick={() => setActiveView('overview')} style={navItemStyle(false)}>
+                    <button onClick={() => setActiveView('team')} style={navItemStyle(isActive('team'))} title={sidebarCollapsed ? 'Team' : undefined}>
+                        <UsersRound size={18} style={{ flexShrink: 0 }} />
+                        {!sidebarCollapsed && <span>Team</span>}
+                    </button>
+
+                    <button onClick={() => setActiveView('settings')} style={navItemStyle(isActive('settings'))} title={sidebarCollapsed ? 'Settings' : undefined}>
                         <Settings size={18} style={{ flexShrink: 0 }} />
-                        <span>Settings</span>
+                        {!sidebarCollapsed && <span>Settings</span>}
                     </button>
 
                     {/* User row */}
                     <div style={{
-                        display: 'flex', alignItems: 'center', gap: '8px',
-                        padding: '8px 12px', marginTop: '4px',
+                        display: 'flex', alignItems: 'center', gap: sidebarCollapsed ? '0' : '8px',
+                        padding: sidebarCollapsed ? '8px 0' : '8px 12px', marginTop: '4px',
+                        justifyContent: sidebarCollapsed ? 'center' : 'flex-start'
                     }}>
                         <div style={{
                             width: '28px', height: '28px', borderRadius: '50%',
@@ -249,23 +278,25 @@ export default function DemoPage() {
                             justifyContent: 'center', color: 'white',
                             fontWeight: 700, fontSize: '0.75rem', flexShrink: 0,
                         }}>D</div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{
-                                fontSize: '0.8125rem', fontWeight: 500,
-                                color: 'var(--color-text-primary)',
-                                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                            }}>Demo User</div>
-                            <div style={{
-                                fontSize: '0.6875rem', color: 'var(--color-text-muted)',
-                                textTransform: 'capitalize',
-                            }}>Free Plan</div>
-                        </div>
+                        {!sidebarCollapsed && (
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{
+                                    fontSize: '0.8125rem', fontWeight: 500,
+                                    color: 'var(--color-text-primary)',
+                                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                                }}>Demo User</div>
+                                <div style={{
+                                    fontSize: '0.6875rem', color: 'var(--color-text-muted)',
+                                    textTransform: 'capitalize',
+                                }}>Free Plan</div>
+                            </div>
+                        )}
                     </div>
                 </div>
             </aside>
 
             {/* Main Content — matches real dashboard layout */}
-            <main style={{ flex: 1, marginLeft: '240px', marginTop: '40px' }}>
+            <main style={{ flex: 1, marginLeft: sidebarCollapsed ? '56px' : '240px', marginTop: '40px', transition: 'margin-left 150ms ease' }}>
                 {/* Top Header — matches real dashboard header */}
                 <header style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -275,8 +306,22 @@ export default function DemoPage() {
                     position: 'sticky', top: '40px', zIndex: 40,
                     gap: '8px',
                 }}>
-                    {/* Left: date controls */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1, minWidth: 0 }}>
+                    {/* Left controls: Sidebar toggle, Date range, Compare */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: 0 }}>
+                        <button
+                            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                            style={{
+                                background: 'transparent', border: 'none', cursor: 'pointer',
+                                padding: '4px', color: 'var(--color-text-secondary)',
+                                display: 'flex', alignItems: 'center', borderRadius: '4px',
+                                marginLeft: '0'
+                            }}
+                        >
+                            {sidebarCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+                        </button>
+                        
+                        <div style={{ width: '1px', height: '24px', background: 'var(--color-border)' }} />
+
                         <div style={{ position: 'relative' }}>
                             <button
                                 onClick={() => setDateDropdownOpen(!dateDropdownOpen)}
@@ -317,20 +362,40 @@ export default function DemoPage() {
                                 </div>
                             )}
                         </div>
-
-                        {activeView === 'overview' && (
-                            <div style={{
-                                display: 'flex', alignItems: 'center', gap: '6px',
-                                padding: '4px 10px',
-                                background: 'rgba(16,185,129,0.08)',
-                                border: '1px solid rgba(16,185,129,0.2)',
-                                borderRadius: '6px',
-                            }}>
-                                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#22c55e', animation: 'pulse 2s infinite' }} />
-                                <span style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)' }}><strong>127</strong> active</span>
-                            </div>
-                        )}
+                        
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)' }}>Compare</span>
+                            <button
+                                onClick={() => setComparisonEnabled(!comparisonEnabled)}
+                                style={{
+                                    width: '36px', height: '20px', borderRadius: '10px',
+                                    background: comparisonEnabled ? 'var(--color-accent-primary)' : 'var(--color-bg-tertiary)',
+                                    border: '1px solid ' + (comparisonEnabled ? 'var(--color-accent-primary)' : 'var(--color-border)'),
+                                    position: 'relative', cursor: 'pointer', transition: 'background 0.2s'
+                                }}
+                            >
+                                <div style={{
+                                    width: '14px', height: '14px', borderRadius: '50%',
+                                    background: 'var(--color-bg-primary)', position: 'absolute',
+                                    top: '1px', left: comparisonEnabled ? '19px' : '1px', transition: 'left 0.2s, box-shadow 0.2s',
+                                    boxShadow: 'var(--shadow-sm)'
+                                }} />
+                            </button>
+                        </div>
                     </div>
+
+                    {activeView === 'overview' && (
+                        <div style={{
+                            display: 'flex', alignItems: 'center', gap: '6px',
+                            padding: '4px 10px',
+                            background: 'rgba(16,185,129,0.08)',
+                            border: '1px solid rgba(16,185,129,0.2)',
+                            borderRadius: '6px',
+                        }}>
+                            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#22c55e', animation: 'pulse 2s infinite' }} />
+                            <span style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)' }}><strong>127</strong> active</span>
+                        </div>
+                    )}
                 </header>
 
                 {/* Page Content */}
