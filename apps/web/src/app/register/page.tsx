@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { BarChart3, Mail, Lock, User, ArrowRight } from 'lucide-react';
+import { BarChart3, Mail, Lock, User, ArrowRight, ArrowLeft } from 'lucide-react';
 import { auth } from '@/lib/api';
 
 export default function RegisterPage() {
@@ -38,8 +38,29 @@ export default function RegisterPage() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-        background: 'var(--color-bg-primary)'
+            background: 'var(--color-bg-primary)',
+            position: 'relative'
         }}>
+            {/* Back to Home Link */}
+            <Link href="/" style={{
+                position: 'absolute',
+                top: 'var(--space-lg)',
+                left: 'var(--space-lg)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 'var(--space-xs)',
+                color: 'var(--color-text-secondary)',
+                textDecoration: 'none',
+                fontSize: '0.875rem',
+                fontWeight: 500,
+                transition: 'color 0.2s'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.color = 'var(--color-text-primary)'}
+            onMouseLeave={(e) => e.currentTarget.style.color = 'var(--color-text-secondary)'}
+            >
+                <ArrowLeft size={16} />
+                Back to home
+            </Link>
             <div style={{
                 width: '100%',
                 maxWidth: '420px',
