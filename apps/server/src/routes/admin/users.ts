@@ -150,7 +150,7 @@ router.patch('/:id', adminAuth, async (req: AuthRequest, res: Response) => {
                 `INSERT INTO subscriptions (user_id, plan, status, events_limit, domains_limit)
                  VALUES ($1, $2, 'active', $3, $4)
                  ON CONFLICT (user_id) DO UPDATE
-                   SET plan = $2, events_limit = $3, domains_limit = $4, updated_at = NOW()`,
+                   SET plan = $2, events_limit = $3, domains_limit = $4, updated_at = NOW(), events_used = subscriptions.events_used`,
                 [req.params.id, subscription, limits.events, limits.domains]
             );
         }

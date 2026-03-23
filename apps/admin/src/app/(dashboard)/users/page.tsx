@@ -75,8 +75,20 @@ export default function UsersPage() {
 
     const handleSave = async () => {
         if (!editUser) return;
+        
+        const changes: Record<string, string> = {};
+        if (editForm.name !== editUser.name) changes.name = editForm.name;
+        if (editForm.email !== editUser.email) changes.email = editForm.email;
+        if (editForm.subscription !== editUser.subscription) changes.subscription = editForm.subscription;
+        if (editForm.role !== (editUser.role || 'user')) changes.role = editForm.role;
+
+        if (Object.keys(changes).length === 0) {
+            setEditUser(null);
+            return;
+        }
+
         try {
-            await api.patch(`/api/admin/users/${editUser.id}`, editForm);
+            await api.patch(`/api/admin/users/${editUser.id}`, changes);
             setEditUser(null);
             loadUsers();
         } catch (err: any) {
