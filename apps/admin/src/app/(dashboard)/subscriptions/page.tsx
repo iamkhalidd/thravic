@@ -106,7 +106,7 @@ export default function SubscriptionsPage() {
                     ) : revenue.map(r => (
                         <div key={r.plan} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontSize: '14px' }}>
                             <span><span className={`badge badge-${r.plan}`}>{r.plan}</span></span>
-                            <span style={{ color: 'var(--color-text-primary)' }}>{r.count} subs — ${parseFloat(r.revenue || '0').toLocaleString()}</span>
+                            <span style={{ color: 'var(--color-text-primary)' }}>{r.count} subs — ₦{parseFloat(r.revenue || '0').toLocaleString()}</span>
                         </div>
                     ))}
                 </div>
@@ -169,7 +169,15 @@ export default function SubscriptionsPage() {
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
                             <div>
                                 <label style={{ display: 'block', fontSize: '13px', color: 'var(--color-text-secondary)', marginBottom: '4px' }}>Plan</label>
-                                <select className="input" value={editForm.plan} onChange={e => setEditForm(f => ({ ...f, plan: e.target.value }))}>
+                                <select className="input" value={editForm.plan} onChange={e => {
+                                    const newPlan = e.target.value;
+                                    const defaults: Record<string, { e: number, d: number }> = {
+                                        free: { e: 5000, d: 1 },
+                                        pro: { e: 100000, d: 3 },
+                                        agency: { e: 500000, d: 20 }
+                                    };
+                                    setEditForm(f => ({ ...f, plan: newPlan, events_limit: defaults[newPlan]?.e ?? f.events_limit, domains_limit: defaults[newPlan]?.d ?? f.domains_limit }));
+                                }}>
                                     <option value="free">Free</option>
                                     <option value="pro">Pro</option>
                                     <option value="agency">Agency</option>
