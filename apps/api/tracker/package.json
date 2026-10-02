@@ -1,0 +1,16 @@
+{
+    "name": "tracker",
+    "version": "1.0.0",
+    "private": true,
+    "description": "Thravic browser tracking script source. The build output is committed at ../app/static/tracker.js and served by the API at /tf.js and /v.js.",
+    "main": "../app/static/tracker.js",
+    "scripts": {
+        "build": "esbuild src/index.ts --bundle --minify --outfile=../app/static/tracker.js --format=iife",
+        "dev": "esbuild src/index.ts --bundle --outfile=../app/static/tracker.js --format=iife --watch",
+        "typecheck": "tsc --noEmit"
+    },
+    "devDependencies": {
+        "esbuild": "^0.20.0",
+        "typescript": "^5.3.0"
+    }
+}

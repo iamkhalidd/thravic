@@ -167,7 +167,7 @@ export default function PlansPage() {
                             {loading ? (
                                 <tr><td colSpan={8} className="loading"><div className="spinner" /></td></tr>
                             ) : plans.length === 0 ? (
-                                <tr><td colSpan={8} style={{ textAlign: 'center', padding: '2rem', color: 'var(--color-text-muted)' }}>No plans configured. Click "New Plan" to create one.</td></tr>
+                                <tr><td colSpan={8} style={{ textAlign: 'center', padding: '2rem', color: 'var(--color-text-muted)' }}>No plans configured. Click &quot;New Plan&quot; to create one.</td></tr>
                             ) : plans.map(plan => (
                                 <tr key={plan.id} style={{ opacity: plan.active ? 1 : 0.5 }}>
                                     <td>

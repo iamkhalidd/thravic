@@ -299,7 +299,7 @@ export default function DashboardPage() {
                                     whiteSpace: 'pre-wrap',
                                     wordBreak: 'break-all'
                                 }}>
-                                    {trackingScript || `<script src="https://your-api.com/tf.js" data-tracking-id="${selectedDomain?.trackingId}"></script>`}
+                                    {trackingScript || `<script async src="https://your-api.com/tf.js" data-tracking-id="${selectedDomain?.trackingId}"></script>`}
                                 </pre>
                                 <button
                                     onClick={handleCopyScript}

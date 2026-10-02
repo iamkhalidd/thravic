@@ -1,0 +1,81 @@
+# ──────────────────────────────────────────────
+# Thravic API — Local Development Stack
+# ──────────────────────────────────────────────
+# Run these from the apps/api directory:
+#
+#   docker compose up -d                          → start postgres + redis (infra only)
+#   docker compose --profile docker up -d --build → also run the API in a container
+#   docker compose down                           → stop
+#   docker compose down -v                        → stop + wipe data
+#
+# For day-to-day development run the API natively
+# (`.venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 3001`)
+# so code changes reload without rebuilding the image. Compose is for the
+# infrastructure the API depends on.
+# ──────────────────────────────────────────────
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: thravic-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: thravic
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: thravic
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Auto-run schema on first start
+      - ./sql/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres -d thravic" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: thravic-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # Behind a profile so the default `docker compose up -d` stays infra-only.
+  api:
+    profiles: [ "docker" ]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: thravic-api
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=development
+      - PORT=3001
+      - DATABASE_URL=postgresql://postgres:thravic@postgres:5432/thravic
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=your-safe-secret-key-for-dev
+      - JWT_REFRESH_SECRET=your-safe-refresh-secret-key-for-dev
+      - CORS_ORIGIN=http://localhost:3000,http://localhost:3002
+      - FRONTEND_URL=http://localhost:3000
+      - SERVER_URL=http://localhost:3001
+      - API_URL=http://localhost:3001
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  redisdata:

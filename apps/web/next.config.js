@@ -1,6 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
     reactStrictMode: true,
+    // Self-contained server bundle for the Docker image.
+    // Vercel ignores this option, so it is safe for both targets.
+    output: 'standalone',
     eslint: {
         ignoreDuringBuilds: true,
     },

@@ -45,7 +45,7 @@ export default function AboutPage() {
                 <section style={s.section}>
                     <h2 style={s.h2}><Target size={28} color="var(--color-accent-primary)" /> Clarity Above All</h2>
                     <p style={s.p}>
-                        In the fast-paced world of startups, data is often abundant but insights are scarce. Our core mission is to bridge that gap. We provide businesses with a lens to see exactly where their traffic is coming from—whether it's an organic surge from Google, a viral campaign on Instagram, or a strategic partnership.
+                        In the fast-paced world of startups, data is often abundant but insights are scarce. Our core mission is to bridge that gap. We provide businesses with a lens to see exactly where their traffic is coming from—whether it&apos;s an organic surge from Google, a viral campaign on Instagram, or a strategic partnership.
                     </p>
                     <p style={s.p}>
                         By identifying these high-value sources, we empower founders and marketing teams to double down on what works and cut out the noise.
@@ -72,7 +72,7 @@ export default function AboutPage() {
                 <section style={s.section}>
                     <h2 style={s.h2}>Beyond Just Numbers</h2>
                     <p style={s.p}>
-                        We believe that analytics shouldn't just be about counting clicks. It's about understanding the journey. Thravic allows you to create sophisticated conversion funnels that map out the path from first-time visitor to loyal customer.
+                        We believe that analytics shouldn&apos;t just be about counting clicks. It&apos;s about understanding the journey. Thravic allows you to create sophisticated conversion funnels that map out the path from first-time visitor to loyal customer.
                     </p>
                     <p style={s.p}>
                         Our professional, innovative platform is designed to be your secondary co-founder—the one that provides the cold, hard facts you need to make the pivots that matter.

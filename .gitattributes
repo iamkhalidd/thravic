@@ -1,0 +1,14 @@
+# Line-ending policy.
+#
+# `apps/api/app/static/tracker.js` is served verbatim as bytes by the API at
+# /tf.js and /v.js. It is a build artifact (the esbuild output of
+# apps/api/tracker/src/index.ts) but it is committed, because it must be
+# identical for every deployment.
+#
+# With core.autocrlf=true a Windows checkout rewrites LF to CRLF, which would
+# silently change the exact bytes every customer's browser downloads — the
+# payload is not normalised afterwards, and the assertions in
+# apps/api/tests/test_tracker.py are content-light, so the change would go
+# unnoticed. `-text` disables EOL conversion for this file so the bytes on disk
+# always match the bytes on the wire.
+apps/api/app/static/tracker.js -text

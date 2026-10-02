@@ -96,8 +96,8 @@ The platform is designed to be easily embeddable via a single JavaScript snippet
 ## 4. Technical Architecture & Stack
 
 *   **Frontend Client:** Next.js (App Router), TypeScript, Tailwind CSS, generating static/server-rendered dashboards.
-*   **Tracking Client:** Vanilla TypeScript payload (`tracking-script/src/index.ts`) compiled into a highly compressed, zero-dependency `.js` file served via CDN.
-*   **Backend API:** Node.js + Express.js. RESTful endpoints handling heavy telemetry ingestion via `/api/collect`.
+*   **Tracking Client:** Vanilla TypeScript payload (`apps/api/tracker/src/index.ts`) compiled by esbuild into a zero-dependency `.js` artifact committed at `apps/api/app/static/tracker.js` and served by the API itself at `/tf.js`.
+*   **Backend API:** Python 3.12 + FastAPI (asyncpg, Pydantic). RESTful endpoints handling heavy telemetry ingestion via `/api/collect`.
 *   **Primary Database:** PostgreSQL (Neon Serverless). Standard relational models utilizing `UUID v4` primary keys and intensive indexing on domains, timestamps, and event types for high-performance read queries.
 *   **Caching & Rate Limiting:** Redis caches session data, handles rate-limiting payloads to prevent DDoS, and buffers fast writes.
 *   **3rd Party Services:**
@@ -138,27 +138,29 @@ The architecture is deliberately relational with some denormalization for read s
     *   Background CRON jobs must meticulously prune `events` and `session_recordings` data that exceed the plan's `retention_days` limit to manage PostgreSQL cloud costs.
 *   **Security:**
     *   Strong Rate Limiting on API endpoints.
-    *   Zod schema validation on absolutely every incoming payload.
-    *   Helmet for secure HTTP headers.
+    *   Zod-compatible schema validation on absolutely every incoming payload (`app/zod_lite.py` reproduces Zod's error wording).
+    *   Helmet-equivalent security headers middleware.
 
 ---
 
 ## 7. System Architecture & Project Structure
 
-The TrackFlow platform is built as a **Turborepo/Monorepo**. It cleanly separates responsibilities across **four distinct modules**: a customer-facing frontend (`web`), an internal SaaS management portal (`admin`), the core backend API (`server`), and the installable client telemetry library (`tracking-script`).
+The TrackFlow platform is built as **three independent projects** sharing a single repository: a customer-facing frontend (`apps/web`), an internal SaaS management portal (`apps/admin`), and the core backend API (`apps/api`), which also owns the client telemetry snippet (`apps/api/tracker`).
+
+There is no root `package.json`, no npm workspaces, and no shared build step. Each project is self-contained, with its own dependencies, lockfile, scripts, and `.env.example`, and can be installed, tested, built, and deployed on its own. They communicate **only over HTTP/JSON**: neither frontend imports anything from the API, and the API imports nothing from the frontends. The only file shared across the repository is `.gitignore`.
 
 ### 7.1. High-Level Architecture Roles
 1. **`apps/web` (The Customer Dashboard):** Written in Next.js 14 and TailwindCSS. This is where end-users log in to view their tracking data (heatmaps, funnels, reports) and manage their active subscriptions.
 2. **`apps/admin` (The Back-Office Portal):** A completely isolated Next.js app exclusively for platform owners. Used to manage global settings, perform security audits, create promo codes, and impersonate users for support.
-3. **`apps/server` (The Core Engine):** A high-performance Node.js/Express API. Handles thousands of concurrent telemetry events (`/api/collect`), processes payments, enforces API validation (Zod), and manages PostgreSQL transactions.
-4. **`packages/tracking-script` (The Telemetry Snippet):** A highly optimized, dependency-free TypeScript library that compiles down to a lightweight tracking snippet (`thravic.js`). Customers embed this on their own websites to capture user interactions.
+3. **`apps/api` (The Core Engine):** A high-performance FastAPI (Python) service. Handles thousands of concurrent telemetry events (`/api/collect`), processes payments, enforces API validation (Zod-compatible, `app/zod_lite.py`), and manages PostgreSQL transactions through asyncpg.
+4. **`apps/api/tracker` (The Telemetry Snippet):** A highly optimized, dependency-free TypeScript library that compiles down to a lightweight tracking snippet (`tracker.js`), served by the API at `/tf.js`. Customers embed this on their own websites to capture user interactions. It keeps its own small esbuild toolchain because it ships to third-party sites rather than to this stack, but its build output is committed inside the API project (`app/static/tracker.js`), so API deploys need no Node step.
 
 ### 7.2. Comprehensive Structural Tree
 
 ```text
-tracking/
+thravic/
 ├── apps/
-│   ├── admin/           # Next.js Admin Portal
+│   ├── admin/           # Next.js Admin Portal (independent project)
 │   │   ├── src/
 │   │   │   ├── app/
 │   │   │   │   ├── (dashboard)/
@@ -171,22 +173,27 @@ tracking/
 │   │   │   │   │   ├── subscriptions/ # Subscriptions
 │   │   │   │   │   └── users/         # User directory
 │   │   │   │   └── login/         # Admin login
+│   │   ├── vercel.json
 │   │   └── package.json
 │   │
-│   ├── server/          # Node.js/Express API
-│   │   ├── src/
-│   │   │   ├── config/      # Env configs
-│   │   │   ├── db/          # PostgreSQL schemas
+│   ├── api/             # FastAPI (Python) API
+│   │   ├── app/
+│   │   │   ├── config.py    # Env configs
+│   │   │   ├── db.py        # PostgreSQL access + type codecs
 │   │   │   ├── jobs/        # Cron jobs
 │   │   │   ├── middleware/  # Auth & Security
-│   │   │   ├── routes/      # API Endpoints
+│   │   │   ├── routers/     # API Endpoints
 │   │   │   │   ├── admin/     # SuperAdmin routes
-│   │   │   │   ├── collect.ts # Telemetry ingest
-│   │   │   │   ├── analytics.ts # Dashboard data
-│   │   │   │   └── payments.ts  # Webhooks logic
+│   │   │   │   ├── collect.py # Telemetry ingest
+│   │   │   │   ├── analytics.py # Dashboard data
+│   │   │   │   └── payments.py  # Webhooks logic
 │   │   │   ├── services/    # Business logic
-│   │   │   └── validators/  # Zod schemas
-│   │   └── package.json
+│   │   │   └── zod_lite.py  # Zod-compatible validation
+│   │   ├── sql/             # Schema + migrations
+│   │   ├── tracker/         # Telemetry snippet source (esbuild → app/static/tracker.js)
+│   │   ├── docker-compose.yml  # postgres + redis for this API
+│   │   ├── Dockerfile
+│   │   └── requirements.txt
 │   │
 │   └── web/             # Next.js Dashboard App
 │       ├── src/
@@ -201,24 +208,30 @@ tracking/
 │       │   ├── components/  # React UI (Charts)
 │       │   ├── hooks/       # Custom React hooks
 │       │   └── contexts/    # React State
+│       ├── Dockerfile
+│       ├── vercel.json
 │       └── package.json
 │
-├── packages/
-│   └── tracking-script/ # Telemetry script
-│       ├── src/
-│       │   └── index.ts   # Core tracker logic
-│       └── package.json   # Rollup build config
-│
-├── docker-compose.yml   # Dev orchestration
-├── package.json         # Workspace root
+├── .github/
+│   └── workflows/
+│       └── ci.yml       # Four independent CI jobs
+├── .gitignore           # The only shared file
+├── README.md
 └── PRD.md               # Product Requirements
 ```
 
 ### 7.3. Micro-Service Interaction Flow
 1. **Trigger:** A visitor loads a webpage and triggers an event on a customer's website.
-2. **Buffer:** The `packages/tracking-script` (`thravic.js`) catches the event and buffers it locally in the browser to save network requests.
-3. **Transmit:** The script safely transmits batched payloads via `navigator.sendBeacon` to the API (`apps/server/src/routes/collect.ts`).
-4. **Ingest:** The Node.js server validates the JSON payload globally (`src/validators/collect.ts`), authenticates the API key, caches session state in Redis, and asynchronously writes events securely to PostgreSQL (`src/db`).
-5. **Analyze:** The customer logs into `apps/web`. The Next.js dashboard requests aggregated metrics from `apps/server/src/routes/analytics.ts` and renders charts/heatmaps.
-6. **Administrate:** The Platform Owner (You) logs into `apps/admin` which uses `apps/server/src/routes/admin/` to monitor system-wide cluster health, manage user billing limits, and toggle global capabilities.
+2. **Buffer:** The tracker served from `/tf.js` (`apps/api/app/static/tracker.js`, built from `apps/api/tracker/src/index.ts`) catches the event and buffers it locally in the browser to save network requests.
+3. **Transmit:** The script safely transmits batched payloads via `navigator.sendBeacon` to the API (`apps/api/app/routers/collect.py`).
+4. **Ingest:** The FastAPI service validates the JSON payload globally (Zod-compatible checks in `app/routers/collect.py` backed by `app/zod_lite.py`), authenticates the API key, caches session state in Redis, and asynchronously writes events securely to PostgreSQL (`app/db.py`).
+5. **Analyze:** The customer logs into `apps/web`. The Next.js dashboard requests aggregated metrics from `apps/api/app/routers/analytics.py` and renders charts/heatmaps.
+6. **Administrate:** The Platform Owner (You) logs into `apps/admin` which uses `apps/api/app/routers/admin/` to monitor system-wide cluster health, manage user billing limits, and toggle global capabilities.
+
+### 7.4. Cross-Project Contract
+
+Because the projects share nothing but HTTP, the API's implementation language remains an internal detail. The contracts that bind them are the REST payloads, the JWT flow, and two environment variables:
+
+- **`CORS_ORIGIN`** — a comma-separated allowlist that must contain both frontend origins. It drives the CORS middleware, the `connect-src` CSP directive, and the redirect guard.
+- **`FRONTEND_URL`** — the customer frontend only, used for OAuth callback redirects, the Paystack return URL, and links inside transactional emails. The admin portal uses none of these, so it is deliberately excluded.
 ```

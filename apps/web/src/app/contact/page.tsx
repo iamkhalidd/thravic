@@ -83,7 +83,7 @@ export default function ContactPage() {
                 <header style={s.header}>
                     <h1 style={s.h1}>Get in Touch with Thravic</h1>
                     <p style={s.subtitle}>
-                        Whether you're scaling your first startup or optimizing a high-growth enterprise, we’re here to help you unlock the full potential of your web traffic.
+                        Whether you&apos;re scaling your first startup or optimizing a high-growth enterprise, we’re here to help you unlock the full potential of your web traffic.
                     </p>
                 </header>
 

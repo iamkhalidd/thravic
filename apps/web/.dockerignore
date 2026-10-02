@@ -1,0 +1,11 @@
+# Build artifacts — never ship these into the image context
+node_modules
+.next
+coverage
+.git
+.env
+.env.*
+!.env.example
+*.log
+Dockerfile
+.dockerignore
