@@ -111,9 +111,15 @@ def verify_password(password: str, hashed: str) -> bool:
 
 
 async def generate_tokens(user_id: str, email: str) -> dict[str, str]:
-    """Issue an access/refresh pair with the exact claims the Express API uses."""
+    """Issue an access/refresh pair with the exact claims the Express API uses.
+
+    ``user_id`` is coerced to ``str``: asyncpg returns UUID columns as
+    ``uuid.UUID``, which PyJWT's JSON encoding cannot serialise (node-postgres
+    returned plain strings, so the Express tokens carried a string id).
+    """
     settings = get_settings()
     issued_at = datetime.now(UTC)
+    user_id = str(user_id)
 
     access_token = jwt.encode(
         {

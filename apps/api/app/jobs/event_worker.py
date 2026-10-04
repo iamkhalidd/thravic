@@ -100,8 +100,9 @@ async def _pop_batch() -> list[dict[str, Any]] | None:
     """
     client = get_client()
     if client is None:
-        # Express's `rpop` rejects and lands in the same error branch.
-        log.error("Redis unavailable — cannot drain the events queue")
+        # Express's `rpop` rejects and lands in the same error branch. Logged at
+        # debug because this repeats every loop while Redis is intentionally off.
+        log.debug("Redis unavailable — cannot drain the events queue")
         return None
 
     try:
@@ -170,6 +171,12 @@ def start_event_worker() -> None:
     global _running, _task, _shutting_down
 
     if _running:
+        return
+
+    # Without Redis there is no queue to drain; don't spin a worker that would
+    # only log "Redis unavailable" every few seconds.
+    if get_client() is None:
+        log.warning("Redis unavailable — event worker not started (draining disabled)")
         return
 
     _running = True
