@@ -48,16 +48,11 @@ defaults to `http://localhost:3001`).
 `FRONTEND_URL` **must keep the values the service had before the FastAPI cutover** so
 previously issued tokens remain valid.
 
-Infrastructure only (Postgres + Redis):
-
-```powershell
-docker compose up -d                                        # infra only
-docker compose --profile docker up -d --build               # also run the API in a container
-```
-
-The schema is **not** created automatically — run `alembic upgrade head` (above)
-once Postgres is up. The app boots without Postgres or Redis: the database logs a
-warning and Redis degrades to no-op caching.
+The API needs Postgres + Redis; point `DATABASE_URL` / `REDIS_URL` at your own
+instances (the deployed service uses Neon + Upstash). The schema is **not** created
+automatically — run `alembic upgrade head` (above) once Postgres is reachable. The
+app boots without Postgres or Redis: the database logs a warning and Redis degrades
+to no-op caching.
 
 ## Rebuilding the tracker
 

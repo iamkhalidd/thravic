@@ -13,7 +13,7 @@ workspaces, and no shared build step. Each project owns its dependencies, lockfi
 
 | Project | Path | Stack | Dev port | Deploys to |
 | --- | --- | --- | --- | --- |
-| API backend | `apps/api` | FastAPI (Python 3.12), PostgreSQL, Redis | `3001` | Render, Docker |
+| API backend | `apps/api` | FastAPI (Python 3.12), PostgreSQL, Redis | `3001` | Render |
 | Customer frontend | `apps/web` | Next.js 14 (App Router), React 18 | `3000` | Vercel, Docker |
 | Admin portal | `apps/admin` | Next.js 14 (App Router), React 18 | `3002` | Vercel |
 
@@ -51,15 +51,12 @@ Each project runs in its own terminal. No root-level command starts them togethe
 
 ```powershell
 cd apps/api
-docker compose up -d                       # starts postgres + redis
 python -m venv .venv                       # first time only
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt   # first time only
 Copy-Item .env.example .env                # first time only, then edit values
+.\.venv\Scripts\python.exe -m alembic upgrade head              # create/update schema
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 3001
 ```
-
-To run the API itself in a container instead of natively, use
-`docker compose --profile docker up -d --build`.
 
 ### Terminal 2 — customer frontend
 
@@ -131,7 +128,6 @@ rebuild or redeploy.
 | Project | Target | Configuration |
 | --- | --- | --- |
 | `apps/api` | Render | `render.yaml` (repo root; `rootDir: apps/api`) |
-| `apps/api` | Docker | `apps/api/Dockerfile` |
 | `apps/web` | Vercel | Set root directory to `apps/web`; `apps/web/vercel.json` |
 | `apps/web` | Docker | `apps/web/Dockerfile` |
 | `apps/admin` | Vercel | Set root directory to `apps/admin`; `apps/admin/vercel.json` |
