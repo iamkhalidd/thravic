@@ -213,7 +213,7 @@ async def retry_transient(
 
     Wrap *one* logical write at a time, never a group of them: an operation that
     already succeeded is never replayed, so a retry cannot double-apply a side
-    effect (such as bumping `sessions.pageviews`).
+    effect (such as a duplicate `sessions` row).
     """
     for attempt in range(1, attempts + 1):
         try:

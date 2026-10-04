@@ -15,6 +15,15 @@ rolled every batch back.
 Every insert is idempotent on `event_id`: the tracker retries failed batches and
 replays its queue, so the same event can arrive twice. `ON CONFLICT DO NOTHING`
 makes the second delivery a no-op rather than a second pageview.
+
+`sessions.pageviews` is RECOMPUTED here, after every insert, from the rows that
+are actually stored. It used to be incremented once per event by the collector,
+which made it count *events transmitted* rather than *pages viewed* — a session
+with a single pageview plus a performance event was stored as `pageviews = 2`,
+and every retry inflated it further. Because the value is derived from the
+already-deduplicated `events` table, replaying a batch any number of times is a
+no-op. The counter is owned here so that *every* ingest path (single collect,
+batch collect, the demo seeder) keeps it correct without opting in.
 """
 
 from __future__ import annotations
@@ -29,30 +38,32 @@ DEFAULT_REALTIME_WINDOW_MINUTES = 30
 
 
 async def insert_event(params: dict[str, Any]) -> dict[str, Any] | None:
-    rows = await query(
-        """
-        INSERT INTO events (domain_id, session_id, visitor_id, event_id, type, url,
-                            referrer, utm_source, utm_medium, utm_campaign, data)
-        VALUES ($1,
-                (SELECT id FROM sessions WHERE session_id = $2 AND domain_id = $1),
-                (SELECT id FROM visitors WHERE visitor_id = $3 AND domain_id = $1),
-                $4, $5, $6, $7, $8, $9, $10, $11)
-        ON CONFLICT (event_id) DO NOTHING
-        RETURNING *
-        """,
-        params["domainId"],
-        params.get("sessionId") or None,
-        params.get("visitorId") or None,
-        params.get("eventId") or None,
-        params["type"],
-        params["url"],
-        params.get("referrer") or None,
-        params.get("utmSource") or None,
-        params.get("utmMedium") or None,
-        params.get("utmCampaign") or None,
-        params.get("data"),  # jsonb codec serializes dicts; pass the object, not a string
-    )
-    return rows[0] if rows else None
+    async with transaction() as conn:
+        rows = await conn.fetch(
+            """
+            INSERT INTO events (domain_id, session_id, visitor_id, event_id, type, url,
+                                referrer, utm_source, utm_medium, utm_campaign, data)
+            VALUES ($1,
+                    (SELECT id FROM sessions WHERE session_id = $2 AND domain_id = $1),
+                    (SELECT id FROM visitors WHERE visitor_id = $3 AND domain_id = $1),
+                    $4, $5, $6, $7, $8, $9, $10, $11)
+            ON CONFLICT (event_id) DO NOTHING
+            RETURNING *
+            """,
+            params["domainId"],
+            params.get("sessionId") or None,
+            params.get("visitorId") or None,
+            params.get("eventId") or None,
+            params["type"],
+            params["url"],
+            params.get("referrer") or None,
+            params.get("utmSource") or None,
+            params.get("utmMedium") or None,
+            params.get("utmCampaign") or None,
+            params.get("data"),  # jsonb codec serializes dicts; pass the object, not a string
+        )
+        await recount_pageviews(conn, [params])
+    return dict(rows[0]) if rows else None
 
 
 async def batch_insert(event_list: list[dict[str, Any]]) -> int:
@@ -91,7 +102,44 @@ async def batch_insert(event_list: list[dict[str, Any]]) -> int:
                 event.get("data"),
             )
             inserted += len(rows)
+
+        # Derived from the rows actually stored, so replaying the batch is a no-op.
+        await recount_pageviews(conn, event_list)
     return inserted
+
+
+async def recount_pageviews(conn: Any, event_list: list[dict[str, Any]]) -> None:
+    """Reset `sessions.pageviews` to the true number of stored pageview events.
+
+    A RECOMPUTE, never an increment. The tracker re-sends a batch until the server
+    acknowledges it and the unload path keeps its queue, so an increment grows
+    without bound while the number of pages actually viewed stays flat. Deriving
+    the value from `events` — which is deduplicated on `event_id` — makes the
+    write idempotent however many times the same batch arrives.
+
+    Runs inside the caller's transaction so the counter can never disagree with
+    the events that were just written. Sessions are addressed by their natural key
+    (`session_id` + `domain_id`) because the client's id is what the caller has.
+    """
+    per_domain: dict[Any, set[str]] = {}
+    for event in event_list:
+        session_id = event.get("sessionId")
+        if session_id:
+            per_domain.setdefault(event["domainId"], set()).add(session_id)
+
+    for domain_id, session_ids in per_domain.items():
+        await conn.execute(
+            """
+            UPDATE sessions s
+            SET pageviews = (
+                SELECT COUNT(*) FROM events e
+                WHERE e.session_id = s.id AND e.type = 'pageview'
+            )
+            WHERE s.domain_id = $1 AND s.session_id = ANY($2::varchar[])
+            """,
+            domain_id,
+            list(session_ids),
+        )
 
 
 async def query_by_domain(

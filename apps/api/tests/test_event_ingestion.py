@@ -28,12 +28,13 @@ from __future__ import annotations
 
 import os
 import uuid
+from datetime import UTC, datetime, timedelta
 
 import asyncpg
 import pytest
 
 from app import db as db_module
-from app.db import _init_connection, _prepare_dsn, _ssl_setting
+from app.db import _init_connection, _prepare_dsn, _ssl_setting, query_one
 from app.services import event_service, session_service
 from app.services.session_service import classify_source
 
@@ -183,7 +184,7 @@ async def test_event_batch_insert_persists_and_links_to_the_surrogates(
     assert event["visitor_id"] == session["visitor_id"]
 
 
-async def test_repeat_session_upsert_bumps_pageviews_without_duplicating(
+async def test_repeat_session_upsert_does_not_inflate_pageviews(
     seeded_domain, db_pool
 ):
     payload = _tracker_payload(seeded_domain)
@@ -192,7 +193,10 @@ async def test_repeat_session_upsert_bumps_pageviews_without_duplicating(
     second = await session_service.upsert(payload)
 
     assert first["id"] == second["id"]
-    assert second["pageviews"] == first["pageviews"] + 1
+    # `pageviews` is derived by event ingestion now. The collector upserts once per
+    # event in a batch, so incrementing here invented a pageview per event — a
+    # single page load that also sent a custom event was stored as `pageviews = 2`.
+    assert second["pageviews"] == 0
 
     async with db_pool.acquire() as conn:
         sessions = await conn.fetchval(
@@ -206,6 +210,73 @@ async def test_repeat_session_upsert_bumps_pageviews_without_duplicating(
     # bigint semantics), so compare numerically.
     assert int(sessions) == 1
     assert int(visitors) == 1
+
+
+async def _pageviews(domain_id: str, session_id: str) -> int:
+    row = await query_one(
+        "SELECT pageviews FROM sessions WHERE domain_id = $1 AND session_id = $2",
+        domain_id,
+        session_id,
+    )
+    return int((row or {}).get("pageviews") or 0)
+
+
+async def test_pageviews_counts_pageviews_not_every_event(seeded_domain):
+    """A page load sends a pageview plus custom events — that is ONE pageview."""
+    payload = _tracker_payload(seeded_domain)
+    await session_service.upsert(payload)
+
+    # The shape the tracker really produces for a single visit.
+    click = {**payload, "eventId": str(uuid.uuid4()), "type": "click"}
+    perf = {**payload, "eventId": str(uuid.uuid4()), "type": "custom"}
+
+    assert await event_service.batch_insert([payload, click, perf]) == 3
+
+    assert await _pageviews(seeded_domain, payload["sessionId"]) == 1
+
+
+async def test_replayed_batch_does_not_inflate_pageviews(seeded_domain):
+    """The tracker re-sends until acknowledged; a replay must not add pageviews."""
+    payload = _tracker_payload(seeded_domain)
+    await session_service.upsert(payload)
+
+    assert await event_service.batch_insert([payload]) == 1
+    assert await _pageviews(seeded_domain, payload["sessionId"]) == 1
+
+    # Exactly what the beacon path produces: the same events, delivered again.
+    assert await event_service.batch_insert([payload]) == 0
+    assert await _pageviews(seeded_domain, payload["sessionId"]) == 1
+
+
+async def test_pageviews_counts_distinct_pageview_events(seeded_domain):
+    payload = _tracker_payload(seeded_domain)
+    await session_service.upsert(payload)
+
+    second = {**payload, "eventId": str(uuid.uuid4())}
+    click = {**payload, "eventId": str(uuid.uuid4()), "type": "click"}
+
+    assert await event_service.batch_insert([payload, second, click]) == 3
+
+    assert await _pageviews(seeded_domain, payload["sessionId"]) == 2
+
+
+async def test_bounce_rate_treats_a_single_pageview_session_as_a_bounce(
+    seeded_domain,
+):
+    """`pageviews <= 1` is the bounce test, so the counter feeds a public metric.
+
+    While the counter counted events, this rate was pinned at 0.00% in production.
+    """
+    payload = _tracker_payload(seeded_domain)
+    await session_service.upsert(payload)
+    await event_service.batch_insert([payload])
+
+    now = datetime.now(UTC)
+    rate = await session_service.get_bounce_rate(
+        seeded_domain, now - timedelta(days=1), now + timedelta(days=1)
+    )
+
+    assert rate == 100.0
 
 
 async def test_a_retried_event_id_is_stored_once(seeded_domain, db_pool):

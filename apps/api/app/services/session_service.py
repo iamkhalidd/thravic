@@ -50,11 +50,18 @@ PAID_MEDIUMS = ("cpc", "ppc", "paid", "paidsearch", "paidsocial")
 
 
 async def upsert(params: dict[str, Any]) -> dict[str, Any] | None:
-    """Insert a session, or bump `pageviews` when the (session_id, domain_id) exists.
+    """Insert a session, or refresh `ended_at` when (session_id, domain_id) exists.
 
     `sessions.visitor_id` is a UUID foreign key into `visitors(id)`, while the
     client sends its own generated string. The visitor row is upserted first so
     the surrogate id can be stored — without it the insert fails the constraint.
+
+    `pageviews` starts at 0 and is deliberately NOT incremented here. It is a
+    derived value owned by `event_service`, which recomputes it from the
+    deduplicated `events` rows after every insert. Bumping it per request could
+    never be idempotent: the collector upserts once per event in a batch, and the
+    tracker re-sends unacknowledged batches, so a counter grew with retries while
+    the real number of pageviews stayed flat.
     """
     visitor = await visitor_service.upsert(
         params.get("domainId"), params.get("visitorId")
@@ -69,10 +76,9 @@ async def upsert(params: dict[str, Any]) -> dict[str, Any] | None:
              user_agent, screen_width, screen_height, language,
              country, region, city, pageviews)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
-                $16, $17, $18, 1)
+                $16, $17, $18, 0)
         ON CONFLICT (session_id, domain_id)
         DO UPDATE SET
-           pageviews = sessions.pageviews + 1,
            ended_at = NOW()
         RETURNING *
         """,
