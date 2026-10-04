@@ -130,7 +130,7 @@ rebuild or redeploy.
 
 | Project | Target | Configuration |
 | --- | --- | --- |
-| `apps/api` | Render | `apps/api/render.yaml` (`rootDir: apps/api`) |
+| `apps/api` | Render | `render.yaml` (repo root; `rootDir: apps/api`) |
 | `apps/api` | Docker | `apps/api/Dockerfile` |
 | `apps/web` | Vercel | Set root directory to `apps/web`; `apps/web/vercel.json` |
 | `apps/web` | Docker | `apps/web/Dockerfile` |

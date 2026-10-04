@@ -1,3 +1,8 @@
+# Render Blueprint for the Thravic API.
+#
+# NOTE: this file must live at the REPOSITORY ROOT for Render to discover it as a
+# Blueprint. The API code lives in apps/api (see `rootDir`), which is why the
+# build/start commands below are relative to that directory.
 services:
   - type: web
     name: trackflow-api-fastapi
@@ -44,13 +49,16 @@ services:
       - key: RATE_LIMIT_WINDOW_MS
         value: 900000
       - key: RATE_LIMIT_MAX
-        value: 300
+        value: 500
       - key: PAYSTACK_SECRET_KEY
         sync: false
       - key: PAYSTACK_WEBHOOK_SECRET
         sync: false
       - key: RESEND_API_KEY
         sync: false
+      # Outgoing-email "from" address (must be a verified Resend sender).
+      - key: SMTP_FROM
+        value: TrackFlow <onboarding@resend.dev>
       # OAuth (leave blank to disable a provider). Register redirect URIs as
       # {API_URL}/api/auth/google/callback and {API_URL}/api/auth/github/callback.
       - key: GOOGLE_CLIENT_ID
