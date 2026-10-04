@@ -14,7 +14,6 @@ import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
@@ -27,8 +26,6 @@ from .logging import create_logger
 log = create_logger("DB")
 
 pool: asyncpg.Pool | None = None
-
-SCHEMA_PATH = Path(__file__).resolve().parent.parent / "sql" / "schema.sql"
 
 MAX_RETRIES = 3
 BASE_DELAY_SECONDS = 3  # 3s, then 6s, then 12s
@@ -180,7 +177,11 @@ async def transaction() -> AsyncIterator[asyncpg.Connection]:
 
 
 async def init_database() -> None:
-    """Connect with retries (Neon cold starts) and apply `sql/schema.sql`."""
+    """Connect with retries (Neon cold starts) and verify the pool.
+
+    The schema is owned by Alembic — run ``alembic upgrade head`` as a deploy
+    step. This function only establishes and verifies the connection pool.
+    """
     global pool
 
     settings = get_settings()
@@ -212,11 +213,6 @@ async def init_database() -> None:
             async with pool.acquire() as conn:
                 await conn.execute("SELECT NOW()")
             log.info("Database connected")
-
-            schema = SCHEMA_PATH.read_text(encoding="utf-8")
-            async with pool.acquire() as conn:
-                await conn.execute(schema)
-            log.info("Schema applied successfully")
             return
 
         except Exception as exc:

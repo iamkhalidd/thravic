@@ -6,7 +6,8 @@ services:
     plan: free
     rootDir: apps/api
     buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    # Migrations are not run on boot; apply them before serving.
+    startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     envVars:
       - key: NODE_ENV
@@ -28,6 +29,18 @@ services:
         sync: false
       - key: FRONTEND_URL
         sync: false
+      # REQUIRED. The served tracker and the domain embed snippet resolve
+      # `SERVER_URL || API_URL || ''` (NOT RENDER_EXTERNAL_URL), so if both are
+      # empty the tracking script ships with an empty endpoint and analytics break.
+      # Set to this service's public URL, e.g. https://<service>.onrender.com or
+      # your custom domain.
+      - key: SERVER_URL
+        sync: false
+      # Used to build OAuth redirect_uri values (`API_URL || RENDER_EXTERNAL_URL`).
+      # Set to the same public URL (needed for correct OAuth callbacks + Paystack
+      # webhook URL) when using a custom domain.
+      - key: API_URL
+        sync: false
       - key: RATE_LIMIT_WINDOW_MS
         value: 900000
       - key: RATE_LIMIT_MAX
@@ -37,4 +50,17 @@ services:
       - key: PAYSTACK_WEBHOOK_SECRET
         sync: false
       - key: RESEND_API_KEY
+        sync: false
+      # OAuth (leave blank to disable a provider). Register redirect URIs as
+      # {API_URL}/api/auth/google/callback and {API_URL}/api/auth/github/callback.
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GITHUB_CLIENT_ID
+        sync: false
+      - key: GITHUB_CLIENT_SECRET
+        sync: false
+      # AI insights (optional; the endpoints 403 when unset)
+      - key: GEMINI_API_KEY
         sync: false

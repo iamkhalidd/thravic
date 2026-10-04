@@ -8,6 +8,10 @@
 #   docker compose down                           → stop
 #   docker compose down -v                        → stop + wipe data
 #
+# The schema is NOT created by compose. After the infrastructure is healthy,
+# apply migrations from apps/api:
+#   .\.venv\Scripts\python.exe -m alembic upgrade head
+#
 # For day-to-day development run the API natively
 # (`.venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 3001`)
 # so code changes reload without rebuilding the image. Compose is for the
@@ -27,8 +31,6 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
-      # Auto-run schema on first start
-      - ./sql/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U postgres -d thravic" ]
       interval: 5s

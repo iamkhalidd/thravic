@@ -36,6 +36,7 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 
 Copy-Item .env.example .env      # then edit values
+.\.venv\Scripts\python.exe -m alembic upgrade head   # create/update the schema
 
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 3001
 ```
@@ -54,8 +55,9 @@ docker compose up -d                                        # infra only
 docker compose --profile docker up -d --build               # also run the API in a container
 ```
 
-The app boots without Postgres or Redis: the database logs a warning and Redis
-degrades to no-op caching.
+The schema is **not** created automatically — run `alembic upgrade head` (above)
+once Postgres is up. The app boots without Postgres or Redis: the database logs a
+warning and Redis degrades to no-op caching.
 
 ## Rebuilding the tracker
 
@@ -91,9 +93,11 @@ redirect allowlist, the OAuth guards, and the tracker delivery contract
 or Redis required.
 
 The suite asserts development behaviour (localhost CORS origins, unmasked error
-bodies, unconfigured OAuth guards), so it must not load a production `.env`.
-Override `NODE_ENV`, `CORS_ORIGIN`, `FRONTEND_URL`, and the OAuth client IDs
-with their development values for the test run.
+bodies, unconfigured OAuth guards), so `conftest.py` seeds safe development
+defaults for `NODE_ENV`, `DATABASE_URL`, `REDIS_URL`, `CORS_ORIGIN`,
+`FRONTEND_URL` and the OAuth client IDs before settings load — a production
+`.env` cannot leak in. Explicitly exported environment variables still win, so
+the suite can be pointed at a specific database when needed.
 
 ## Parity rules
 
@@ -125,27 +129,77 @@ breaking one silently breaks a client.
 
 ## Schema and migrations
 
-`sql/schema.sql` is the database schema and is applied on boot, exactly as the
-previous backend did.
+**Alembic is the single source of truth for the schema.** The app no longer
+creates tables on boot — `alembic upgrade head` is a required step (see
+"Running").
 
-`sql/migrations/migrate_paystack.sql` holds the Stripe→Paystack rename migration
-from the old repo. Apply it to any database that has not been through that rename.
+Each revision under `alembic/versions/` is **self-contained**: its SQL is
+embedded inline and run via `alembic_support.py`. A shipped revision must never
+change — add a new one instead. There are still no SQLAlchemy models, so
+`--autogenerate` is off (`target_metadata = None`).
 
-Alembic and SQLAlchemy are deliberately **not** used yet. Planned sequence:
+| Revision | Contents |
+| --- | --- |
+| `0001_baseline` | The full application schema (frozen at adoption) |
+| `0002_paystack_rename` | The Stripe→Paystack column rename |
 
-1. **Now** — raw SQL + `schema.sql` on boot.
-2. **Next** — adopt Alembic in SQL-migration mode and `alembic stamp head` to
-   baseline the existing database without re-running anything.
-   `sql/migrations/migrate_paystack.sql` is a good first real migration.
-3. **New features after that** — add SQLAlchemy for CRUD-heavy endpoints while
-   keeping raw SQL for analytics and aggregations.
+`alembic/env.py` builds the connection from the app's `DATABASE_URL` and reuses
+`app.db`'s DSN/TLS handling, so migrations connect exactly like the runtime pool.
+
+### Adopting on an existing database
+
+A database that already has the schema (for example the current production
+database) should be **stamped** instead of re-running the baseline:
+
+```powershell
+.\.venv\Scripts\python.exe -m alembic stamp head
+```
+
+A database that predates the Paystack rename should instead be baselined at the
+baseline revision and then upgraded, so that migration actually runs (it is
+idempotent, so this is safe either way):
+
+```powershell
+.\.venv\Scripts\python.exe -m alembic stamp 0001_baseline
+.\.venv\Scripts\python.exe -m alembic upgrade head
+```
+
+### Applying migrations
+
+```powershell
+.\.venv\Scripts\python.exe -m alembic upgrade head    # apply pending migrations
+.\.venv\Scripts\python.exe -m alembic current         # show the applied revision
+.\.venv\Scripts\python.exe -m alembic history         # show the full chain
+```
+
+Offline SQL generation (`--sql`) prints the baseline schema, which contains `═`
+box drawing characters; on Windows redirecting that to a file needs UTF-8:
+
+```powershell
+$env:PYTHONUTF8="1"; .\.venv\Scripts\python.exe -m alembic upgrade head --sql
+```
+
+### Adding a migration
+
+Generate a revision, then paste the SQL into it and run it with
+`run_sql_script(...)` from `upgrade()` / `downgrade()`:
+
+```powershell
+.\.venv\Scripts\python.exe -m alembic revision -m "short description"
+```
+
+See `alembic/versions/0002_paystack_rename.py` for the pattern.
+
+SQLAlchemy models for CRUD-heavy endpoints are still **not** used — raw SQL
+remains for analytics and aggregations.
 
 ## Layout
 
 ```text
 apps/api/
-├── sql/schema.sql          # database schema, applied on boot
-├── sql/migrations/         # SQL migrations (adopt through Alembic)
+├── alembic.ini             # Alembic config (URL built by env.py from settings)
+├── alembic/                # Alembic env + revisions (SQL-migration mode)
+├── alembic_support.py      # run_sql_script(): executes a revision's SQL
 ├── tracker/                # tracker source (esbuild → app/static/tracker.js)
 ├── app/
 │   ├── main.py             # app wiring, middleware order, lifespan

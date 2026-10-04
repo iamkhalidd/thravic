@@ -1,4 +1,33 @@
--- Thravic Analytics - PostgreSQL Schema
+"""baseline: current schema
+
+Revision ID: 0001_baseline
+Revises:
+Create Date: 2026-10-04
+
+Baseline revision for adopting Alembic on a database that already exists.
+``upgrade()`` applies the full application schema (frozen at adoption time), so a
+brand-new database can be built entirely through Alembic.
+
+Adopting on an existing database (schema already present):
+
+    alembic stamp 0001_baseline        # mark applied, do not re-run
+
+then ``alembic upgrade head`` to pick up anything after the baseline.
+"""
+
+from __future__ import annotations
+
+from alembic_support import run_sql_script
+
+# revision identifiers, used by Alembic.
+revision = "0001_baseline"
+down_revision = None
+branch_labels = None
+depends_on = None
+
+# Frozen snapshot of the schema at Alembic adoption. Deliberately inline and
+# self-contained: a shipped baseline must never change.
+_SCHEMA_SQL = r"""-- Thravic Analytics - PostgreSQL Schema
 -- Tables ordered by dependency (referenced tables created first)
 
 -- ═══════════════════════════════════════════════
@@ -403,3 +432,17 @@ CREATE INDEX IF NOT EXISTS idx_usage_logs_domain_month ON usage_logs(domain_id, 
 CREATE INDEX IF NOT EXISTS idx_audit_admin ON admin_audit_log(admin_id);
 CREATE INDEX IF NOT EXISTS idx_audit_created ON admin_audit_log(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
+"""
+
+
+def upgrade() -> None:
+    """Apply the baseline schema."""
+    run_sql_script(_SCHEMA_SQL)
+
+
+def downgrade() -> None:
+    """The baseline is a point-in-time snapshot and is not reversible."""
+    raise NotImplementedError(
+        "The baseline cannot be downgraded. Restore from a backup instead."
+    )
+

@@ -6,6 +6,7 @@ from the `apps/api` directory (there is no `src/` layout to do this implicitly).
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -15,6 +16,29 @@ ROOT = Path(__file__).resolve().parent
 
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+
+
+# ── Test defaults ────────────────────────────────────────────────────────────
+# The suite asserts development behaviour and must never write to the real
+# database. Seed safe defaults for any key the caller has not explicitly
+# exported, *before* `app.config.get_settings()` is first called. `.env` values
+# lose to process environment variables, so a production `.env` cannot leak in.
+# Explicitly exported variables still win, so the suite can be pointed at a
+# specific database (e.g. the parity harness) when needed.
+
+_TEST_DEFAULTS = {
+    "NODE_ENV": "development",
+    "DATABASE_URL": "",
+    "REDIS_URL": "",
+    "CORS_ORIGIN": "http://localhost:3000,http://localhost:3002",
+    "FRONTEND_URL": "http://localhost:3000",
+    "GITHUB_CLIENT_ID": "",
+    "GITHUB_CLIENT_SECRET": "",
+    "GOOGLE_CLIENT_ID": "",
+    "GOOGLE_CLIENT_SECRET": "",
+}
+for _key, _value in _TEST_DEFAULTS.items():
+    os.environ.setdefault(_key, _value)
 
 
 # ── Safety: the suite writes to whatever DATABASE_URL points at ───────────────

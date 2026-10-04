@@ -17,9 +17,11 @@ WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Application code and SQL assets
+# Application code and Alembic migrations
 COPY app ./app
-COPY sql ./sql
+COPY alembic ./alembic
+COPY alembic.ini ./
+COPY alembic_support.py ./
 
 # Run as a non-root user
 RUN useradd --create-home --uid 1001 thravic \

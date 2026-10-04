@@ -22,3 +22,5 @@ build/
 # Local data
 uploads/
 *.log
+# Throwaway PostgreSQL clusters used for migration/parity testing
+.pgdata-*/
