@@ -19,16 +19,31 @@ from ..config import get_settings
 CSP_CONNECT_EXTRA = ("'self'",)
 FONT_SRC = ("'self'", "https://fonts.gstatic.com")
 
+# Swagger UI / ReDoc assets are served from this CDN.
+SWAGGER_CDN = "https://cdn.jsdelivr.net"
+
+# Routes whose responses get a docs-friendly CSP. The interactive docs load their
+# bundle from a CDN and use an inline bootstrap script; every other response keeps
+# the strict policy.
+DOCS_PATHS = frozenset({"/docs", "/docs/", "/redoc", "/redoc/", "/openapi.json"})
+
 CallNext = Callable[[Request], Awaitable[Response]]
 
 
-def build_content_security_policy(allowed_origins: list[str]) -> str:
+def build_content_security_policy(allowed_origins: list[str], *, for_docs: bool = False) -> str:
     settings = get_settings()
+
+    script_src = ["'self'"]
+    style_src = ["'self'", "'unsafe-inline'"]
+    if for_docs:
+        # Swagger UI / ReDoc load their JS from a CDN and use an inline script.
+        script_src += ["'unsafe-inline'", SWAGGER_CDN]
+        style_src.append(SWAGGER_CDN)
 
     directives: list[tuple[str, list[str]]] = [
         ("default-src", ["'self'"]),
-        ("script-src", ["'self'"]),
-        ("style-src", ["'self'", "'unsafe-inline'"]),
+        ("script-src", script_src),
+        ("style-src", style_src),
         ("img-src", ["'self'", "data:", "https:"]),
         # Same list CORS uses — both come from CORS_ORIGIN
         ("connect-src", [*CSP_CONNECT_EXTRA, *allowed_origins]),
@@ -49,12 +64,15 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     def __init__(self, app, allowed_origins: list[str]) -> None:
         super().__init__(app)
         self.csp = build_content_security_policy(allowed_origins)
+        self.docs_csp = build_content_security_policy(allowed_origins, for_docs=True)
         self.is_production = get_settings().is_production
 
     async def dispatch(self, request: Request, call_next: CallNext) -> Response:
         response = await call_next(request)
 
-        response.headers["Content-Security-Policy"] = self.csp
+        # Relax the CSP only for the interactive docs routes.
+        csp = self.docs_csp if request.url.path in DOCS_PATHS else self.csp
+        response.headers["Content-Security-Policy"] = csp
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "SAMEORIGIN"
         response.headers["X-DNS-Prefetch-Control"] = "off"
