@@ -22,6 +22,9 @@ services:
         value: "true"
       - key: DATABASE_URL
         sync: false
+      # Optional. Leave BLANK to run without Redis: caching degrades to a no-op
+      # and the rate limiter is skipped (same graceful degradation as the old
+      # backend). Paste a Redis URL when you want caching + rate limiting.
       - key: REDIS_URL
         sync: false
       # Must keep the values the service had before the cutover so tokens survive
