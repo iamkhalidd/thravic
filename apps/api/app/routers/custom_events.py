@@ -2,11 +2,13 @@
 
 Four read-only aggregations over `events`. Two behaviours are worth calling out:
 
-* Every handler is authenticated via a router-level `router.use(authenticate)`,
-  but **none of them verify domain ownership** — the query filters on the
-  `domainId` path parameter alone. An authenticated user can therefore read
-  another tenant's custom-event data by supplying that domain's id. This is
-  preserved verbatim for parity; see the security note in the migration doc.
+* Every handler is authenticated AND verifies that the caller owns the `domainId`
+  before running its query. The Express original did NOT: it filtered on the
+  `domainId` path parameter alone, so any authenticated user could read another
+  tenant's custom-event data by supplying that domain's id. That was preserved
+  verbatim during the port for parity, and is now fixed. A non-owner receives the
+  same 404 as a non-existent domain, so the endpoint cannot be used to probe for
+  valid domain ids either.
 * `get_date_range` mirrors `parseInt(req.query.days) || 30`, so `days=0` and
   `days=abc` both fall back to 30.
 """
@@ -22,11 +24,12 @@ from ..errors import SimpleError
 from ..js_compat import js_parse_int
 from ..json_response import jsjson
 from ..logging import create_logger
-from ..middleware.auth import require_auth
+from ..middleware.auth import AuthUser, require_auth
+from ..services import domain_service
 
 log = create_logger("CustomEvents")
 
-router = APIRouter(dependencies=[Depends(require_auth)])
+router = APIRouter()
 
 DEFAULT_RANGE_DAYS = 30
 
@@ -73,9 +76,25 @@ def _get_date_range(request: Request) -> tuple[datetime, datetime]:
     return start, end
 
 
+async def _require_owned_domain(domain_id: str, user_id: str) -> dict:
+    """404 unless the caller owns the domain.
+
+    These routes were the one place in the API that trusted the `domainId` path
+    parameter on its own. The same check the other analytics routers apply is used
+    here so a foreign domain is indistinguishable from a missing one.
+    """
+    domain = await domain_service.get_by_id(domain_id)
+    if not domain_service.is_owner(domain, user_id):
+        raise SimpleError("Domain not found", 404)
+    return domain
+
+
 @router.get("/{domainId}/errors")
-async def errors(domainId: str, request: Request):
+async def errors(
+    domainId: str, request: Request, user: AuthUser = Depends(require_auth)
+):
     try:
+        await _require_owned_domain(domainId, user.user_id)
         start, end = _get_date_range(request)
 
         rows = await query(
@@ -132,14 +151,19 @@ async def errors(domainId: str, request: Request):
                 "trend": [dict(row) for row in trend],
             }
         )
+    except SimpleError:
+        raise
     except Exception as exc:
         log.error(f"Error fetching error events: {exc}")
         raise SimpleError(FAILED_ERRORS, 500) from None
 
 
 @router.get("/{domainId}/performance")
-async def performance(domainId: str, request: Request):
+async def performance(
+    domainId: str, request: Request, user: AuthUser = Depends(require_auth)
+):
     try:
+        await _require_owned_domain(domainId, user.user_id)
         start, end = _get_date_range(request)
 
         metrics = await query_one(
@@ -206,14 +230,19 @@ async def performance(domainId: str, request: Request):
                 "byPage": [dict(row) for row in by_page],
             }
         )
+    except SimpleError:
+        raise
     except Exception as exc:
         log.error(f"Error fetching performance data: {exc}")
         raise SimpleError(FAILED_PERFORMANCE, 500) from None
 
 
 @router.get("/{domainId}/forms")
-async def forms(domainId: str, request: Request):
+async def forms(
+    domainId: str, request: Request, user: AuthUser = Depends(require_auth)
+):
     try:
+        await _require_owned_domain(domainId, user.user_id)
         start, end = _get_date_range(request)
 
         rows = await query(
@@ -271,14 +300,19 @@ async def forms(domainId: str, request: Request):
                 "trend": [dict(row) for row in trend],
             }
         )
+    except SimpleError:
+        raise
     except Exception as exc:
         log.error(f"Error fetching form data: {exc}")
         raise SimpleError(FAILED_FORMS, 500) from None
 
 
 @router.get("/{domainId}/rage-clicks")
-async def rage_clicks(domainId: str, request: Request):
+async def rage_clicks(
+    domainId: str, request: Request, user: AuthUser = Depends(require_auth)
+):
     try:
+        await _require_owned_domain(domainId, user.user_id)
         start, end = _get_date_range(request)
 
         rows = await query(
@@ -322,6 +356,8 @@ async def rage_clicks(domainId: str, request: Request):
                 "rageClicks": [dict(row) for row in rows],
             }
         )
+    except SimpleError:
+        raise
     except Exception as exc:
         log.error(f"Error fetching rage click data: {exc}")
         raise SimpleError(FAILED_RAGE_CLICKS, 500) from None
