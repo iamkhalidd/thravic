@@ -5,10 +5,12 @@ Two things to be aware of when reading or testing this module:
 * `POST /checkout` and `POST /verify` call the live Paystack API with the
   configured secret key. The parity specs deliberately only exercise the paths
   that reject the request *before* any outbound call.
-* `upgrade_subscription` reproduces a genuine defect. Its
-  `INSERT ... ON CONFLICT (user_id)` requires a unique constraint on
-  `subscriptions.user_id`, and the schema has none (only a primary key on `id`),
-  so the statement always raises. See the note inside that function.
+* `upgrade_subscription` upserts with `INSERT ... ON CONFLICT (user_id)`, which
+  requires a unique constraint on `subscriptions.user_id`. Production has it, but
+  no migration created it, so a database built from migrations would raise "there
+  is no unique or exclusion constraint matching the ON CONFLICT specification"
+  and 500 every successful charge. `0006_subscriptions_constraints` closes that
+  gap. See the note inside that function.
 """
 
 from __future__ import annotations
@@ -641,13 +643,18 @@ async def usage(user: AuthUser = Depends(require_auth)):
 async def _upgrade_subscription(user_id: str, plan: str, reference: str) -> None:
     """Upsert the subscription and email a receipt.
 
-    ⚠️ `ON CONFLICT (user_id)` REQUIRES a unique constraint on
-    `subscriptions.user_id`. The schema only has a primary key on `id`, so this
-    statement raises `there is no unique or exclusion constraint matching the
-    ON CONFLICT specification`. The exception propagates, which means the caller
-    returns 500, the receipt email is never sent, and the `subscriptions` row is
-    never upgraded — a paying customer gets no features. Reproduced faithfully
-    here; fixing it is a schema decision.
+    `ON CONFLICT (user_id)` REQUIRES a unique constraint on
+    `subscriptions.user_id`. Production happens to have
+    `subscriptions_user_id_unique`, but no migration used to create it, so a
+    database built from migrations raised "there is no unique or exclusion
+    constraint matching the ON CONFLICT specification" — the caller answered 500,
+    the receipt was never sent and the row was never upgraded, i.e. a paying
+    customer got no features. `0006_subscriptions_constraints` now guarantees it.
+
+    `plan` is written straight through, so `subscriptions.plan` must accept every
+    value `plans.PLAN_LIMITS` offers. 0006 also widens that CHECK, which in
+    production did not include `agency` — an agency purchase could not be stored
+    at all.
     """
     tier = PLAN_LIMITS.get(plan)
     if not tier:

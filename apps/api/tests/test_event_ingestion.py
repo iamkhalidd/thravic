@@ -332,3 +332,81 @@ async def test_every_source_type_the_app_emits_is_storable(seeded_domain):
     for source_type in emitted:
         payload = {**_tracker_payload(seeded_domain), "sourceType": source_type}
         assert await session_service.upsert(payload) is not None, source_type
+
+
+# ── The same contract for subscriptions ──────────────────────────────────────
+# `subscriptions.plan` and the unique constraint on `user_id` are both load-bearing
+# for payments, and both had drifted from what the application needs.
+
+
+async def _user_id_for(domain_id: str) -> str:
+    row = await query_one("SELECT user_id FROM domains WHERE id = $1", domain_id)
+    return str(row["user_id"])
+
+
+async def test_every_plan_the_app_sells_is_storable(seeded_domain, db_pool):
+    """`subscriptions.plan` must accept every plan `plans.PLAN_LIMITS` offers.
+
+    Production's CHECK listed `('free','growth','pro','enterprise')` while the app
+    sells free/pro/**agency**, so an agency purchase could not be stored at all:
+    the upgrade failed the constraint and the customer got no plan.
+    """
+    from app.plans import PLAN_LIMITS
+
+    user_id = await _user_id_for(seeded_domain)
+    assert PLAN_LIMITS, "no plans are configured"
+
+    for plan in PLAN_LIMITS:
+        async with db_pool.acquire() as conn:
+            await conn.execute(
+                "DELETE FROM subscriptions WHERE user_id = $1", user_id
+            )
+            stored = await conn.fetchval(
+                """
+                INSERT INTO subscriptions (user_id, plan, events_limit, domains_limit)
+                VALUES ($1, $2, 1000, 1)
+                RETURNING plan
+                """,
+                user_id,
+                plan,
+            )
+        assert stored == plan, f"plan {plan!r} was rejected by the schema"
+
+
+async def test_the_payment_upsert_succeeds_and_updates_on_conflict(
+    seeded_domain, db_pool
+):
+    """`_upgrade_subscription` upserts `ON CONFLICT (user_id)`.
+
+    That needs a unique constraint on `subscriptions.user_id`. Production had one
+    but no migration created it, so a database built from migrations raised
+    "no unique or exclusion constraint matching the ON CONFLICT specification" and
+    500'd every successful charge — the customer paid and got nothing.
+    """
+    user_id = await _user_id_for(seeded_domain)
+
+    async def _upsert(plan: str) -> str:
+        async with db_pool.acquire() as conn:
+            return await conn.fetchval(
+                """
+                INSERT INTO subscriptions
+                    (user_id, plan, events_limit, domains_limit)
+                VALUES ($1, $2, 1000, 1)
+                ON CONFLICT (user_id) DO UPDATE SET
+                    plan       = $2,
+                    updated_at = NOW()
+                RETURNING plan
+                """,
+                user_id,
+                plan,
+            )
+
+    assert await _upsert("pro") == "pro"
+    # The second call takes the DO UPDATE branch rather than raising.
+    assert await _upsert("agency") == "agency"
+
+    async with db_pool.acquire() as conn:
+        rows = await conn.fetchval(
+            "SELECT count(*) FROM subscriptions WHERE user_id = $1", user_id
+        )
+    assert int(rows) == 1, "the upsert must update in place, not insert a second row"
