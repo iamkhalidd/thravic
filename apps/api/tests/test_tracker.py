@@ -13,6 +13,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.routers import tracker as tracker_routes
 
 
 @pytest.fixture
@@ -27,10 +28,13 @@ def test_serves_built_tracker_with_the_expected_headers(client, path):
 
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/javascript; charset=utf-8"
+    # Deliberately short: a rebuilt tracker must reach returning visitors in
+    # minutes, not a day. Revalidation is a bodiless 304, so the cost is low.
     assert response.headers["cache-control"] == (
-        "public, max-age=86400, stale-while-revalidate=3600"
+        "public, max-age=300, stale-while-revalidate=86400"
     )
     assert response.headers["access-control-allow-origin"] == "*"
+    assert response.headers["etag"]
 
 
 @pytest.mark.parametrize("path", ["/tf.js", "/v.js"])
@@ -64,3 +68,33 @@ def test_tracker_bundle_is_never_line_ending_converted(client, path):
 
 def test_tf_and_v_js_are_the_same_artifact(client):
     assert client.get("/tf.js").content == client.get("/v.js").content
+
+
+@pytest.mark.parametrize("path", ["/tf.js", "/v.js"])
+def test_revalidation_answers_304_with_no_body(client, path):
+    """The point of the ETag: refreshing a 14 KB script costs no body."""
+    first = client.get(path)
+
+    second = client.get(path, headers={"if-none-match": first.headers["etag"]})
+
+    assert second.status_code == 304
+    assert second.content == b""
+    assert second.headers["etag"] == first.headers["etag"]
+    assert second.headers["cache-control"] == first.headers["cache-control"]
+
+
+def test_a_stale_validator_still_gets_the_body(client):
+    response = client.get("/tf.js", headers={"if-none-match": '"not-the-current-one"'})
+
+    assert response.status_code == 200
+    assert b"/api/collect" in response.content
+
+
+def test_the_etag_tracks_the_served_bytes(client, monkeypatch):
+    """Content-derived: a rebuild must invalidate caches, not keep the old tag."""
+    before = client.get("/tf.js").headers["etag"]
+
+    monkeypatch.setattr(tracker_routes, "TRACKER_TEMPLATE", b"// a different build\n")
+    monkeypatch.setattr(tracker_routes, "_etag", None)
+
+    assert client.get("/tf.js").headers["etag"] != before
