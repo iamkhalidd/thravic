@@ -97,7 +97,9 @@ async def lifespan(_app: FastAPI):
     log.info("Shutdown complete")
 
 
-_docs_enabled = not settings.is_production
+# Swagger/OpenAPI. Off in production by default (the old backend served no docs);
+# set DOCS_ENABLED=true to expose /docs + /openapi.json in production.
+_docs_enabled = settings.DOCS_ENABLED or not settings.is_production
 
 app = FastAPI(
     title="Thravic API",

@@ -17,6 +17,9 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      # Serve Swagger UI at /docs in production.
+      - key: DOCS_ENABLED
+        value: "true"
       - key: DATABASE_URL
         sync: false
       - key: REDIS_URL
