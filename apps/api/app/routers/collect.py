@@ -4,24 +4,24 @@ The hot path. Customer websites POST here with no auth token: the domain is
 resolved from the `trackingId` in the URL, so this router is gated by the
 tracking switch and the IP/referrer blocklist rather than by `require_auth`.
 
-Two behaviours worth knowing:
+Both write paths persist synchronously. There is no Redis in the ingest path, so
+`POST /:trackingId` upserts the session and inserts the event before it answers,
+and `/batch` does the same for every event — a storage failure surfaces as a 500
+rather than being quietly dropped into a queue.
 
-* `POST /:trackingId` does **not** write to Postgres. It LPUSHes onto the
-  `thravic:events_queue` Redis list and returns 202 immediately; a background
-  worker drains it. The `/batch` variant writes synchronously instead.
-* These routes are open to every origin (the tracking script runs on customer
-  domains), so CORS is handled by `ThravicCORSMiddleware` rather than here.
+These routes are open to every origin (the tracking script runs on customer
+domains), so CORS is handled by `ThravicCORSMiddleware` rather than here.
 """
 
 from __future__ import annotations
 
 import asyncio
 import json
-from datetime import UTC
 from typing import Any
 
 from fastapi import APIRouter, Depends, Request
 
+from ..db import retry_transient
 from ..errors import PayloadError, SimpleError
 from ..json_response import jsjson
 from ..logging import create_logger
@@ -48,8 +48,6 @@ router = APIRouter(dependencies=[Depends(tracking_gate), Depends(blocklist_gate)
 
 EVENT_TYPES = ("pageview", "click", "scroll", "form", "custom", "session_end")
 RECORDING_EVENT_TYPES = ("mousemove", "click", "scroll", "input", "resize", "pageview")
-
-EVENTS_QUEUE_KEY = "thravic:events_queue"
 
 MAX_EVENT_DATA_BYTES = 2048
 MIN_BATCH_EVENTS = 1
@@ -96,6 +94,11 @@ def _event_issues(body: dict) -> list[dict]:
         issues.append(issue)
 
     _, issue = string_field(body, "referrer", required=False)
+    if issue:
+        issues.append(issue)
+
+    # Client-generated idempotency key; optional, so older snippets keep working.
+    _, issue = string_field(body, "eventId", required=False)
     if issue:
         issues.append(issue)
 
@@ -222,35 +225,38 @@ async def collect_event(trackingId: str, request: Request):
                 "Payload too large - custom event data limited to 2KB", 413
             )
 
-        queued_event = {
-            "domainId": str(domain["id"]),
-            "sessionId": body.get("sessionId"),
-            "visitorId": body.get("visitorId"),
-            "type": body["type"],
-            "url": body["url"],
-            "referrer": body.get("referrer") or None,
-            "utmSource": body.get("utmSource") or None,
-            "utmMedium": body.get("utmMedium") or None,
-            "utmCampaign": body.get("utmCampaign") or None,
-            "utmTerm": body.get("utmTerm") or None,
-            "utmContent": body.get("utmContent") or None,
-            "data": data or {},
-            "userAgent": user_agent,
-            "screenWidth": body.get("screenWidth") or None,
-            "screenHeight": body.get("screenHeight") or None,
-            "language": body.get("language") or None,
-            "country": (location or {}).get("country"),
-            "region": (location or {}).get("region"),
-            "city": (location or {}).get("city"),
-            "sourceType": source_type,
-            "receivedAt": _now_iso(),
-        }
+        # The session is upserted first so the event's foreign keys resolve; the
+        # event row is written in the same request. `utmTerm`/`utmContent` live on
+        # the session only, matching the `/batch` route. Each write is retried on
+        # its own so a blip cannot cost the event, and so a retry can never repeat
+        # a side effect that already succeeded.
+        await retry_transient(
+            lambda: session_service_upsert(
+                domain["id"], body, user_agent, source_type, location
+            ),
+            description="Session upsert",
+        )
 
-        from ..redis_client import get_client
-
-        client = get_client()
-        if client is not None:
-            await client.lpush(EVENTS_QUEUE_KEY, json.dumps(queued_event))
+        await retry_transient(
+            lambda: event_service.batch_insert(
+                [
+                    {
+                        "domainId": domain["id"],
+                        "sessionId": body.get("sessionId"),
+                        "visitorId": body.get("visitorId"),
+                        "eventId": body.get("eventId") or None,
+                        "type": body["type"],
+                        "url": body["url"],
+                        "referrer": body.get("referrer") or None,
+                        "utmSource": body.get("utmSource") or None,
+                        "utmMedium": body.get("utmMedium") or None,
+                        "utmCampaign": body.get("utmCampaign") or None,
+                        "data": data or {},
+                    }
+                ]
+            ),
+            description="Event insert",
+        )
 
         # Fire and forget — the response must not wait on webhook delivery
         _fire_and_forget(
@@ -290,13 +296,19 @@ async def collect_batch(trackingId: str, request: Request):
                 event.get("utmMedium") or None,
             )
 
-            await session_service_upsert(domain["id"], event, user_agent, source_type)
+            await retry_transient(
+                lambda event=event, source_type=source_type: session_service_upsert(
+                    domain["id"], event, user_agent, source_type
+                ),
+                description="Session upsert",
+            )
 
             inserts.append(
                 {
                     "domainId": domain["id"],
                     "sessionId": event.get("sessionId"),
                     "visitorId": event.get("visitorId"),
+                    "eventId": event.get("eventId") or None,
                     "type": event["type"],
                     "url": event["url"],
                     "referrer": event.get("referrer") or None,
@@ -307,7 +319,9 @@ async def collect_batch(trackingId: str, request: Request):
                 }
             )
 
-        count = await event_service.batch_insert(inserts)
+        count = await retry_transient(
+            lambda: event_service.batch_insert(inserts), description="Event insert"
+        )
         return jsjson({"success": True, "processed": count}, status_code=202)
     except (PayloadError, SimpleError):
         raise
@@ -317,10 +331,20 @@ async def collect_batch(trackingId: str, request: Request):
 
 
 async def session_service_upsert(
-    domain_id: Any, event: dict, user_agent: str, source_type: str
+    domain_id: Any,
+    event: dict,
+    user_agent: str,
+    source_type: str,
+    location: dict | None = None,
 ) -> None:
-    """`sessionService.upsert` as called from the batch collector."""
+    """`sessionService.upsert` as called from the collectors.
+
+    `location` is the geo lookup from the request IP; the single-event route has
+    it, the batch route does not.
+    """
     from ..services import session_service
+
+    location = location or {}
 
     await session_service.upsert(
         {
@@ -340,6 +364,9 @@ async def session_service_upsert(
             "screenWidth": event.get("screenWidth") or None,
             "screenHeight": event.get("screenHeight") or None,
             "language": event.get("language") or None,
+            "country": location.get("country"),
+            "region": location.get("region"),
+            "city": location.get("city"),
         }
     )
 
@@ -523,10 +550,3 @@ async def recording_end(trackingId: str, recordingId: str):
 def _same_id(left: Any, right: Any) -> bool:
     """Compare two UUID values regardless of whether they arrived as objects/strings."""
     return str(left) == str(right)
-
-
-def _now_iso() -> str:
-    from datetime import datetime
-
-    now = datetime.now(UTC)
-    return now.strftime("%Y-%m-%dT%H:%M:%S.") + f"{now.microsecond // 1000:03d}Z"

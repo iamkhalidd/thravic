@@ -81,3 +81,19 @@ def pytest_configure(config: object) -> None:
         "Point DATABASE_URL at a disposable database instead, or set "
         f"{ALLOW_REMOTE_ENV}=1 to override."
     )
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limit_windows():
+    """Clear the in-process rate-limit counters around every test.
+
+    Without Redis the limiter counts in module-global memory, and the app builds
+    a single middleware instance for the whole session. Counts would otherwise
+    leak from one test into the next and show up as a confusing 429 in an
+    unrelated test that merely happens to run later.
+    """
+    from app.middleware.rate_limit import reset_local_windows
+
+    reset_local_windows()
+    yield
+    reset_local_windows()

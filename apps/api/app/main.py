@@ -20,7 +20,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .config import get_settings
 from .db import close_database, init_database
-from .jobs import init_jobs, shutdown_jobs, start_event_worker, stop_event_worker
+from .jobs import init_jobs, shutdown_jobs
 from .json_response import js_iso_datetime, jsjson
 from .logging import configure_logging, create_logger
 from .middleware.cors import ThravicCORSMiddleware
@@ -75,21 +75,13 @@ async def lifespan(_app: FastAPI):
     # Database is required — routes will fail without it
     await init_database()
 
-    # Redis is optional — caching degrades gracefully
+    # Redis is optional — caching degrades gracefully. Collection itself writes
+    # straight to Postgres, so nothing depends on Redis being up.
     await init_redis()
-
-    # Background queue drainer. DEVIATION: Express starts this *before*
-    # initRedis() because its ioredis client is constructed at import time; here
-    # the client only exists after init_redis(), so starting earlier would just
-    # log "Redis unavailable" until then. Not observable over HTTP.
-    start_event_worker()
 
     log.info(f"Thravic API ready on port {settings.PORT}")
     yield
 
-    # Drain the in-flight batch before the pool closes, so a shutdown mid-batch
-    # does not turn into a queue read that can never be committed.
-    await stop_event_worker()
     shutdown_jobs(scheduler)
 
     await close_redis()

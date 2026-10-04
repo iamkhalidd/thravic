@@ -1,8 +1,8 @@
 """Job wiring — port of `jobs/index.ts`.
 
-`init_jobs()` starts the scheduler and registers the hourly traffic alert. The
-event worker is started separately by the application lifespan, exactly as
-`index.ts` calls `initJobs()` and then `startEventWorker()`.
+`init_jobs()` starts the scheduler and registers the hourly traffic alert.
+Collection is written to Postgres in the request, so there is no background
+event drainer and nothing here touches Redis.
 """
 
 from __future__ import annotations
@@ -12,15 +12,12 @@ from datetime import UTC
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from ..logging import create_logger
-from .event_worker import start_event_worker, stop_event_worker
 from .traffic_alert import start_traffic_alert_job
 
 log = create_logger("Jobs")
 
 __all__ = [
     "init_jobs",
-    "start_event_worker",
-    "stop_event_worker",
     "shutdown_jobs",
 ]
 

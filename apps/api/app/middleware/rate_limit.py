@@ -7,11 +7,15 @@ rejects on the first breach, so thresholds behave identically.
 
 Redis is used for counters, with the same key prefixes as the Express limiters, so
 existing buckets carry over across the cutover. When Redis is unavailable the
-rule is skipped, matching `rate-limit-redis`'s graceful degradation.
+counter falls back to a per-process window (`LocalWindowCounter`) instead of being
+skipped: Redis is blank in normal operation, and skipping every rule left the
+public `/api/collect` endpoint completely unthrottled while still writing to
+Postgres.
 """
 
 from __future__ import annotations
 
+import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
@@ -110,6 +114,70 @@ def default_rules() -> list[RateLimitRule]:
     ]
 
 
+class LocalWindowCounter:
+    """Per-process fixed-window counter, used only when Redis returns nothing.
+
+    Approximate by construction: the counters live in one instance's memory, so
+    across N instances the effective limit is roughly `max_requests * N`, and they
+    reset on deploy. That is still the difference between "throttled" and "wide
+    open", which is where the endpoint stood with no Redis.
+    """
+
+    def __init__(
+        self,
+        max_keys: int = 10_000,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
+        self._windows: dict[str, tuple[float, int]] = {}
+        self._max_keys = max_keys
+        self._clock = clock
+
+    def increment(self, key: str, window_seconds: int) -> tuple[int, int]:
+        """Return `(count, remaining_seconds)` for the key's current window."""
+        now = self._clock()
+        expires_at, count = self._windows.get(key, (0.0, 0))
+        if now >= expires_at:
+            expires_at, count = now + window_seconds, 0
+        count += 1
+        self._windows[key] = (expires_at, count)
+
+        if len(self._windows) > self._max_keys:
+            self._sweep(now)
+
+        return count, max(int(expires_at - now), 0)
+
+    def _sweep(self, now: float) -> None:
+        """Drop expired windows, then the soonest-to-expire if still over budget.
+
+        Without the second step a flood of distinct keys (every request a new IP)
+        would grow the dict without bound, since nothing has expired yet.
+        """
+        for key in [k for k, (expires_at, _) in self._windows.items() if now >= expires_at]:
+            del self._windows[key]
+
+        overflow = len(self._windows) - self._max_keys
+        if overflow > 0:
+            soonest = sorted(self._windows.items(), key=lambda item: item[1][0])
+            for key, _ in soonest[:overflow]:
+                del self._windows[key]
+
+    def size(self) -> int:
+        return len(self._windows)
+
+    def clear(self) -> None:
+        self._windows.clear()
+
+
+# One counter per process, shared by every middleware instance — it is a
+# process-wide fallback, not per-middleware state. `reset_local_windows()` exists
+# so tests start from a clean slate instead of inheriting another test's counts.
+LOCAL_WINDOWS = LocalWindowCounter()
+
+
+def reset_local_windows() -> None:
+    LOCAL_WINDOWS.clear()
+
+
 class RateLimitMiddleware(BaseHTTPMiddleware):
     def __init__(self, app, rules: list[RateLimitRule] | None = None) -> None:
         super().__init__(app)
@@ -131,7 +199,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 f"{rule.prefix}{ip}", rule.window_seconds
             )
             if result is None:
-                continue  # Redis unavailable — limiter is inert, as in Express
+                # Redis unavailable — count in-process instead of skipping the rule.
+                result = LOCAL_WINDOWS.increment(f"{rule.prefix}{ip}", rule.window_seconds)
 
             count, remaining_ttl = result
             last_state = (rule, count, remaining_ttl)

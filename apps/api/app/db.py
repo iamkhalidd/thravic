@@ -11,7 +11,7 @@ import asyncio
 import json
 import ssl as ssl_module
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Any
@@ -171,6 +171,64 @@ async def transaction() -> AsyncIterator[asyncpg.Connection]:
     async with get_pool().acquire() as conn:
         async with conn.transaction():
             yield conn
+
+
+# ── Transient-failure retry ──────────────────────────────────────────────────
+# A synchronous write request is directly exposed to short connection blips:
+# Neon cold starts, pooler recycling, a statement cancelled by a timeout. Those
+# are worth another attempt. A constraint violation or a syntax error is not —
+# retrying it fails identically and only adds latency.
+
+RETRY_ATTEMPTS = 3
+RETRY_BASE_DELAY_SECONDS = 0.05
+
+_TRANSIENT_EXCEPTIONS: tuple[type[BaseException], ...] = (
+    asyncpg.exceptions.PostgresConnectionError,
+    asyncpg.exceptions.InterfaceError,
+    asyncpg.exceptions.AdminShutdownError,
+    asyncpg.exceptions.CannotConnectNowError,
+    asyncpg.exceptions.TooManyConnectionsError,
+    asyncpg.exceptions.QueryCanceledError,
+    asyncpg.exceptions.DeadlockDetectedError,
+    asyncpg.exceptions.SerializationError,
+    ConnectionError,
+    TimeoutError,  # also covers asyncio.TimeoutError on 3.11+
+    OSError,
+)
+
+
+def is_transient(exc: BaseException) -> bool:
+    """True for connection-level failures that are worth retrying."""
+    return isinstance(exc, _TRANSIENT_EXCEPTIONS)
+
+
+async def retry_transient(
+    operation: Callable[[], Awaitable[Any]],
+    *,
+    description: str,
+    attempts: int = RETRY_ATTEMPTS,
+    base_delay: float = RETRY_BASE_DELAY_SECONDS,
+) -> Any:
+    """Run `operation`, retrying only transient failures with a short backoff.
+
+    Wrap *one* logical write at a time, never a group of them: an operation that
+    already succeeded is never replayed, so a retry cannot double-apply a side
+    effect (such as bumping `sessions.pageviews`).
+    """
+    for attempt in range(1, attempts + 1):
+        try:
+            return await operation()
+        except Exception as exc:
+            if attempt == attempts or not is_transient(exc):
+                raise
+            delay = base_delay * (2 ** (attempt - 1))
+            log.warning(
+                f"{description} failed (attempt {attempt}/{attempts}): {exc} — "
+                f"retrying in {delay:.2f}s"
+            )
+            await asyncio.sleep(delay)
+
+    raise AssertionError("retry_transient fell through")  # pragma: no cover
 
 
 # ── Lifecycle ────────────────────────────────────────────────────────────────

@@ -13,6 +13,7 @@ from urllib.parse import urlparse
 
 from ..db import query, query_one
 from ..js_compat import js_round
+from . import visitor_service
 
 DEFAULT_TOP_REFERRERS_LIMIT = 10
 DEFAULT_REALTIME_WINDOW_MINUTES = 30
@@ -49,7 +50,17 @@ PAID_MEDIUMS = ("cpc", "ppc", "paid", "paidsearch", "paidsocial")
 
 
 async def upsert(params: dict[str, Any]) -> dict[str, Any] | None:
-    """Insert a session, or bump `pageviews` when the (session_id, domain_id) exists."""
+    """Insert a session, or bump `pageviews` when the (session_id, domain_id) exists.
+
+    `sessions.visitor_id` is a UUID foreign key into `visitors(id)`, while the
+    client sends its own generated string. The visitor row is upserted first so
+    the surrogate id can be stored — without it the insert fails the constraint.
+    """
+    visitor = await visitor_service.upsert(
+        params.get("domainId"), params.get("visitorId")
+    )
+    visitor_pk = visitor["id"] if visitor else None
+
     rows = await query(
         """
         INSERT INTO sessions
@@ -67,7 +78,7 @@ async def upsert(params: dict[str, Any]) -> dict[str, Any] | None:
         """,
         params["sessionId"],
         params["domainId"],
-        params.get("visitorId") or None,
+        visitor_pk,
         params.get("source") or None,
         params.get("sourceType") or None,
         params.get("referrer") or None,

@@ -65,6 +65,9 @@ interface TFConfig {
 }
 
 interface TFEvent {
+    /** Client-generated id. The server treats it as an idempotency key, so a
+     *  retried delivery of the same event is never counted twice. */
+    eventId: string;
     type: 'pageview' | 'click' | 'scroll' | 'form' | 'custom' | 'session_end';
     url: string;
     referrer: string | null;
@@ -92,6 +95,14 @@ interface RecordingEvent {
 const VISITOR_KEY = '_tf_vid';
 const SESSION_KEY = '_tf_sid';
 const SESSION_EXPIRY = 30 * 60 * 1000; // 30 minutes
+
+// Undelivered events are mirrored here so a failed send, a reload or a closed
+// tab cannot lose them. The server dedupes on `eventId`, so re-sending is safe.
+const QUEUE_KEY = '_tf_queue';
+const MAX_QUEUE_EVENTS = 200;
+// Stop retrying in-page after this many consecutive failures; the persisted
+// queue is picked up again on the next page load.
+const MAX_SEND_ATTEMPTS = 5;
 
 // Default configuration
 const defaultConfig: TFConfig = {
@@ -126,6 +137,10 @@ class ThravicAnalytics {
     private config: TFConfig = defaultConfig;
     private eventQueue: TFEvent[] = [];
     private batchTimer: number | null = null;
+    /** A send is in flight — never start a second one. */
+    private sending: boolean = false;
+    private retryTimer: number | null = null;
+    private retryAttempt: number = 0;
     private scrollDepth: number = 0;
     private initialized: boolean = false;
     /** When requireConsent=true, tracking is paused until consent is granted */
@@ -277,8 +292,9 @@ class ThravicAnalytics {
     // Revoke consent (e.g. user withdraws permission)
     public revokeConsent(): void {
         this.consentGranted = false;
-        // Clear any queued events
+        // Clear any queued events, including the persisted copy.
         this.eventQueue = [];
+        this.persistQueue();
     }
 
     // ────────────────────────────────────
@@ -289,6 +305,7 @@ class ThravicAnalytics {
     private createEvent(type: TFEvent['type'], data?: Record<string, unknown>): TFEvent {
         const utm = this.getUtmParams();
         return {
+            eventId: this.generateId(),
             type,
             url: window.location.href,
             referrer: document.referrer || null,
@@ -306,49 +323,108 @@ class ThravicAnalytics {
         };
     }
 
+    // ────────────────────────────────────
+    //  Durable queue
+    // ────────────────────────────────────
+
+    // Restore anything a previous page could not deliver.
+    private loadPersistedQueue(): void {
+        try {
+            const raw = localStorage.getItem(QUEUE_KEY);
+            if (!raw) return;
+            const parsed = JSON.parse(raw);
+            if (!Array.isArray(parsed)) return;
+            this.eventQueue = parsed
+                .filter((e) => e && typeof e === 'object' && typeof e.eventId === 'string')
+                .slice(-MAX_QUEUE_EVENTS);
+        } catch { /* storage blocked, or the value is corrupt */ }
+    }
+
+    private persistQueue(): void {
+        try {
+            if (this.eventQueue.length === 0) {
+                localStorage.removeItem(QUEUE_KEY);
+                return;
+            }
+            localStorage.setItem(
+                QUEUE_KEY,
+                JSON.stringify(this.eventQueue.slice(-MAX_QUEUE_EVENTS))
+            );
+        } catch { /* storage blocked — the queue stays in memory only */ }
+    }
+
     // Queue an event
     private queueEvent(event: TFEvent): void {
         if (!this.shouldTrack()) return;
 
         this.eventQueue.push(event);
+        // Bound the queue: an unreachable endpoint must not grow it forever.
+        if (this.eventQueue.length > MAX_QUEUE_EVENTS) {
+            this.eventQueue = this.eventQueue.slice(-MAX_QUEUE_EVENTS);
+        }
+        this.persistQueue();
 
         if (this.eventQueue.length >= this.config.batchSize) {
             this.flush();
         }
     }
 
-    // Send analytics events to server
-    private flush(): void {
+    // Send analytics events to the server.
+    //
+    // Delivery is at-least-once. The queue is mirrored into localStorage and an
+    // event is only dropped once the server has acknowledged the batch; a failed
+    // send is retried with backoff, and whatever is left is replayed on the next
+    // page load. Each event carries a client-generated `eventId` that the server
+    // treats as an idempotency key, so a duplicate delivery is not counted twice.
+    //
+    // `final` marks the unload path: `sendBeacon` is the only transport that
+    // survives it, but it reports no status, so those events stay queued and are
+    // confirmed by the next page load.
+    private flush(final: boolean = false): void {
         if (this.eventQueue.length === 0) return;
         if (!this.shouldTrack()) return;
 
         const events = [...this.eventQueue];
-        this.eventQueue = [];
-
         // Batch endpoint: POST /api/collect/:trackingId/batch
         const batchUrl = `${this.config.endpoint}/${this.trackingId}/batch`;
-        const payload = { events };
 
-        // Use sendBeacon for reliable delivery on page unload
-        if (navigator.sendBeacon) {
-            const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
-            const sent = navigator.sendBeacon(batchUrl, blob);
-            if (!sent) {
-                // sendBeacon queue is full — fall through to fetch
-                this.flushWithFetch(batchUrl, payload);
-            }
-        } else {
-            this.flushWithFetch(batchUrl, payload);
+        if (final && navigator.sendBeacon) {
+            const blob = new Blob([JSON.stringify({ events })], { type: 'application/json' });
+            navigator.sendBeacon(batchUrl, blob);
+            return;
         }
-    }
 
-    private flushWithFetch(url: string, payload: object): void {
-        fetch(url, {
+        if (this.sending) return;
+        this.sending = true;
+
+        fetch(batchUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
+            body: JSON.stringify({ events }),
             keepalive: true,
-        }).catch(() => { /* silent — best-effort delivery */ });
+        })
+            .then((res) => {
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                // Acknowledged — drop exactly what was sent.
+                const sent = new Set(events.map((e) => e.eventId));
+                this.eventQueue = this.eventQueue.filter((e) => !sent.has(e.eventId));
+                this.persistQueue();
+                this.retryAttempt = 0;
+            })
+            .catch(() => this.scheduleRetry())
+            .finally(() => { this.sending = false; });
+    }
+
+    private scheduleRetry(): void {
+        if (this.retryTimer !== null) return;
+        if (this.retryAttempt >= MAX_SEND_ATTEMPTS) return;
+
+        const delay = Math.min(1000 * Math.pow(2, this.retryAttempt), 30_000);
+        this.retryAttempt += 1;
+        this.retryTimer = window.setTimeout(() => {
+            this.retryTimer = null;
+            this.flush();
+        }, delay);
     }
 
     // ────────────────────────────────────
@@ -871,7 +947,7 @@ class ThravicAnalytics {
                     duration: Math.round((Date.now() - this.pageStart) / 1000),
                     lastPage: window.location.href,
                 }));
-                this.flush();
+                this.flush(true);
                 if (this.recordingId) {
                     this.endRecording();
                 }
@@ -881,7 +957,7 @@ class ThravicAnalytics {
         });
 
         window.addEventListener('beforeunload', () => {
-            this.flush();
+            this.flush(true);
             if (this.recordingId) {
                 this.endRecording();
             }
@@ -959,6 +1035,10 @@ class ThravicAnalytics {
         }
 
         this.initialized = true;
+
+        // Deliver anything a previous page could not. Safe to re-send: the server
+        // dedupes on `eventId`.
+        this.loadPersistedQueue();
 
         // Setup listeners
         this.setupListeners();
