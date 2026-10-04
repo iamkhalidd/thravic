@@ -46,9 +46,9 @@ class Settings(BaseSettings):
     NODE_ENV: str = "development"
     PORT: int = 3001
     LOG_LEVEL: str = "info"
-    # Serve Swagger UI at /docs (and /openapi.json). Off in production by default,
-    # where the old backend exposed no docs; set DOCS_ENABLED=true to enable there.
-    DOCS_ENABLED: bool = False
+    # Serve Swagger UI at /docs (and /openapi.json). Enabled by default; set
+    # DOCS_ENABLED=false to hide the docs.
+    DOCS_ENABLED: bool = True
 
     # ── Database / cache ──────────────────────
     DATABASE_URL: str | None = None
