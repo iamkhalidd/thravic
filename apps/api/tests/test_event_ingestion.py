@@ -35,6 +35,7 @@ import pytest
 from app import db as db_module
 from app.db import _init_connection, _prepare_dsn, _ssl_setting
 from app.services import event_service, session_service
+from app.services.session_service import classify_source
 
 TEST_DSN = os.getenv("THRAVIC_TEST_DATABASE_URL")
 
@@ -227,3 +228,36 @@ async def test_distinct_event_ids_are_both_stored(seeded_domain, db_pool):
     payloads = [_tracker_payload(seeded_domain), _tracker_payload(seeded_domain)]
 
     assert await event_service.batch_insert(payloads) == 2
+
+
+# ── Schema/application contract ──────────────────────────────────────────────
+# Both of these failed in production before the constraints were widened: the
+# API accepted the value, Postgres rejected it, and the endpoint answered 500
+# while /health stayed green. Nothing in the suite noticed, so these tie the
+# CHECK constraints to what the application actually emits.
+
+
+async def test_every_event_type_the_api_accepts_is_storable(seeded_domain):
+    """`events.type` must accept every type `collect.py` validates."""
+    from app.routers.collect import EVENT_TYPES
+
+    for event_type in EVENT_TYPES:
+        payload = {**_tracker_payload(seeded_domain), "type": event_type}
+        assert await event_service.batch_insert([payload]) == 1, event_type
+
+
+async def test_every_source_type_the_app_emits_is_storable(seeded_domain):
+    """`sessions.source_type` must accept every value `classify_source` returns."""
+    emitted = {
+        classify_source("https://www.google.com/", None, None),  # search engine
+        classify_source("https://twitter.com/", None, None),  # social network
+        classify_source("https://news.ycombinator.com/", None, None),  # referral
+        classify_source(None, "newsletter", "email"),  # email
+        classify_source(None, "google", "cpc"),  # paid
+        classify_source(None, None, None),  # direct
+    }
+    assert emitted == {"organic", "social", "referral", "email", "paid", "direct"}
+
+    for source_type in emitted:
+        payload = {**_tracker_payload(seeded_domain), "sourceType": source_type}
+        assert await session_service.upsert(payload) is not None, source_type

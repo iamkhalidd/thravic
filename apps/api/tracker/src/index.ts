@@ -397,6 +397,8 @@ class ThravicAnalytics {
         if (this.sending) return;
         this.sending = true;
 
+        const sentIds = new Set(events.map((e) => e.eventId));
+
         fetch(batchUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -404,10 +406,16 @@ class ThravicAnalytics {
             keepalive: true,
         })
             .then((res) => {
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                // Acknowledged — drop exactly what was sent.
-                const sent = new Set(events.map((e) => e.eventId));
-                this.eventQueue = this.eventQueue.filter((e) => !sent.has(e.eventId));
+                // A 4xx (except 429) is a permanent rejection — a payload the
+                // server will never accept. Retrying it forever only burns the
+                // visitor's connection, so it is dropped along with the
+                // acknowledged case. 429 means "slow down", so that one retries.
+                const permanent =
+                    res.status >= 400 && res.status < 500 && res.status !== 429;
+                if (!res.ok && !permanent) throw new Error(`HTTP ${res.status}`);
+
+                // Done with these events either way.
+                this.eventQueue = this.eventQueue.filter((e) => !sentIds.has(e.eventId));
                 this.persistQueue();
                 this.retryAttempt = 0;
             })
