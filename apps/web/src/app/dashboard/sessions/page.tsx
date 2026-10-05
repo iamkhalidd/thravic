@@ -1,271 +1,461 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import Link from 'next/link';
+import { useState, useEffect, useRef } from 'react';
 import {
     Video,
     Play,
+    Pause,
+    SkipBack,
+    SkipForward,
+    Maximize2,
+    Monitor,
+    Smartphone,
+    Tablet,
     Clock,
-    Filter,
-    Search,
-    ArrowRight
+    MousePointer2,
+    Trash2
 } from 'lucide-react';
-import { recordings } from '@/lib/api';
-import { useDomain } from '@/contexts/DomainContext';
+import { domains } from '@/lib/api';
 
-// Mirrors the `recordings` entries returned by /api/recordings/{domainId}.
-interface SessionRecording {
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+
+// Mirrors /api/recordings/{domainId}: url/duration/eventsCount. There is no
+// visitor id, device, status or viewport size on a recording row.
+interface Recording {
     id: string;
     url: string;
-    duration: number;
-    eventsCount: number;
     startedAt: string;
     endedAt: string | null;
+    duration: number;
+    eventsCount: number;
+}
+
+interface RecordingEvent {
+    type: string;
+    timestamp: number;
+    data: Record<string, any>;
+}
+
+interface FullRecording extends Recording {
+    events: RecordingEvent[];
+}
+
+const FALLBACK_VIEWPORT = { width: 1280, height: 720 };
+
+/**
+ * The recording row carries no viewport size, but the tracker stores it on the
+ * recording's own first `pageview` event (and on every `resize`), and mouse
+ * coordinates are clientX/clientY - i.e. relative to the viewport. So the replay
+ * canvas is derived from those events rather than assumed.
+ *
+ * A session that is resized mid-recording is replayed against its initial
+ * viewport; positions after the resize are therefore approximate.
+ */
+function viewportOf(events: RecordingEvent[]): { width: number; height: number } {
+    for (const event of events) {
+        const width = Number(event.data?.viewportWidth);
+        const height = Number(event.data?.viewportHeight);
+        if (width > 0 && height > 0) {
+            return { width, height };
+        }
+    }
+    return FALLBACK_VIEWPORT;
+}
+
+async function getRecordings(domainId: string) {
+    const token = localStorage.getItem('accessToken');
+    const res = await fetch(`${API_URL}/api/recordings/${domainId}?status=completed`, {
+        headers: { Authorization: `Bearer ${token}` }
+    });
+    return res.json();
+}
+
+async function getRecording(domainId: string, recordingId: string) {
+    const token = localStorage.getItem('accessToken');
+    const res = await fetch(`${API_URL}/api/recordings/${domainId}/${recordingId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+    });
+    return res.json();
+}
+
+async function deleteRecording(domainId: string, recordingId: string) {
+    const token = localStorage.getItem('accessToken');
+    await fetch(`${API_URL}/api/recordings/${domainId}/${recordingId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+    });
+}
+
+function formatDuration(seconds: number): string {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
 export default function SessionsPage() {
-    const { selectedDomainId, loading: domainLoading } = useDomain();
-    const [sessions, setSessions] = useState<SessionRecording[]>([]);
+    const [selectedDomainId, setSelectedDomainId] = useState<string | null>(null);
+    const [recordingsList, setRecordingsList] = useState<Recording[]>([]);
+    const [selectedRecording, setSelectedRecording] = useState<FullRecording | null>(null);
     const [loading, setLoading] = useState(true);
-    const [searchQuery, setSearchQuery] = useState('');
-    const [filters, setFilters] = useState({
-        duration: 'all'
-    });
+    const [loadingPlayback, setLoadingPlayback] = useState(false);
+
+    // Playback state
+    const [isPlaying, setIsPlaying] = useState(false);
+    const [playbackTime, setPlaybackTime] = useState(0);
+    const [playbackSpeed, setPlaybackSpeed] = useState(1);
+    const [cursorPosition, setCursorPosition] = useState({ x: 0, y: 0 });
+    const playbackRef = useRef<number>();
+
+    // Derived from the loaded recording's events; see viewportOf().
+    const viewport = selectedRecording
+        ? viewportOf(selectedRecording.events)
+        : FALLBACK_VIEWPORT;
 
     useEffect(() => {
-        const loadSessions = async () => {
-            if (!selectedDomainId) return;
-            setLoading(true);
-            const result = await recordings.list(selectedDomainId);
-            if (result.data) {
-                setSessions(result.data.recordings || []);
+        domains.list().then(result => {
+            if (result.data && result.data.domains.length > 0) {
+                setSelectedDomainId(result.data.domains[0].id);
+            } else {
+                setLoading(false);
             }
-            setLoading(false);
-        };
+        });
+    }, []);
 
-        if (selectedDomainId) {
-            loadSessions();
-        }
+    useEffect(() => {
+        if (!selectedDomainId) return;
+
+        setLoading(true);
+        getRecordings(selectedDomainId).then(data => {
+            setRecordingsList(data.recordings || []);
+            setLoading(false);
+        });
     }, [selectedDomainId]);
 
-    // The API returns url/duration/eventsCount - there is no visitor id, device
-    // or country on a recording, so only the fields that exist are filtered on.
-    const filteredSessions = sessions.filter(session => {
-        if (searchQuery && !(session.url || '').toLowerCase().includes(searchQuery.toLowerCase())) return false;
-        if (filters.duration === 'short' && session.duration > 60) return false;
-        if (filters.duration === 'medium' && (session.duration < 60 || session.duration > 300)) return false;
-        if (filters.duration === 'long' && session.duration < 300) return false;
-        return true;
-    });
+    // Playback loop
+    useEffect(() => {
+        if (!isPlaying || !selectedRecording) return;
 
-    if (domainLoading || loading) {
-        return (
-            <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-xl)' }}>
-                <div className="loading-spinner" />
-            </div>
+        const interval = setInterval(() => {
+            setPlaybackTime(prev => {
+                const newTime = prev + (16 * playbackSpeed); // ~60fps
+
+                if (newTime >= selectedRecording.duration * 1000) {
+                    setIsPlaying(false);
+                    return selectedRecording.duration * 1000;
+                }
+
+                // Find events at current time and update cursor
+                const currentEvents = selectedRecording.events.filter(
+                    e => e.timestamp >= prev && e.timestamp < newTime
+                );
+
+                for (const event of currentEvents) {
+                    if (event.type === 'mousemove' && event.data) {
+                        setCursorPosition({
+                            x: (event.data.x / viewport.width) * 100,
+                            y: (event.data.y / viewport.height) * 100
+                        });
+                    }
+                }
+
+                return newTime;
+            });
+        }, 16);
+
+        playbackRef.current = interval as any;
+
+        return () => clearInterval(interval);
+    }, [isPlaying, selectedRecording, playbackSpeed]);
+
+    const handleSelectRecording = async (recordingId: string) => {
+        if (!selectedDomainId) return;
+
+        setLoadingPlayback(true);
+        const data = await getRecording(selectedDomainId, recordingId);
+        setSelectedRecording(data);
+        setPlaybackTime(0);
+        setIsPlaying(false);
+        setCursorPosition({ x: 50, y: 50 });
+        setLoadingPlayback(false);
+    };
+
+    const handleDelete = async (recordingId: string) => {
+        if (!selectedDomainId || !confirm('Delete this recording?')) return;
+
+        await deleteRecording(selectedDomainId, recordingId);
+        setRecordingsList(prev => prev.filter(r => r.id !== recordingId));
+        if (selectedRecording?.id === recordingId) {
+            setSelectedRecording(null);
+        }
+    };
+
+    const togglePlayback = () => setIsPlaying(!isPlaying);
+
+    const skipTime = (seconds: number) => {
+        if (!selectedRecording) return;
+        setPlaybackTime(prev =>
+            Math.max(0, Math.min(prev + seconds * 1000, selectedRecording.duration * 1000))
         );
-    }
+    };
 
-    if (!selectedDomainId) {
+    if (loading) {
         return (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-xl)', color: 'var(--color-text-secondary)' }}>
-                <p>Please select a domain to view session recordings</p>
+            <div>
+                <div className="skeleton" style={{ height: '40px', width: '200px', marginBottom: 'var(--space-xl)' }} />
+                <div className="grid grid-cols-3 gap-lg">
+                    {[1, 2, 3].map(i => (
+                        <div key={i} className="card">
+                            <div className="skeleton" style={{ height: '120px' }} />
+                        </div>
+                    ))}
+                </div>
             </div>
         );
     }
 
     return (
         <div>
-            {/* Page Header */}
-            <div style={{ marginBottom: 'var(--space-xl)' }}>
-                <h1 style={{
-                    fontSize: '1.5rem',
-                    fontWeight: 600,
-                    color: 'var(--color-text-primary)',
-                    marginBottom: 'var(--space-xs)'
-                }}>
-                    Session Recordings
-                </h1>
-                <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>
-                    Watch real user sessions to understand behavior
-                </p>
-            </div>
-
-            {/* Filters */}
-            <div style={{
-                display: 'flex',
-                flexWrap: 'wrap',
-                gap: 'var(--space-md)',
-                marginBottom: 'var(--space-lg)',
-                padding: 'var(--space-md)',
-                background: 'var(--color-bg-secondary)',
-                borderRadius: 'var(--radius-lg)',
-                border: '1px solid var(--color-border)'
-            }}>
-                {/* Search */}
-                <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 'var(--space-xs)',
-                    padding: 'var(--space-xs) var(--space-sm)',
-                    background: 'var(--color-bg-tertiary)',
-                    borderRadius: 'var(--radius-md)',
-                    border: '1px solid var(--color-border)'
-                }}>
-                    <Search size={14} style={{ color: 'var(--color-text-tertiary)' }} />
-                    <input
-                        type="text"
-                        placeholder="Search by page URL..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        style={{
-                            background: 'transparent',
-                            border: 'none',
-                            outline: 'none',
-                            fontSize: '0.8125rem',
-                            color: 'var(--color-text-primary)',
-                            width: '180px'
-                        }}
-                    />
-                </div>
-
-                {/* Duration Filter */}
-                <select
-                    value={filters.duration}
-                    onChange={(e) => setFilters({ ...filters, duration: e.target.value })}
-                    style={{
-                        padding: 'var(--space-xs) var(--space-sm)',
-                        background: 'var(--color-bg-tertiary)',
-                        border: '1px solid var(--color-border)',
-                        borderRadius: 'var(--radius-md)',
-                        fontSize: '0.8125rem',
-                        color: 'var(--color-text-primary)',
-                        cursor: 'pointer'
-                    }}
-                >
-                    <option value="all">Any Duration</option>
-                    <option value="short">&lt; 1 min</option>
-                    <option value="medium">1-5 min</option>
-                    <option value="long">&gt; 5 min</option>
-                </select>
-
-                <div style={{
-                    marginLeft: 'auto',
-                    fontSize: '0.8125rem',
-                    color: 'var(--color-text-secondary)'
-                }}>
-                    {filteredSessions.length} sessions
+            {/* Header */}
+            <div className="flex items-center justify-between" style={{ marginBottom: 'var(--space-xl)' }}>
+                <h1>Sessions</h1>
+                <div className="flex items-center gap-sm">
+                    <span style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
+                        {recordingsList.length} sessions
+                    </span>
                 </div>
             </div>
 
-            {/* Sessions List */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
-                {filteredSessions.length === 0 ? (
-                    <div style={{
-                        padding: 'var(--space-xl)',
-                        textAlign: 'center',
-                        color: 'var(--color-text-secondary)',
-                        background: 'var(--color-bg-secondary)',
-                        borderRadius: 'var(--radius-lg)',
-                        border: '1px solid var(--color-border)'
-                    }}>
-                        <Video size={40} style={{ marginBottom: 'var(--space-md)', opacity: 0.5 }} />
-                        <p>No session recordings found</p>
-                        <p style={{ fontSize: '0.8125rem', marginTop: 'var(--space-xs)' }}>
-                            Session recordings will appear here once visitors interact with your site
-                        </p>
+            {recordingsList.length === 0 ? (
+                <div className="card" style={{ textAlign: 'center', padding: 'var(--space-2xl)' }}>
+                    <Video size={48} style={{ color: 'var(--color-text-muted)', marginBottom: 'var(--space-lg)' }} />
+                    <h3 style={{ marginBottom: 'var(--space-sm)' }}>No recordings yet</h3>
+                    <p>Session recordings will appear here once visitors interact with your site</p>
+                </div>
+            ) : (
+                <div className="grid grid-cols-3 gap-lg">
+                    {/* Recording List */}
+                    <div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
+                            {recordingsList.map(recording => {
+                                const DeviceIcon = Monitor;
+
+                                return (
+                                    <div
+                                        key={recording.id}
+                                        className="card"
+                                        onClick={() => handleSelectRecording(recording.id)}
+                                        style={{
+                                            cursor: 'pointer',
+                                            borderColor: selectedRecording?.id === recording.id
+                                                ? 'var(--color-accent-primary)'
+                                                : undefined
+                                        }}
+                                    >
+                                        <div className="flex items-center justify-between" style={{ marginBottom: 'var(--space-sm)' }}>
+                                            <div className="flex items-center gap-sm">
+                                                <DeviceIcon size={16} style={{ color: 'var(--color-text-muted)' }} />
+                                                <span style={{ fontSize: '0.875rem', fontWeight: 500 }}>
+                                                    {recording.url}
+                                                </span>
+                                            </div>
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleDelete(recording.id);
+                                                }}
+                                                className="btn btn-ghost"
+                                                style={{ padding: 'var(--space-xs)' }}
+                                            >
+                                                <Trash2 size={14} />
+                                            </button>
+                                        </div>
+
+                                        <div className="flex items-center gap-md" style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
+                                            <span className="flex items-center gap-xs">
+                                                <Clock size={12} />
+                                                {formatDuration(recording.duration)}
+                                            </span>
+                                            <span className="flex items-center gap-xs">
+                                                <MousePointer2 size={12} />
+                                                {recording.eventsCount} events
+                                            </span>
+                                        </div>
+
+                                        <div style={{
+                                            marginTop: 'var(--space-sm)',
+                                            fontSize: '0.75rem',
+                                            color: 'var(--color-text-muted)'
+                                        }}>
+                                            {new Date(recording.startedAt).toLocaleString()}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
                     </div>
-                ) : (
-                    filteredSessions.map((session, idx) => (
-                        <Link
-                            key={idx}
-                            href="/dashboard/recordings"
-                            style={{
+
+                    {/* Playback Player */}
+                    <div style={{ gridColumn: 'span 2' }}>
+                        {loadingPlayback ? (
+                            <div className="card" style={{
                                 display: 'flex',
                                 alignItems: 'center',
-                                gap: 'var(--space-md)',
-                                padding: 'var(--space-md)',
-                                background: 'var(--color-bg-secondary)',
-                                borderRadius: 'var(--radius-lg)',
-                                border: '1px solid var(--color-border)',
-                                textDecoration: 'none',
-                                transition: 'all var(--transition-fast)'
-                            }}
-                        >
-                            {/* Play Button */}
-                            <div style={{
-                                width: '48px',
-                                height: '48px',
-                                borderRadius: 'var(--radius-md)',
-                                background: 'var(--color-primary-alpha)',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center'
+                                justifyContent: 'center',
+                                minHeight: '500px'
                             }}>
-                                <Play size={20} style={{ color: 'var(--color-primary)' }} />
+                                <div className="skeleton" style={{ width: '100%', height: '400px' }} />
                             </div>
+                        ) : selectedRecording ? (
+                            <div className="card">
+                                {/* Player Header */}
+                                <div className="card-header" style={{ marginBottom: 'var(--space-md)' }}>
+                                    <h4 className="card-title">{selectedRecording.url}</h4>
+                                    <span style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
+                                        {viewport.width}x{viewport.height}
+                                    </span>
+                                </div>
 
-                            {/* Session Info */}
-                            <div style={{ flex: 1 }}>
+                                {/* Player Screen */}
                                 <div style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 'var(--space-sm)',
-                                    marginBottom: '4px'
+                                    position: 'relative',
+                                    width: '100%',
+                                    aspectRatio: `${viewport.width}/${viewport.height}`,
+                                    maxHeight: '400px',
+                                    background: 'var(--color-bg-primary)',
+                                    borderRadius: 'var(--radius-md)',
+                                    overflow: 'hidden',
+                                    margin: '0 auto'
                                 }}>
-                                    <span style={{
-                                        fontSize: '0.875rem',
-                                        fontWeight: 500,
-                                        color: 'var(--color-text-primary)'
+                                    {/* Simulated page content */}
+                                    <div style={{
+                                        position: 'absolute',
+                                        inset: 0,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        color: 'var(--color-text-muted)',
+                                        fontSize: '0.875rem'
                                     }}>
-                                        {session.url || 'Unknown page'}
-                                    </span>
+                                        [Session Playback - {selectedRecording.url}]
+                                    </div>
+
+                                    {/* Cursor */}
+                                    <div style={{
+                                        position: 'absolute',
+                                        left: `${cursorPosition.x}%`,
+                                        top: `${cursorPosition.y}%`,
+                                        transform: 'translate(-50%, -50%)',
+                                        width: '20px',
+                                        height: '20px',
+                                        pointerEvents: 'none',
+                                        transition: isPlaying ? 'left 16ms linear, top 16ms linear' : 'none'
+                                    }}>
+                                        <MousePointer2
+                                            size={20}
+                                            style={{
+                                                color: 'var(--color-accent-primary)',
+                                                filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.5))'
+                                            }}
+                                        />
+                                    </div>
                                 </div>
-                                <div style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 'var(--space-md)',
-                                    fontSize: '0.75rem',
-                                    color: 'var(--color-text-tertiary)'
-                                }}>
-                                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                        <Clock size={12} />
-                                        {formatDuration(session.duration || 0)}
-                                    </span>
-                                    <span>
-                                        {session.eventsCount || 0} events
-                                    </span>
+
+                                {/* Progress Bar */}
+                                <div style={{ marginTop: 'var(--space-lg)' }}>
+                                    <div
+                                        style={{
+                                            height: '6px',
+                                            background: 'var(--color-bg-secondary)',
+                                            borderRadius: 'var(--radius-full)',
+                                            cursor: 'pointer',
+                                            overflow: 'hidden'
+                                        }}
+                                        onClick={(e) => {
+                                            if (!selectedRecording) return;
+                                            const rect = e.currentTarget.getBoundingClientRect();
+                                            const percent = (e.clientX - rect.left) / rect.width;
+                                            setPlaybackTime(percent * selectedRecording.duration * 1000);
+                                        }}
+                                    >
+                                        <div style={{
+                                            height: '100%',
+                                            width: `${(playbackTime / (selectedRecording.duration * 1000)) * 100}%`,
+                                            background: 'var(--color-accent-primary)',
+                                            borderRadius: 'var(--radius-full)',
+                                            transition: 'width 16ms linear'
+                                        }} />
+                                    </div>
+                                </div>
+
+                                {/* Controls */}
+                                <div className="flex items-center justify-between" style={{ marginTop: 'var(--space-md)' }}>
+                                    <div className="flex items-center gap-md">
+                                        <button
+                                            onClick={() => skipTime(-10)}
+                                            className="btn btn-ghost"
+                                            style={{ padding: 'var(--space-sm)' }}
+                                        >
+                                            <SkipBack size={18} />
+                                        </button>
+                                        <button
+                                            onClick={togglePlayback}
+                                            className="btn btn-primary"
+                                            style={{
+                                                width: '48px',
+                                                height: '48px',
+                                                borderRadius: 'var(--radius-full)',
+                                                padding: 0,
+                                                justifyContent: 'center'
+                                            }}
+                                        >
+                                            {isPlaying ? <Pause size={20} /> : <Play size={20} />}
+                                        </button>
+                                        <button
+                                            onClick={() => skipTime(10)}
+                                            className="btn btn-ghost"
+                                            style={{ padding: 'var(--space-sm)' }}
+                                        >
+                                            <SkipForward size={18} />
+                                        </button>
+                                    </div>
+
+                                    <div className="flex items-center gap-md">
+                                        <span style={{ fontSize: '0.875rem', fontFamily: 'var(--font-mono)' }}>
+                                            {formatDuration(playbackTime / 1000)} / {formatDuration(selectedRecording.duration)}
+                                        </span>
+
+                                        {/* Speed selector */}
+                                        <select
+                                            value={playbackSpeed}
+                                            onChange={(e) => setPlaybackSpeed(parseFloat(e.target.value))}
+                                            className="input"
+                                            style={{ width: 'auto', padding: 'var(--space-xs) var(--space-sm)' }}
+                                        >
+                                            <option value="0.5">0.5x</option>
+                                            <option value="1">1x</option>
+                                            <option value="2">2x</option>
+                                            <option value="4">4x</option>
+                                        </select>
+                                    </div>
                                 </div>
                             </div>
-
-                            {/* Timestamp */}
-                            <div style={{ textAlign: 'right' }}>
-                                <div style={{
-                                    fontSize: '0.75rem',
-                                    color: 'var(--color-text-secondary)'
-                                }}>
-                                    {new Date(session.startedAt).toLocaleDateString()}
-                                </div>
-                                <div style={{
-                                    fontSize: '0.6875rem',
-                                    color: 'var(--color-text-tertiary)'
-                                }}>
-                                    {new Date(session.startedAt).toLocaleTimeString()}
+                        ) : (
+                            <div className="card" style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                minHeight: '500px',
+                                color: 'var(--color-text-muted)'
+                            }}>
+                                <div style={{ textAlign: 'center' }}>
+                                    <Video size={48} style={{ marginBottom: 'var(--space-md)', opacity: 0.5 }} />
+                                    <p>Select a recording to play</p>
                                 </div>
                             </div>
-
-                            <ArrowRight size={16} style={{ color: 'var(--color-text-tertiary)' }} />
-                        </Link>
-                    ))
-                )}
-            </div>
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
-}
-
-function formatDuration(seconds: number): string {
-    if (seconds < 60) return `${Math.round(seconds)}s`;
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.round(seconds % 60);
-    return `${mins}m ${secs}s`;
 }

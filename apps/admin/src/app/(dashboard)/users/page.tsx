@@ -147,9 +147,19 @@ export default function UsersPage() {
     };
 
     const handleImpersonate = async (user: User) => {
+        // Checked BEFORE the token is minted: a deployment missing this variable
+        // used to open http://localhost:3000 and waste the impersonation token.
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+        if (!appUrl) {
+            alert(
+                'NEXT_PUBLIC_APP_URL is not set, so the impersonation session cannot be opened. ' +
+                'Set it to the public URL of the Thravic web app and redeploy.'
+            );
+            return;
+        }
+
         try {
             const data = await api.post(`/api/admin/users/${user.id}/impersonate`, {});
-            const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
             const url = `${appUrl}/dashboard?impersonate_token=${data.token}&impersonate_email=${encodeURIComponent(user.email)}`;
             window.open(url, '_blank', 'noopener,noreferrer');
         } catch (err: any) {
