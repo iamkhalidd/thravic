@@ -508,49 +508,45 @@ export const sources = {
 };
 
 // Funnels API
+// Every funnel route is scoped to a domain: /api/funnels/{domainId}[/{funnelId}].
 export const funnels = {
-    async list(domainId?: string) {
-        const query = domainId ? `?domainId=${domainId}` : '';
+    async list(domainId: string) {
         return apiRequest<{
             funnels: Array<{
                 id: string;
                 name: string;
-                steps: Array<{ name: string; url: string }>;
-                conversionRate: number;
+                description: string | null;
+                stepsCount: number;
+                createdAt: string;
+                updatedAt: string;
             }>;
-        }>(`/api/funnels${query}`);
+        }>(`/api/funnels/${domainId}`);
     },
 
-    async get(id: string) {
-        return apiRequest<{
-            funnel: {
-                id: string;
-                name: string;
-                steps: Array<{ name: string; url: string; visitors: number; dropoff: number }>;
-                conversionRate: number;
-            };
-        }>(`/api/funnels/${id}`);
+    async get(domainId: string, funnelId: string) {
+        return apiRequest<{ funnel: any }>(`/api/funnels/${domainId}/${funnelId}`);
     },
 
-    async create(data: { name: string; domainId: string; steps: Array<{ name: string; url: string }> }) {
-        return apiRequest<{ funnel: any }>('/api/funnels', {
+    async create(domainId: string, data: { name: string; steps: Array<{ name: string; type: string; matchType?: string; matchValue: string }> }) {
+        return apiRequest<{ funnel: any }>(`/api/funnels/${domainId}`, {
             method: 'POST',
             body: JSON.stringify(data)
         });
     },
 
-    async delete(id: string) {
-        return apiRequest<{ message: string }>(`/api/funnels/${id}`, {
+    async delete(domainId: string, funnelId: string) {
+        return apiRequest<{ message: string }>(`/api/funnels/${domainId}/${funnelId}`, {
             method: 'DELETE'
         });
     }
 };
 
-// Recordings API  
+// Recordings API
+// The list endpoint is /api/recordings/{domainId} and returns url/duration/
+// eventsCount - there is no visitorId, device, geo or page count on it.
 export const recordings = {
-    async list(domainId?: string, filters?: { device?: string; duration?: string }) {
+    async list(domainId: string, filters?: { device?: string; duration?: string }) {
         const params = new URLSearchParams();
-        if (domainId) params.set('domainId', domainId);
         if (filters?.device) params.set('device', filters.device);
         if (filters?.duration) params.set('duration', filters.duration);
         const query = params.toString() ? `?${params}` : '';
@@ -558,56 +554,55 @@ export const recordings = {
         return apiRequest<{
             recordings: Array<{
                 id: string;
-                visitorId: string;
-                device: string;
-                country: string;
+                url: string;
                 duration: number;
-                pages: number;
+                eventsCount: number;
                 startedAt: string;
-                funnelCompleted: boolean;
+                endedAt: string | null;
             }>;
-        }>(`/api/recordings${query}`);
+            pagination: { page: number; limit: number; total: number; totalPages: number };
+        }>(`/api/recordings/${domainId}${query}`);
     },
 
-    async get(id: string) {
+    async get(domainId: string, recordingId: string) {
         return apiRequest<{
-            recording: {
-                id: string;
-                visitorId: string;
-                events: Array<{ type: string; timestamp: string; data: any }>;
-                duration: number;
-            };
-        }>(`/api/recordings/${id}`);
+            id: string;
+            url: string;
+            duration: number;
+            eventsCount: number;
+            events: Array<{ type: string; timestamp: number; data: any }>;
+            startedAt: string;
+            endedAt: string | null;
+        }>(`/api/recordings/${domainId}/${recordingId}`);
     }
 };
 
 // Heatmaps API
+// /api/heatmaps/{domainId} returns the points for ONE type (?type=click|scroll),
+// and /api/heatmaps/{domainId}/pages lists the pages that have interactions.
 export const heatmaps = {
-    async list(domainId?: string) {
-        const query = domainId ? `?domainId=${domainId}` : '';
+    async pages(domainId: string) {
         return apiRequest<{
-            heatmaps: Array<{
-                id: string;
-                page: string;
-                clicks: number;
-                maxScroll: number;
-            }>;
-        }>(`/api/heatmaps${query}`);
+            pages: Array<{ path: string; clicks: number; visitors: number }>;
+        }>(`/api/heatmaps/${domainId}/pages`);
     },
 
-    async get(pageUrl: string, domainId: string) {
-        const params = new URLSearchParams({ page: pageUrl, domainId });
+    async get(domainId: string, pageUrl: string, type: 'click' | 'scroll' = 'click') {
+        const params = new URLSearchParams({ page: pageUrl, type });
         return apiRequest<{
-            clicks: Array<{ x: number; y: number; count: number }>;
-            scrollDepth: Array<{ depth: number; percentage: number }>;
-        }>(`/api/heatmaps/data?${params}`);
+            domainId: string;
+            pageUrl: string;
+            type: string;
+            points: Array<{ x: number; y: number; count: number }>;
+            totalInteractions: number;
+            uniqueVisitors: number;
+        }>(`/api/heatmaps/${domainId}?${params}`);
     }
 };
 
-// Insights API
+// Insights API - scoped to a domain: /api/insights/{domainId}
 export const insights = {
-    async get(domainId?: string) {
-        const query = domainId ? `?domainId=${domainId}` : '';
+    async get(domainId: string) {
         return apiRequest<{
             insights: Array<{
                 id: string;
@@ -624,7 +619,7 @@ export const insights = {
                 trend: 'up' | 'down' | 'stable';
                 confidence: number;
             }>;
-        }>(`/api/insights${query}`);
+        }>(`/api/insights/${domainId}`);
     }
 };
 

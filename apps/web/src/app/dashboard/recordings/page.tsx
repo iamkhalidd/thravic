@@ -19,18 +19,15 @@ import { domains } from '@/lib/api';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
+// Mirrors /api/recordings/{domainId}: url/duration/eventsCount. There is no
+// visitor id, device, status or viewport size on a recording row.
 interface Recording {
     id: string;
-    visitorId: string;
-    sessionId: string;
+    url: string;
     startedAt: string;
     endedAt: string | null;
     duration: number;
-    pagePath: string;
-    screenWidth: number;
-    screenHeight: number;
-    eventCount: number;
-    status: 'recording' | 'completed' | 'processing';
+    eventsCount: number;
 }
 
 interface RecordingEvent {
@@ -41,6 +38,28 @@ interface RecordingEvent {
 
 interface FullRecording extends Recording {
     events: RecordingEvent[];
+}
+
+const FALLBACK_VIEWPORT = { width: 1280, height: 720 };
+
+/**
+ * The recording row carries no viewport size, but the tracker stores it on the
+ * recording's own first `pageview` event (and on every `resize`), and mouse
+ * coordinates are clientX/clientY - i.e. relative to the viewport. So the replay
+ * canvas is derived from those events rather than assumed.
+ *
+ * A session that is resized mid-recording is replayed against its initial
+ * viewport; positions after the resize are therefore approximate.
+ */
+function viewportOf(events: RecordingEvent[]): { width: number; height: number } {
+    for (const event of events) {
+        const width = Number(event.data?.viewportWidth);
+        const height = Number(event.data?.viewportHeight);
+        if (width > 0 && height > 0) {
+            return { width, height };
+        }
+    }
+    return FALLBACK_VIEWPORT;
 }
 
 async function getRecordings(domainId: string) {
@@ -73,12 +92,6 @@ function formatDuration(seconds: number): string {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
-function getDeviceIcon(width: number) {
-    if (width < 768) return Smartphone;
-    if (width < 1024) return Tablet;
-    return Monitor;
-}
-
 export default function RecordingsPage() {
     const [selectedDomainId, setSelectedDomainId] = useState<string | null>(null);
     const [recordingsList, setRecordingsList] = useState<Recording[]>([]);
@@ -92,6 +105,11 @@ export default function RecordingsPage() {
     const [playbackSpeed, setPlaybackSpeed] = useState(1);
     const [cursorPosition, setCursorPosition] = useState({ x: 0, y: 0 });
     const playbackRef = useRef<number>();
+
+    // Derived from the loaded recording's events; see viewportOf().
+    const viewport = selectedRecording
+        ? viewportOf(selectedRecording.events)
+        : FALLBACK_VIEWPORT;
 
     useEffect(() => {
         domains.list().then(result => {
@@ -134,8 +152,8 @@ export default function RecordingsPage() {
                 for (const event of currentEvents) {
                     if (event.type === 'mousemove' && event.data) {
                         setCursorPosition({
-                            x: (event.data.x / selectedRecording.screenWidth) * 100,
-                            y: (event.data.y / selectedRecording.screenHeight) * 100
+                            x: (event.data.x / viewport.width) * 100,
+                            y: (event.data.y / viewport.height) * 100
                         });
                     }
                 }
@@ -219,7 +237,7 @@ export default function RecordingsPage() {
                     <div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
                             {recordingsList.map(recording => {
-                                const DeviceIcon = getDeviceIcon(recording.screenWidth);
+                                const DeviceIcon = Monitor;
 
                                 return (
                                     <div
@@ -237,7 +255,7 @@ export default function RecordingsPage() {
                                             <div className="flex items-center gap-sm">
                                                 <DeviceIcon size={16} style={{ color: 'var(--color-text-muted)' }} />
                                                 <span style={{ fontSize: '0.875rem', fontWeight: 500 }}>
-                                                    {recording.pagePath}
+                                                    {recording.url}
                                                 </span>
                                             </div>
                                             <button
@@ -259,7 +277,7 @@ export default function RecordingsPage() {
                                             </span>
                                             <span className="flex items-center gap-xs">
                                                 <MousePointer2 size={12} />
-                                                {recording.eventCount} events
+                                                {recording.eventsCount} events
                                             </span>
                                         </div>
 
@@ -291,9 +309,9 @@ export default function RecordingsPage() {
                             <div className="card">
                                 {/* Player Header */}
                                 <div className="card-header" style={{ marginBottom: 'var(--space-md)' }}>
-                                    <h4 className="card-title">{selectedRecording.pagePath}</h4>
+                                    <h4 className="card-title">{selectedRecording.url}</h4>
                                     <span style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
-                                        {selectedRecording.screenWidth}x{selectedRecording.screenHeight}
+                                        {viewport.width}x{viewport.height}
                                     </span>
                                 </div>
 
@@ -301,7 +319,7 @@ export default function RecordingsPage() {
                                 <div style={{
                                     position: 'relative',
                                     width: '100%',
-                                    aspectRatio: `${selectedRecording.screenWidth}/${selectedRecording.screenHeight}`,
+                                    aspectRatio: `${viewport.width}/${viewport.height}`,
                                     maxHeight: '400px',
                                     background: 'var(--color-bg-primary)',
                                     borderRadius: 'var(--radius-md)',
@@ -318,7 +336,7 @@ export default function RecordingsPage() {
                                         color: 'var(--color-text-muted)',
                                         fontSize: '0.875rem'
                                     }}>
-                                        [Session Playback - {selectedRecording.pagePath}]
+                                        [Session Playback - {selectedRecording.url}]
                                     </div>
 
                                     {/* Cursor */}

@@ -16,7 +16,6 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 interface PageWithHeatmap {
     path: string;
     clicks: number;
-    scrolls: number;
     visitors: number;
 }
 
@@ -40,17 +39,12 @@ async function getPages(domainId: string) {
     return res.json();
 }
 
-async function getClickHeatmap(domainId: string, page: string, viewport: string) {
+// The API serves one endpoint for both heatmap types, selected with ?type=click|scroll.
+// `viewport` is sent for forward compatibility - the API does not filter on it yet.
+async function getHeatmap(domainId: string, type: 'click' | 'scroll', page: string, viewport: string) {
     const token = localStorage.getItem('accessToken');
-    const res = await fetch(`${API_URL}/api/heatmaps/${domainId}/click?page=${encodeURIComponent(page)}&viewport=${viewport}`, {
-        headers: { Authorization: `Bearer ${token}` }
-    });
-    return res.json();
-}
-
-async function getScrollHeatmap(domainId: string, page: string, viewport: string) {
-    const token = localStorage.getItem('accessToken');
-    const res = await fetch(`${API_URL}/api/heatmaps/${domainId}/scroll?page=${encodeURIComponent(page)}&viewport=${viewport}`, {
+    const params = new URLSearchParams({ type, page, viewport });
+    const res = await fetch(`${API_URL}/api/heatmaps/${domainId}?${params}`, {
         headers: { Authorization: `Bearer ${token}` }
     });
     return res.json();
@@ -104,8 +98,7 @@ export default function HeatmapsPage() {
         const loadHeatmap = async () => {
             setLoadingHeatmap(true);
 
-            const getData = heatmapType === 'click' ? getClickHeatmap : getScrollHeatmap;
-            const data = await getData(selectedDomainId, selectedPage, viewport);
+            const data = await getHeatmap(selectedDomainId, heatmapType, selectedPage, viewport);
 
             setHeatmapData({
                 points: data.points || [],

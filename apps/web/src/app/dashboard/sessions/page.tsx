@@ -6,26 +6,30 @@ import {
     Video,
     Play,
     Clock,
-    Globe,
-    Smartphone,
-    Monitor,
     Filter,
     Search,
-    Target,
     ArrowRight
 } from 'lucide-react';
 import { recordings } from '@/lib/api';
 import { useDomain } from '@/contexts/DomainContext';
 
+// Mirrors the `recordings` entries returned by /api/recordings/{domainId}.
+interface SessionRecording {
+    id: string;
+    url: string;
+    duration: number;
+    eventsCount: number;
+    startedAt: string;
+    endedAt: string | null;
+}
+
 export default function SessionsPage() {
     const { selectedDomainId, loading: domainLoading } = useDomain();
-    const [sessions, setSessions] = useState<any[]>([]);
+    const [sessions, setSessions] = useState<SessionRecording[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [filters, setFilters] = useState({
-        device: 'all',
-        duration: 'all',
-        funnelCompleted: 'all'
+        duration: 'all'
     });
 
     useEffect(() => {
@@ -44,9 +48,10 @@ export default function SessionsPage() {
         }
     }, [selectedDomainId]);
 
+    // The API returns url/duration/eventsCount - there is no visitor id, device
+    // or country on a recording, so only the fields that exist are filtered on.
     const filteredSessions = sessions.filter(session => {
-        if (searchQuery && !session.visitorId?.includes(searchQuery)) return false;
-        if (filters.device !== 'all' && session.device !== filters.device) return false;
+        if (searchQuery && !(session.url || '').toLowerCase().includes(searchQuery.toLowerCase())) return false;
         if (filters.duration === 'short' && session.duration > 60) return false;
         if (filters.duration === 'medium' && (session.duration < 60 || session.duration > 300)) return false;
         if (filters.duration === 'long' && session.duration < 300) return false;
@@ -110,7 +115,7 @@ export default function SessionsPage() {
                     <Search size={14} style={{ color: 'var(--color-text-tertiary)' }} />
                     <input
                         type="text"
-                        placeholder="Search by visitor ID..."
+                        placeholder="Search by page URL..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         style={{
@@ -123,26 +128,6 @@ export default function SessionsPage() {
                         }}
                     />
                 </div>
-
-                {/* Device Filter */}
-                <select
-                    value={filters.device}
-                    onChange={(e) => setFilters({ ...filters, device: e.target.value })}
-                    style={{
-                        padding: 'var(--space-xs) var(--space-sm)',
-                        background: 'var(--color-bg-tertiary)',
-                        border: '1px solid var(--color-border)',
-                        borderRadius: 'var(--radius-md)',
-                        fontSize: '0.8125rem',
-                        color: 'var(--color-text-primary)',
-                        cursor: 'pointer'
-                    }}
-                >
-                    <option value="all">All Devices</option>
-                    <option value="desktop">Desktop</option>
-                    <option value="mobile">Mobile</option>
-                    <option value="tablet">Tablet</option>
-                </select>
 
                 {/* Duration Filter */}
                 <select
@@ -194,7 +179,7 @@ export default function SessionsPage() {
                     filteredSessions.map((session, idx) => (
                         <Link
                             key={idx}
-                            href={`/dashboard/sessions/${session.id}`}
+                            href="/dashboard/recordings"
                             style={{
                                 display: 'flex',
                                 alignItems: 'center',
@@ -233,23 +218,8 @@ export default function SessionsPage() {
                                         fontWeight: 500,
                                         color: 'var(--color-text-primary)'
                                     }}>
-                                        {session.visitorId?.slice(0, 8) || 'Anonymous'}
+                                        {session.url || 'Unknown page'}
                                     </span>
-                                    {session.funnelCompleted && (
-                                        <span style={{
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '2px',
-                                            fontSize: '0.6875rem',
-                                            color: 'var(--color-success)',
-                                            background: 'var(--color-success-alpha, rgba(34, 197, 94, 0.1))',
-                                            padding: '2px 6px',
-                                            borderRadius: 'var(--radius-sm)'
-                                        }}>
-                                            <Target size={10} />
-                                            Converted
-                                        </span>
-                                    )}
                                 </div>
                                 <div style={{
                                     display: 'flex',
@@ -262,16 +232,8 @@ export default function SessionsPage() {
                                         <Clock size={12} />
                                         {formatDuration(session.duration || 0)}
                                     </span>
-                                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                        {session.device === 'mobile' ? <Smartphone size={12} /> : <Monitor size={12} />}
-                                        {session.device || 'Unknown'}
-                                    </span>
-                                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                        <Globe size={12} />
-                                        {session.country || 'Unknown'}
-                                    </span>
                                     <span>
-                                        {session.pages || 0} pages
+                                        {session.eventsCount || 0} events
                                     </span>
                                 </div>
                             </div>
