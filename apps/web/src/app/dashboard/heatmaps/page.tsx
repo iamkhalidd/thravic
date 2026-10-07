@@ -28,6 +28,7 @@ interface HeatmapPoint {
 interface HeatmapData {
     points: HeatmapPoint[];
     totalInteractions: number;
+    unplacedInteractions: number;
     uniqueVisitors: number;
 }
 
@@ -95,6 +96,7 @@ export default function HeatmapsPage() {
             setHeatmapData({
                 points: data.points || [],
                 totalInteractions: data.totalInteractions || 0,
+                unplacedInteractions: data.unplacedInteractions || 0,
                 uniqueVisitors: data.uniqueVisitors || 0
             });
 
@@ -286,10 +288,12 @@ export default function HeatmapsPage() {
                                 </div>
                             ) : heatmapType === 'click' ? (
                                 /* Click Heatmap Grid */
+                                <>
                                 <div style={{
                                     position: 'relative',
                                     width: '100%',
-                                    aspectRatio: viewport === 'mobile' ? '9/16' : viewport === 'tablet' ? '3/4' : '16/9',
+                                    // Points are percentages of the whole page, not of one screen.
+                                    aspectRatio: viewport === 'mobile' ? '9/16' : viewport === 'tablet' ? '3/4' : '4/3',
                                     maxWidth: viewport === 'mobile' ? '375px' : viewport === 'tablet' ? '768px' : '100%',
                                     margin: '0 auto',
                                     background: 'var(--color-bg-secondary)',
@@ -330,6 +334,13 @@ export default function HeatmapsPage() {
                                         {selectedPage}
                                     </div>
                                 </div>
+                                <p style={{ marginTop: 'var(--space-sm)', fontSize: '0.75rem', color: 'var(--color-text-muted)', textAlign: 'center' }}>
+                                    The canvas is the whole page: left to right is the screen width, top to bottom is the full page height.
+                                    {(heatmapData?.unplacedInteractions ?? 0) > 0 && (
+                                        <> {heatmapData!.unplacedInteractions.toLocaleString()} older clicks were recorded before click positions were captured and are not shown.</>
+                                    )}
+                                </p>
+                                </>
                             ) : (
                                 /* Scroll Depth Visualization */
                                 <div style={{ padding: 'var(--space-md)' }}>

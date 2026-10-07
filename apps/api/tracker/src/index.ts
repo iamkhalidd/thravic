@@ -123,6 +123,8 @@ const defaultConfig: TFConfig = {
     recordingMaxDuration: 600_000,
 };
 
+const SCROLL_MILESTONES = [25, 50, 75, 100];
+
 // ── Rage-click constants ──
 const RAGE_CLICK_THRESHOLD = 3;      // clicks needed
 const RAGE_CLICK_WINDOW   = 800;     // ms
@@ -442,6 +444,12 @@ class ThravicAnalytics {
     private trackPageView(): void {
         this.pageStart = Date.now();
         this.queueEvent(this.createEvent('pageview'));
+
+        // A page that fits in the viewport never fires `scroll`; check it once the
+        // content (or a SPA route's content) has had a moment to render.
+        if (this.config.trackScrolls) {
+            window.setTimeout(() => this.trackScroll(), 1000);
+        }
     }
 
     // ────────────────────────────────────
@@ -465,8 +473,13 @@ class ThravicAnalytics {
         this.detectRageClick(e);
 
         const data: Record<string, unknown> = {
+            // x/y are viewport pixels; the heatmap needs them relative to the page,
+            // so the viewport width and the page-space y and height go with them.
             x: e.clientX,
             y: e.clientY,
+            pageY: e.pageY,
+            viewportWidth: window.innerWidth,
+            docHeight: document.documentElement.scrollHeight,
             tag: target.tagName.toLowerCase(),
             id: target.id || undefined,
             // Limit className to avoid leaking long dynamic class strings
@@ -498,13 +511,17 @@ class ThravicAnalytics {
 
     private trackScroll(): void {
         const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-        const docHeight = document.documentElement.scrollHeight - window.innerHeight;
-        const scrollPercent = Math.round((scrollTop / docHeight) * 100);
+        const scrollable = document.documentElement.scrollHeight - window.innerHeight;
+        // A page that fits in the viewport is fully seen without scrolling.
+        const scrollPercent = scrollable > 0 ? Math.round((scrollTop / scrollable) * 100) : 100;
 
-        // Only track at 25% increments
-        if (scrollPercent > this.scrollDepth && scrollPercent % 25 === 0) {
-            this.scrollDepth = scrollPercent;
-            this.queueEvent(this.createEvent('scroll', { depth: scrollPercent }));
+        // Report each 25% milestone once, including any skipped by a fast scroll
+        // (scroll events are sampled, so the exact value 25 is rarely observed).
+        for (const milestone of SCROLL_MILESTONES) {
+            if (milestone > this.scrollDepth && scrollPercent >= milestone) {
+                this.scrollDepth = milestone;
+                this.queueEvent(this.createEvent('scroll', { depth: milestone }));
+            }
         }
     }
 
