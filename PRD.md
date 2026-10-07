@@ -212,9 +212,6 @@ thravic/
 │       ├── vercel.json
 │       └── package.json
 │
-├── .github/
-│   └── workflows/
-│       └── ci.yml       # Four independent CI jobs
 ├── .gitignore           # The only shared file
 ├── README.md
 └── PRD.md               # Product Requirements

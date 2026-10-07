@@ -68,8 +68,8 @@ npm run build     # rewrites ../app/static/tracker.js
 ```
 
 `npm run typecheck` checks the source without emitting, and `npm run dev`
-rebuilds on change. Never hand-edit `app/static/tracker.js` — CI rebuilds and
-fails if the committed file does not match the source.
+rebuilds on change. Never hand-edit `app/static/tracker.js`, and rebuild it before committing a source
+change: nothing checks automatically that the committed file matches the source.
 
 At serve time, `routers/tracker.py` reads the file once and replaces its single
 `${apiUrl}` placeholder with `SERVER_URL` (falling back to `API_URL`), so the

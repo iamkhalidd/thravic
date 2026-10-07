@@ -106,7 +106,11 @@ Python; no Node step is involved.
 | Lint a frontend | `cd apps/web; npm run lint` |
 | Build the admin portal | `cd apps/admin; npm run build` |
 
-Every Node project uses `npm ci` in CI, which requires the committed `package-lock.json`.
+Vercel installs each Node project with `npm ci`, which requires the committed `package-lock.json`.
+
+There is no CI: GitHub Actions could not start jobs on this account, so the workflow was
+removed. Run the checks above locally before merging. To restore it, check out
+`.github/workflows/ci.yml` from the commit before its removal.
 
 ---
 
@@ -142,7 +146,6 @@ issued tokens survive the cutover.
 
 ```text
 thravic/
-├── .github/workflows/ci.yml   # One CI job per project, plus the tracker build
 ├── .gitignore                 # The only shared file
 ├── apps/
 │   ├── admin/                 # Independent Next.js project
