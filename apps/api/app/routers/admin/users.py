@@ -94,10 +94,13 @@ async def list_users(request: Request):
             f"""
             SELECT u.id, u.name, u.email, u.subscription, u.role, u.created_at,
                    COUNT(DISTINCT d.id) as domains_count,
-                   COALESCE(SUM(ul.events_count), 0) as total_events
+                   -- Counted from `events`: nothing writes `usage_logs`. Runs for
+                   -- one page of users, served by the (domain_id, created_at) index.
+                   (SELECT COUNT(*) FROM events e
+                    JOIN domains ud ON ud.id = e.domain_id
+                    WHERE ud.user_id = u.id) as total_events
             FROM users u
             LEFT JOIN domains d ON d.user_id = u.id
-            LEFT JOIN usage_logs ul ON ul.domain_id = d.id
             {where}
             GROUP BY u.id
             ORDER BY u.{sort_column} {order}
@@ -253,6 +256,11 @@ async def toggle_suspend(
         )
         if not user:
             raise SimpleError("User not found", 404)
+
+        # The toggle flips between "suspended" and "user", so suspending an admin
+        # and then reactivating them would silently demote them.
+        if user.get("role") not in ("user", "suspended"):
+            raise SimpleError("Change this admin's role to user before suspending them", 400)
 
         new_role = "user" if user.get("role") == "suspended" else "suspended"
 

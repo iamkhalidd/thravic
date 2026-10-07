@@ -308,6 +308,7 @@ a {
 .badge-canceled { background: var(--color-danger-bg); color: var(--color-danger); }
 .badge-admin { background: var(--color-accent-bg); color: var(--color-accent); }
 .badge-super_admin { background: var(--color-warning-bg); color: var(--color-warning); }
+.badge-suspended { background: var(--color-danger-bg); color: var(--color-danger); }
 
 /* Buttons */
 .btn {

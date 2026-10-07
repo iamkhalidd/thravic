@@ -1,10 +1,21 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { BarChart3, Mail, Lock, ArrowRight, ArrowLeft } from 'lucide-react';
 import { auth } from '@/lib/api';
+
+// Codes the API's OAuth callbacks put in `/login?error=...`.
+const OAUTH_ERRORS: Record<string, string> = {
+    account_suspended: 'This account is suspended. Contact support to restore access.',
+    no_email: 'Your provider did not share an email address, so we could not sign you in.',
+    account_creation_failed: 'We could not create your account. Please try again.',
+    missing_code: 'Sign-in was cancelled or did not complete. Please try again.',
+    missing_tokens: 'Sign-in did not complete. Please try again.',
+    oauth_failed: 'The sign-in provider rejected the request. Please try again.',
+    oauth_error: 'Something went wrong signing you in. Please try again.',
+};
 
 export default function LoginPage() {
     const router = useRouter();
@@ -14,6 +25,13 @@ export default function LoginPage() {
     });
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+
+    // Read on mount rather than with useSearchParams, which would need a Suspense
+    // boundary around the whole page.
+    useEffect(() => {
+        const code = new URLSearchParams(window.location.search).get('error');
+        if (code) setError(OAUTH_ERRORS[code] ?? OAUTH_ERRORS.oauth_error);
+    }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
