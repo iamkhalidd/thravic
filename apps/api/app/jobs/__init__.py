@@ -1,6 +1,7 @@
 """Job wiring — port of `jobs/index.ts`.
 
-`init_jobs()` starts the scheduler and registers the hourly traffic alert.
+`init_jobs()` starts the scheduler and registers the hourly traffic alert and
+the daily retention job (see `jobs/runner.py` for how daily jobs are scheduled).
 Collection is written to Postgres in the request, so there is no background
 event drainer and nothing here touches Redis.
 """
@@ -12,6 +13,7 @@ from datetime import UTC
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from ..logging import create_logger
+from .retention import start_retention_job
 from .traffic_alert import start_traffic_alert_job
 
 log = create_logger("Jobs")
@@ -28,6 +30,7 @@ def init_jobs() -> AsyncIOScheduler:
 
     scheduler = AsyncIOScheduler(timezone=UTC)
     start_traffic_alert_job(scheduler)
+    start_retention_job(scheduler)
     scheduler.start()
 
     log.info("[Jobs] All jobs scheduled.")

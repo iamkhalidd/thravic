@@ -27,7 +27,7 @@ log = create_logger("Audit")
 
 async def log_action(
     *,
-    admin_id: str,
+    admin_id: str | None,
     action: str,
     target_type: str | None = None,
     target_id: str | None = None,

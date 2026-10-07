@@ -14,8 +14,16 @@ interface Policy {
     expiredEventsCount: number;
 }
 
+// The daily retention job (API: jobs/retention.py) and its most recent run.
+interface JobStatus {
+    mode: string;
+    fromInactivePaidOwners: number;
+    lastRun: { last_run_at: string; details: any } | null;
+}
+
 export default function RetentionPage() {
     const [policies, setPolicies] = useState<Policy[]>([]);
+    const [job, setJob] = useState<JobStatus | null>(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState<string | null>(null);
     const [cleaning, setCleaning] = useState(false);
@@ -26,6 +34,7 @@ export default function RetentionPage() {
         try {
             const data = await api.get('/api/admin/retention');
             setPolicies(data.policies);
+            setJob({ mode: data.mode, fromInactivePaidOwners: data.fromInactivePaidOwners, lastRun: data.lastRun });
             const forms: Record<string, any> = {};
             (data.policies as Policy[]).forEach(p => {
                 forms[p.plan] = { events_days: p.events_days, sessions_days: p.sessions_days, recordings_days: p.recordings_days, heatmaps_days: p.heatmaps_days };
@@ -61,6 +70,25 @@ export default function RetentionPage() {
 
     return (
         <div>
+            {job && (
+                <div className="card" style={{ marginBottom: 'var(--space-lg)', fontSize: '13px' }}>
+                    <div style={{ fontWeight: 600, marginBottom: '4px' }}>
+                        Daily retention job: {job.mode === 'delete' ? 'deleting expired data' : job.mode === 'off' ? 'off' : 'dry run (nothing is deleted)'}
+                    </div>
+                    <div style={{ color: 'var(--color-text-secondary)' }}>
+                        {job.lastRun
+                            ? `Last run ${new Date(job.lastRun.last_run_at).toLocaleString()}. Each run is recorded in the Audit Log.`
+                            : 'Not run yet. It runs once a day while the API is up; set RETENTION_MODE to change what it does.'}
+                    </div>
+                    {job.fromInactivePaidOwners > 0 && (
+                        <div style={{ color: 'var(--color-warning)', marginTop: '4px' }}>
+                            {job.fromInactivePaidOwners.toLocaleString()} expired rows belong to customers whose paid subscription is no longer active,
+                            so they are held to the free plan&apos;s retention. Check these before switching to delete mode.
+                        </div>
+                    )}
+                </div>
+            )}
+
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 'var(--space-lg)' }}>
                 <button className="btn btn-danger" onClick={handleCleanup} disabled={cleaning}>
                     <Trash2 size={14} /> {cleaning ? 'Running Cleanup...' : 'Run Cleanup Now'}
