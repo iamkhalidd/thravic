@@ -80,7 +80,7 @@ async def _require_owned_domain(domain_id: str, user_id: str) -> dict:
 
 
 def _top_pages_with_paths(rows: list[dict]) -> list[dict]:
-    return [{"path": url_path(row["url"]), "views": row["views"]} for row in rows]
+    return [{"path": row["path"], "views": row["views"]} for row in rows]
 
 
 @router.get("/{domainId}/overview")
@@ -142,7 +142,7 @@ async def sources(domainId: str, request: Request, user: AuthUser = Depends(requ
             domain["id"], start_date, end_date
         )
         top_referrers = await session_service.get_top_referrers(
-            domain["id"], start_date, end_date, 20
+            domain["id"], start_date, end_date, 20, domain.get("domain")
         )
 
         breakdown: dict[str, int] = {name: 0 for name in SOURCE_TYPES}
@@ -155,8 +155,9 @@ async def sources(domainId: str, request: Request, user: AuthUser = Depends(requ
                 "byType": breakdown,
                 "topSources": [
                     {
-                        "source": row["referrer"],
-                        "visits": row["sessions"],
+                        "source": row["site"],
+                        "sessions": row["sessions"],
+                        "visits": row["sessions"],  # older clients read `visits`
                         "visitors": row["visitors"],
                     }
                     for row in top_referrers
@@ -279,6 +280,7 @@ async def timeseries(domainId: str, request: Request, user: AuthUser = Depends(r
                         "date": row["bucket"],
                         "pageviews": row["pageviews"],
                         "visitors": row["visitors"],
+                        "sessions": row["sessions"],
                     }
                     for row in data
                 ],
@@ -346,6 +348,7 @@ async def dashboard(domainId: str, request: Request, user: AuthUser = Depends(re
                         "date": row["bucket"],
                         "pageviews": row["pageviews"],
                         "visitors": row["visitors"],
+                        "sessions": row["sessions"],
                     }
                     for row in series
                 ],
@@ -368,14 +371,27 @@ async def pages(domainId: str, request: Request, user: AuthUser = Depends(requir
             request.query_params.get("start"), request.query_params.get("end")
         )
 
-        top_pages = await event_service.get_top_pages(
-            domain["id"], start_date, end_date, 50
-        )
+        stats = await event_service.get_page_stats(domain["id"], start_date, end_date, 50)
 
         return jsjson(
             {
                 "period": {"start": start_date, "end": end_date},
-                "pages": _top_pages_with_paths(top_pages),
+                "pages": [
+                    {
+                        "path": row["path"],
+                        "views": row["views"],  # older clients read `views`
+                        "pageviews": row["views"],
+                        "avgTime": row["avg_seconds"],
+                        "entries": row["entries"],
+                        "exits": row["exits"],
+                        "bounceRate": (
+                            round(row["bounces"] / row["entries"] * 100, 1)
+                            if row["entries"]
+                            else 0
+                        ),
+                    }
+                    for row in stats
+                ],
             }
         )
     except SimpleError:

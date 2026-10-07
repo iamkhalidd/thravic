@@ -125,6 +125,24 @@ const defaultConfig: TFConfig = {
 
 const SCROLL_MILESTONES = [25, 50, 75, 100];
 
+// Deliver `payload` as the page is going away. sendBeacon always sends
+// credentials, so a JSON body would need a CORS preflight that the collector's
+// wildcard `Access-Control-Allow-Origin` cannot pass - the browser drops it.
+// text/plain is a CORS-safelisted type: no preflight, and the collector parses
+// the body as JSON whatever its content type.
+function beacon(url: string, payload: unknown): void {
+    const body = JSON.stringify(payload);
+    if (navigator.sendBeacon && navigator.sendBeacon(url, new Blob([body], { type: 'text/plain;charset=UTF-8' }))) {
+        return;
+    }
+    fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+        keepalive: true,
+    }).catch(() => {});
+}
+
 // Settings the dashboard controls (GET {endpoint}/{trackingId}/config).
 const REMOTE_CONFIG_KEYS = ['trackClicks', 'trackScrolls', 'trackForms', 'trackRecordings'] as const;
 
@@ -395,9 +413,8 @@ class ThravicAnalytics {
         // Batch endpoint: POST /api/collect/:trackingId/batch
         const batchUrl = `${this.config.endpoint}/${this.trackingId}/batch`;
 
-        if (final && navigator.sendBeacon) {
-            const blob = new Blob([JSON.stringify({ events })], { type: 'application/json' });
-            navigator.sendBeacon(batchUrl, blob);
+        if (final) {
+            beacon(batchUrl, { events });
             return;
         }
 
@@ -541,19 +558,23 @@ class ThravicAnalytics {
         const form = e.target as HTMLFormElement;
         if (!form || form.tagName !== 'FORM') return;
 
+        // Read attributes, not properties: a form containing a field named `name`,
+        // `id`, `action` or `method` makes `form.name` etc. return that field
+        // element instead of the form's own value (it was recorded as `{}`).
+        const attr = (name: string) => form.getAttribute(name) || undefined;
+
         let actionPath: string | undefined;
         try {
-            const url = new URL(form.action, window.location.origin);
-            actionPath = url.pathname;
+            actionPath = new URL(attr('action') || window.location.href, window.location.href).pathname;
         } catch {
-            actionPath = form.getAttribute('action') || undefined;
+            actionPath = attr('action');
         }
 
         const data: Record<string, unknown> = {
-            formId: form.id || undefined,
-            formName: form.name || undefined,
+            formId: attr('id'),
+            formName: attr('name'),
             action: actionPath,
-            method: (form.method || 'get').toUpperCase(),
+            method: (attr('method') || 'get').toUpperCase(),
             fieldCount: form.elements.length,
         };
 
@@ -814,41 +835,31 @@ class ThravicAnalytics {
         }
     }
 
-    private flushRecordingEvents(): void {
+    // `final`: the page is being hidden or unloaded, so only a beacon survives.
+    private flushRecordingEvents(final: boolean = false): void {
         if (!this.recordingId || this.recordingEvents.length === 0) return;
 
         const events = [...this.recordingEvents];
         this.recordingEvents = [];
 
         const url = `${this.config.endpoint}/${this.trackingId}/recording/${this.recordingId}/events`;
-        const payload = { events };
-
-        if (navigator.sendBeacon) {
-            const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
-            const sent = navigator.sendBeacon(url, blob);
-            if (!sent) {
-                fetch(url, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload),
-                    keepalive: true,
-                }).catch(() => {});
-            }
-        } else {
-            fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
-                keepalive: true,
-            }).catch(() => {});
+        if (final) {
+            beacon(url, { events });
+            return;
         }
+        fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ events }),
+            keepalive: true,
+        }).catch(() => {});
     }
 
     private endRecording(): void {
         if (!this.recordingId) return;
 
         // Flush remaining events first
-        this.flushRecordingEvents();
+        this.flushRecordingEvents(true);
 
         // Clear the periodic flush timer
         if (this.recordingFlushTimer) {
@@ -856,17 +867,7 @@ class ThravicAnalytics {
             this.recordingFlushTimer = null;
         }
 
-        const url = `${this.config.endpoint}/${this.trackingId}/recording/${this.recordingId}/end`;
-        if (navigator.sendBeacon) {
-            navigator.sendBeacon(url, new Blob([JSON.stringify({})], { type: 'application/json' }));
-        } else {
-            fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: '{}',
-                keepalive: true,
-            }).catch(() => {});
-        }
+        beacon(`${this.config.endpoint}/${this.trackingId}/recording/${this.recordingId}/end`, {});
 
         this.recordingId = null;
     }
@@ -975,18 +976,28 @@ class ThravicAnalytics {
                     lastPage: window.location.href,
                 }));
                 this.flush(true);
-                if (this.recordingId) {
-                    this.endRecording();
-                }
+                // Save what has been recorded, but keep recording: the visitor
+                // may only have switched tabs. Ending here used to cut every
+                // recording at the first tab switch, with no new one on return.
+                this.flushRecordingEvents(true);
             } else {
                 this.pageStart = Date.now();
             }
         });
 
-        window.addEventListener('beforeunload', () => {
+        // The page is really going away (navigation, close, or into bfcache).
+        window.addEventListener('pagehide', () => {
             this.flush(true);
             if (this.recordingId) {
                 this.endRecording();
+            }
+        });
+
+        // Restored from the back/forward cache: the old recording was ended on
+        // pagehide, so this visit gets a new one.
+        window.addEventListener('pageshow', (e: PageTransitionEvent) => {
+            if (e.persisted && this.config.trackRecordings && !this.recordingId && this.shouldTrack()) {
+                this.startRecording();
             }
         });
 

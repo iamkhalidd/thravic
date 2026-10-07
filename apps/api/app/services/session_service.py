@@ -214,12 +214,18 @@ async def get_avg_duration(
 async def get_source_type_breakdown(
     domain_id: str, start_date: datetime, end_date: datetime
 ) -> list[dict[str, Any]]:
+    """Sessions per channel, with legacy source types folded into today's six."""
+    legacy = " ".join(
+        f"WHEN '{old}' THEN '{new}'" for old, new in LEGACY_SOURCE_TYPES.items()
+    )
     return await query(
-        """
-        SELECT COALESCE(source_type, 'direct') as source_type, COUNT(*)::int as count
+        f"""
+        SELECT CASE COALESCE(source_type, 'direct') {legacy}
+                   ELSE COALESCE(source_type, 'direct') END AS source_type,
+               COUNT(*)::int as count
         FROM sessions
         WHERE domain_id = $1 AND started_at >= $2 AND started_at <= $3
-        GROUP BY source_type
+        GROUP BY 1
         ORDER BY count DESC
         """,
         domain_id,
@@ -228,22 +234,35 @@ async def get_source_type_breakdown(
     )
 
 
+# The referrer's hostname, lower-cased and without `www.`, in SQL.
+_REFERRER_HOST_SQL = (
+    "LOWER(REGEXP_REPLACE("
+    "SUBSTRING(referrer FROM '^[A-Za-z][A-Za-z0-9+.-]*://([^/:?#]+)'), '^www\\.', ''))"
+)
+
+
 async def get_top_referrers(
     domain_id: str,
     start_date: datetime,
     end_date: datetime,
     limit: int = DEFAULT_TOP_REFERRERS_LIMIT,
+    own_host: str | None = None,
 ) -> list[dict[str, Any]]:
+    """Top referring sites: one row per hostname (not per full URL, which split one
+    site across many rows), excluding the tracked site itself."""
+    own = (own_host or "").lower().removeprefix("www.")
     return await query(
-        """
-        SELECT
-            referrer,
-            COUNT(*)::int as sessions,
-            COUNT(DISTINCT visitor_id)::int as visitors
+        f"""
+        SELECT {_REFERRER_HOST_SQL} AS site,
+               COUNT(*)::int AS sessions,
+               COUNT(DISTINCT visitor_id)::int AS visitors,
+               COALESCE(SUM(pageviews), 0)::int AS pageviews
         FROM sessions
         WHERE domain_id = $1 AND started_at >= $2 AND started_at <= $3
           AND referrer IS NOT NULL AND referrer != ''
-        GROUP BY referrer
+          AND {_REFERRER_HOST_SQL} IS NOT NULL
+          AND NOT ({_REFERRER_HOST_SQL} = $5 OR {_REFERRER_HOST_SQL} LIKE '%.' || $5)
+        GROUP BY 1
         ORDER BY sessions DESC
         LIMIT $4
         """,
@@ -251,6 +270,7 @@ async def get_top_referrers(
         start_date,
         end_date,
         limit,
+        own,
     )
 
 
@@ -270,40 +290,74 @@ async def get_realtime_active_sessions(
     return int((row or {}).get("count") or "0")
 
 
+# utm_medium values that name a channel rather than a paid campaign.
+SOCIAL_MEDIUMS = ("social", "social-media", "social_media", "sm", "socialnetwork", "social-network")
+EMAIL_MEDIUMS = ("email", "e-mail", "newsletter", "mail")
+ORGANIC_MEDIUMS = ("organic", "seo")
+REFERRAL_MEDIUMS = ("referral", "referrer", "link")
+
+# Legacy `sessions.source_type` values written by the old classifier, folded into
+# the six channels the dashboard shows so older sessions are not left out.
+LEGACY_SOURCE_TYPES = {"search": "organic", "ad": "paid", "campaign": "paid", "internal": "direct"}
+
+
+def _host(url: str | None) -> str:
+    """Lower-cased hostname without a leading `www.`; empty when unparseable."""
+    try:
+        hostname = (urlparse(url or "").hostname or "").lower()
+    except Exception:
+        return ""
+    return hostname[4:] if hostname.startswith("www.") else hostname
+
+
+def _matches(hostname: str, domains: tuple[str, ...]) -> bool:
+    return any(hostname == d or hostname.endswith("." + d) for d in domains)
+
+
 def classify_source(
-    referrer: str | None, utm_source: str | None, utm_medium: str | None
+    referrer: str | None,
+    utm_source: str | None,
+    utm_medium: str | None,
+    own_host: str | None = None,
 ) -> str:
-    """Classify traffic as direct | organic | paid | social | referral | email."""
-    medium = (utm_medium or "").lower()
-    source = (utm_source or "").lower()
+    """Classify traffic as direct | organic | paid | social | referral | email.
+
+    `own_host` is the tracked site's domain: a referrer from the site itself (a new
+    session started from one of its own pages) is not a referral, it is direct.
+    """
+    medium = (utm_medium or "").lower().strip()
+    source = (utm_source or "").lower().strip()
 
     # UTM-based classification (most specific)
-    if medium == "email" or source == "email":
+    if medium in EMAIL_MEDIUMS or source in EMAIL_MEDIUMS:
         return "email"
     if medium in PAID_MEDIUMS:
         return "paid"
+    if medium in SOCIAL_MEDIUMS:
+        return "social"
+    if medium in ORGANIC_MEDIUMS:
+        return "organic"
+    if medium in REFERRAL_MEDIUMS:
+        return "referral"
+    if source and not medium:
+        # utm_source alone: name the channel when the source is a known network
+        source_host = source if "." in source else f"{source}.com"
+        if _matches(source_host, SOCIAL_NETWORKS):
+            return "social"
+        if _matches(source_host, SEARCH_ENGINES):
+            return "organic"
     if source or medium:
         return "paid"  # any other UTM = deliberate campaign
 
-    if not referrer:
+    hostname = _host(referrer)
+    if not hostname:
         return "direct"
 
-    try:
-        hostname = (urlparse(referrer).hostname or "").lower()
-        hostname = hostname[4:] if hostname.startswith("www.") else hostname
-
-        if any(
-            hostname == engine or hostname.endswith("." + engine)
-            for engine in SEARCH_ENGINES
-        ):
-            return "organic"
-
-        if any(
-            hostname == network or hostname.endswith("." + network)
-            for network in SOCIAL_NETWORKS
-        ):
-            return "social"
-    except Exception:
-        pass  # malformed URL — treat as referral
-
+    own = (own_host or "").lower().removeprefix("www.")
+    if own and (hostname == own or hostname.endswith("." + own)):
+        return "direct"
+    if _matches(hostname, SEARCH_ENGINES):
+        return "organic"
+    if _matches(hostname, SOCIAL_NETWORKS):
+        return "social"
     return "referral"

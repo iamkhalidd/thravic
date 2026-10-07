@@ -126,3 +126,20 @@ async def test_list_reports_the_device_class(seeded_domain, db_pool):
     rows = await recording_service.list_by_domain(seeded_domain, 50, 0)
 
     assert sorted(row["device"] for row in rows) == ["mobile", "unknown"]
+
+
+async def test_appended_events_are_stored_as_events_not_one_string(seeded_domain, db_pool):
+    """The jsonb codec encodes the list; encoding it twice stored a JSON string."""
+    recording = await recording_service.create(seeded_domain, None, URL)
+
+    await recording_service.append_events(
+        recording["id"], [{"type": "mousemove", "timestamp": 2500, "data": {"x": 1, "y": 2}}]
+    )
+    stored = await recording_service.get_by_id(recording["id"])
+
+    assert stored["recording_data"]["events"] == [
+        {"type": "mousemove", "timestamp": 2500, "data": {"x": 1, "y": 2}}
+    ]
+    # Known from the events, before (or without) the end beacon.
+    assert stored["duration"] == 3
+    assert stored["events_count"] == 1

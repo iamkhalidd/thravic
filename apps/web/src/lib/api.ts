@@ -344,7 +344,7 @@ export const analytics = {
         }>(`/api/analytics/${domainId}/timeseries${query}`);
     },
 
-    // Get complete dashboard data - calls backend overview endpoint
+    // Get complete dashboard data: totals, daily series, top pages and channels.
     async getDashboard(domainId: string, start?: string, end?: string) {
         const params = new URLSearchParams();
         if (start) params.set('start', start);
@@ -353,21 +353,18 @@ export const analytics = {
 
         return apiRequest<{
             period: { start: string; end: string };
-            chart: {
-                data: Array<{
-                    date: string;
-                    visitors: number;
-                    sessions: number;
-                    pageviews: number;
-                }>;
-            };
             metrics: {
-                visitors: number;
-                sessions: number;
                 pageviews: number;
+                uniqueVisitors: number;
+                sessions: number;
                 bounceRate: number;
-                avgDuration: number;
+                avgSessionDuration: number;
             };
+            topPages: Array<{ path: string; views: number }>;
+            // One row per day, ISO dates, zero-filled across the period.
+            timeseries: Array<{ date: string; pageviews: number; visitors: number; sessions: number }>;
+            sources: Record<'direct' | 'organic' | 'paid' | 'social' | 'referral' | 'email', number>;
+            realtime: { activeVisitors: number };
         }>(`/api/analytics/${domainId}/dashboard${query}`);
     },
 

@@ -4,9 +4,6 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import {
     Globe,
-    TrendingUp,
-    ArrowUpRight,
-    ArrowDownRight,
     PieChart,
     BarChart3,
     ExternalLink
@@ -62,8 +59,13 @@ export default function TrafficSourcesPage() {
         );
     }
 
-    const channelData = data?.channels || [];
+    // GET /api/sources/{id}/overview: sessions per channel in `summary.byType`,
+    // and referring sites in `topReferrers`.
+    const channelData = Object.entries(data?.summary?.byType || {}).map(
+        ([type, value]: [string, any]) => ({ type, sessions: value?.count || 0 })
+    );
     const totalSessions = channelData.reduce((sum: number, ch: any) => sum + ch.sessions, 0);
+    const topSources: Array<{ site: string; sessions: number }> = data?.topReferrers || [];
 
     return (
         <div>
@@ -93,12 +95,10 @@ export default function TrafficSourcesPage() {
                     const channel = channelData.find((ch: any) => ch.type === key);
                     const sessions = channel?.sessions || 0;
                     const percentage = totalSessions > 0 ? ((sessions / totalSessions) * 100).toFixed(1) : 0;
-                    const change = channel?.change || 0;
 
                     return (
-                        <Link
+                        <div
                             key={key}
-                            href={`/dashboard/traffic/sources/${key}`}
                             style={{
                                 padding: 'var(--space-lg)',
                                 background: 'var(--color-bg-secondary)',
@@ -146,18 +146,8 @@ export default function TrafficSourcesPage() {
                                 }}>
                                     {percentage}% of total
                                 </span>
-                                <span style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '2px',
-                                    fontSize: '0.75rem',
-                                    color: change >= 0 ? 'var(--color-success)' : 'var(--color-error)'
-                                }}>
-                                    {change >= 0 ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
-                                    {Math.abs(change)}%
-                                </span>
                             </div>
-                        </Link>
+                        </div>
                     );
                 })}
             </div>
@@ -260,18 +250,24 @@ export default function TrafficSourcesPage() {
                         marginBottom: 'var(--space-lg)',
                         color: 'var(--color-text-primary)'
                     }}>
-                        Top Sources
+                        Top Referring Sites
                     </h3>
                     <table style={{ width: '100%', fontSize: '0.8125rem' }}>
                         <thead>
                             <tr style={{ color: 'var(--color-text-tertiary)' }}>
                                 <th style={{ textAlign: 'left', padding: 'var(--space-xs) 0', fontWeight: 500 }}>Source</th>
                                 <th style={{ textAlign: 'right', padding: 'var(--space-xs) 0', fontWeight: 500 }}>Sessions</th>
-                                <th style={{ textAlign: 'right', padding: 'var(--space-xs) 0', fontWeight: 500 }}>Change</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {(data?.topSources || []).slice(0, 8).map((source: any, idx: number) => (
+                            {topSources.length === 0 && (
+                                <tr>
+                                    <td colSpan={2} style={{ padding: 'var(--space-md) 0', color: 'var(--color-text-tertiary)' }}>
+                                        No referring sites in this period. Visits from links on other sites appear here.
+                                    </td>
+                                </tr>
+                            )}
+                            {topSources.slice(0, 8).map((source, idx) => (
                                 <tr key={idx} style={{ borderTop: '1px solid var(--color-border)' }}>
                                     <td style={{
                                         padding: 'var(--space-sm) 0',
@@ -279,7 +275,7 @@ export default function TrafficSourcesPage() {
                                     }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)' }}>
                                             <Globe size={12} style={{ color: 'var(--color-text-tertiary)' }} />
-                                            {source.source || 'Direct'}
+                                            {source.site}
                                         </div>
                                     </td>
                                     <td style={{
@@ -288,13 +284,6 @@ export default function TrafficSourcesPage() {
                                         color: 'var(--color-text-primary)'
                                     }}>
                                         {source.sessions?.toLocaleString()}
-                                    </td>
-                                    <td style={{
-                                        textAlign: 'right',
-                                        padding: 'var(--space-sm) 0',
-                                        color: (source.change || 0) >= 0 ? 'var(--color-success)' : 'var(--color-error)'
-                                    }}>
-                                        {(source.change || 0) >= 0 ? '+' : ''}{source.change || 0}%
                                     </td>
                                 </tr>
                             ))}

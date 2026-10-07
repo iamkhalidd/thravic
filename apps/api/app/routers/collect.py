@@ -235,6 +235,7 @@ async def collect_event(trackingId: str, request: Request):
             body.get("referrer") or None,
             body.get("utmSource") or None,
             body.get("utmMedium") or None,
+            domain.get("domain"),
         )
 
         # Guard against oversized payloads consuming database storage
@@ -320,6 +321,7 @@ async def collect_batch(trackingId: str, request: Request):
                 event.get("referrer") or None,
                 event.get("utmSource") or None,
                 event.get("utmMedium") or None,
+                domain.get("domain"),
             )
 
             await retry_transient(

@@ -1,8 +1,8 @@
 """Traffic source routes — port of `routes/sources.ts`.
 
 Note `identify_platform` uses a **substring** match (`host.includes(pattern)`), not
-a suffix or equality check, and `extract_domain` strips only the first literal
-`www.` occurrence. Both quirks are reproduced because they change classification.
+a suffix or equality check; the quirk is reproduced because it changes
+classification. Referrers are grouped by hostname in `session_service`.
 """
 
 from __future__ import annotations
@@ -105,18 +105,6 @@ def identify_platform(
     return None
 
 
-def extract_domain(referrer: str | None) -> str | None:
-    if not referrer:
-        return None
-    try:
-        parsed = urlparse(referrer)
-        if not parsed.hostname:
-            raise ValueError("no hostname")
-        return parsed.hostname.replace("www.", "")
-    except Exception:
-        return None
-
-
 @router.get("/{domainId}/referrers")
 async def referrers(domainId: str, request: Request, user: AuthUser = Depends(require_auth)):
     try:
@@ -126,7 +114,7 @@ async def referrers(domainId: str, request: Request, user: AuthUser = Depends(re
         )
 
         top = await session_service.get_top_referrers(
-            domain["id"], start_date, end_date, REFERRER_LIMIT
+            domain["id"], start_date, end_date, REFERRER_LIMIT, domain.get("domain")
         )
 
         return jsjson(
@@ -134,9 +122,13 @@ async def referrers(domainId: str, request: Request, user: AuthUser = Depends(re
                 "period": {"start": start_date, "end": end_date},
                 "referrers": [
                     {
-                        "domain": extract_domain(row["referrer"]) or row["referrer"],
+                        "site": row["site"],
                         "sessions": row["sessions"],
                         "visitors": row["visitors"],
+                        "pageviews": row["pageviews"],
+                        "pagesPerSession": (
+                            round(row["pageviews"] / row["sessions"], 1) if row["sessions"] else 0
+                        ),
                     }
                     for row in top
                 ],
@@ -147,6 +139,13 @@ async def referrers(domainId: str, request: Request, user: AuthUser = Depends(re
     except Exception as exc:
         log.error(f"Referrers error: {exc}")
         raise SimpleError(FAILED_REFERRERS, 500) from None
+
+
+def _engagement(bounces: int, sessions: int) -> dict[str, int | str]:
+    """Bounce rate (sessions with at most one pageview) and a High/Medium/Low label."""
+    bounce_rate = js_round(bounces / sessions * 100) if sessions else 0
+    label = "High" if bounce_rate < 40 else "Medium" if bounce_rate < 70 else "Low"
+    return {"bounceRate": bounce_rate, "engagement": label}
 
 
 @router.get("/{domainId}/social")
@@ -167,9 +166,13 @@ async def social(domainId: str, request: Request, user: AuthUser = Depends(requi
             platform = identify_platform(session["referrer"], SOCIAL_PLATFORMS)
             if not platform:
                 continue
-            entry = platform_map.setdefault(platform, {"visitors": set(), "sessions": 0})
+            entry = platform_map.setdefault(
+                platform, {"visitors": set(), "sessions": 0, "bounces": 0}
+            )
             entry["visitors"].add(session["visitor_id"])
             entry["sessions"] += 1
+            if (session.get("pageviews") or 0) <= 1:
+                entry["bounces"] += 1
 
         platforms = sorted(
             (
@@ -177,6 +180,7 @@ async def social(domainId: str, request: Request, user: AuthUser = Depends(requi
                     "platform": platform,
                     "visitors": len(data["visitors"]),
                     "sessions": data["sessions"],
+                    **_engagement(data["bounces"], data["sessions"]),
                 }
                 for platform, data in platform_map.items()
             ),
@@ -294,6 +298,11 @@ async def campaigns(domainId: str, request: Request, user: AuthUser = Depends(re
                     "visitors": len(data["visitors"]),
                     "sessions": len(data["sessions"]),
                     "pageviews": data["pageviews"],
+                    "pagesPerSession": (
+                        round(data["pageviews"] / len(data["sessions"]), 1)
+                        if data["sessions"]
+                        else 0
+                    ),
                 }
                 for campaign, data in campaign_map.items()
             ),
@@ -328,7 +337,7 @@ async def overview(domainId: str, request: Request, user: AuthUser = Depends(req
             domain["id"], start_date, end_date
         )
         top_referrers = await session_service.get_top_referrers(
-            domain["id"], start_date, end_date, OVERVIEW_REFERRER_LIMIT
+            domain["id"], start_date, end_date, OVERVIEW_REFERRER_LIMIT, domain.get("domain")
         )
         sessions = await session_service.query_by_domain(
             domain["id"], start_date, end_date
@@ -384,10 +393,7 @@ async def overview(domainId: str, request: Request, user: AuthUser = Depends(req
                     },
                 },
                 "topReferrers": [
-                    {
-                        "site": extract_domain(row["referrer"]) or row["referrer"],
-                        "sessions": row["sessions"],
-                    }
+                    {"site": row["site"], "sessions": row["sessions"]}
                     for row in top_referrers
                 ],
                 "topSocial": top_social,

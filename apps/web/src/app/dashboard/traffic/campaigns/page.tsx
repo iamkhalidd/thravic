@@ -6,14 +6,12 @@ import {
     Megaphone,
     TrendingUp,
     TrendingDown,
-    ArrowUpRight,
-    ArrowDownRight,
     Filter,
     Search,
     ExternalLink,
     Eye,
-    MousePointer,
-    Target
+    Users,
+    FileText
 } from 'lucide-react';
 import { sources } from '@/lib/api';
 import { useDomain } from '@/contexts/DomainContext';
@@ -127,8 +125,8 @@ export default function CampaignsPage() {
                         }}
                     >
                         <option value="sessions">Sessions</option>
-                        <option value="conversions">Conversions</option>
-                        <option value="conversionRate">Conversion Rate</option>
+                        <option value="visitors">Visitors</option>
+                        <option value="pageviews">Pageviews</option>
                     </select>
                 </div>
             </div>
@@ -189,16 +187,6 @@ export default function CampaignsPage() {
                                         <span>Medium: {campaign.medium || 'N/A'}</span>
                                     </div>
                                 </div>
-                                <div style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '4px',
-                                    fontSize: '0.8125rem',
-                                    color: campaign.change >= 0 ? 'var(--color-success)' : 'var(--color-error)'
-                                }}>
-                                    {campaign.change >= 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
-                                    {Math.abs(campaign.change || 0)}% vs prev
-                                </div>
                             </div>
 
                             <div className="dash-grid-4">
@@ -230,14 +218,14 @@ export default function CampaignsPage() {
                                         alignItems: 'center',
                                         gap: '4px'
                                     }}>
-                                        <MousePointer size={10} /> Clicks
+                                        <Users size={10} /> Visitors
                                     </div>
                                     <div style={{
                                         fontSize: '1.125rem',
                                         fontWeight: 600,
                                         color: 'var(--color-text-primary)'
                                     }}>
-                                        {(campaign.clicks || 0).toLocaleString()}
+                                        {(campaign.visitors || 0).toLocaleString()}
                                     </div>
                                 </div>
                                 <div>
@@ -249,14 +237,14 @@ export default function CampaignsPage() {
                                         alignItems: 'center',
                                         gap: '4px'
                                     }}>
-                                        <Target size={10} /> Conversions
+                                        <FileText size={10} /> Pageviews
                                     </div>
                                     <div style={{
                                         fontSize: '1.125rem',
                                         fontWeight: 600,
                                         color: 'var(--color-text-primary)'
                                     }}>
-                                        {(campaign.conversions || 0).toLocaleString()}
+                                        {(campaign.pageviews || 0).toLocaleString()}
                                     </div>
                                 </div>
                                 <div>
@@ -265,14 +253,14 @@ export default function CampaignsPage() {
                                         color: 'var(--color-text-tertiary)',
                                         marginBottom: '2px'
                                     }}>
-                                        Conv. Rate
+                                        Pages / Session
                                     </div>
                                     <div style={{
                                         fontSize: '1.125rem',
                                         fontWeight: 600,
                                         color: 'var(--color-text-primary)'
                                     }}>
-                                        {(campaign.conversionRate || 0).toFixed(1)}%
+                                        {(campaign.pagesPerSession || 0).toFixed(1)}
                                     </div>
                                 </div>
                             </div>

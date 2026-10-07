@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from ..db import query, query_one
@@ -40,23 +39,37 @@ async def create(
 async def append_events(
     recording_id: str, new_events: list[Any]
 ) -> dict[str, Any] | None:
-    # The array is serialized explicitly because it is concatenated inside the
-    # query with `||` rather than passed as a jsonb parameter.
+    """Append events and keep `duration` up to date from the latest one.
+
+    The list is passed as-is: the connection's jsonb codec encodes it. Encoding it
+    here as well stored each batch as one JSON *string* inside `events`, so the
+    player found no events to replay.
+
+    Event timestamps are milliseconds since the recording started, so the duration
+    is known before the end beacon arrives - and stays right if it never does (a
+    phone backgrounding the page rarely sends one).
+    """
+    latest_ms = max(
+        (e.get("timestamp") for e in new_events if isinstance(e.get("timestamp"), int | float)),
+        default=0,
+    )
     return await query_one(
         """
         UPDATE session_recordings
         SET recording_data = jsonb_set(
-               recording_data,
+               COALESCE(recording_data, '{"events":[]}'::jsonb),
                '{events}',
-               (recording_data->'events')::jsonb || $2::jsonb
+               COALESCE(recording_data->'events', '[]'::jsonb) || $2::jsonb
             ),
-            events_count = COALESCE(events_count, 0) + $3
+            events_count = COALESCE(events_count, 0) + $3,
+            duration = GREATEST(COALESCE(duration, 0), CEIL($4::float / 1000)::int)
         WHERE id = $1
         RETURNING *
         """,
         recording_id,
-        json.dumps(new_events),
+        new_events,
         len(new_events),
+        latest_ms,
     )
 
 
@@ -65,7 +78,10 @@ async def end_recording(recording_id: str) -> dict[str, Any] | None:
         """
         UPDATE session_recordings
         SET ended_at = NOW(),
-            duration = EXTRACT(EPOCH FROM (NOW() - started_at))::int,
+            -- Never shorter than the recorded events (see append_events).
+            duration = GREATEST(
+                COALESCE(duration, 0), EXTRACT(EPOCH FROM (NOW() - started_at))::int
+            ),
             session_id = COALESCE(session_id, (
                 SELECT s.id FROM sessions s
                 WHERE s.session_id = session_recordings.client_session_id

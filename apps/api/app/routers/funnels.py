@@ -14,7 +14,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, Request
 
 from ..errors import SimpleError
-from ..js_compat import js_round
+from ..js_compat import js_round, url_path
 from ..json_response import jsjson
 from ..logging import create_logger
 from ..middleware.auth import AuthUser, require_auth
@@ -180,21 +180,53 @@ def _step_payload(step: dict) -> dict:
 
 
 def _matches_step(step: dict, event: dict) -> bool:
+    """Whether `event` satisfies `step`.
+
+    Pageview-style steps match the page: "exact" accepts the full URL or its path
+    (a step of `/pricing` never matched `https://site.com/pricing` before). Custom
+    event steps match the event's name, which is what a person types for them.
+    """
     if step["type"] != event["type"]:
         return False
 
-    value = event.get("url") or ""
+    if event["type"] == "custom":
+        data = event.get("data") or {}
+        candidates = [str(data.get("event") or "")] if isinstance(data, dict) else [""]
+    else:
+        url = event.get("url") or ""
+        candidates = [url, url_path(url)]
+
+    expected = step["match_value"]
     match_type = step["match_type"]
-    if match_type == "exact":
-        return value == step["match_value"]
-    if match_type == "contains":
-        return step["match_value"] in value
-    if match_type == "regex":
-        try:
-            return re.search(step["match_value"], value) is not None
-        except re.error:
-            return False
+    for value in candidates:
+        if match_type == "exact" and value == expected:
+            return True
+        if match_type == "contains" and expected in value:
+            return True
+        if match_type == "regex":
+            try:
+                if re.search(expected, value) is not None:
+                    return True
+            except re.error:
+                return False
     return False
+
+
+def _funnel_progress(steps: list[dict], events: list[dict]) -> list[int]:
+    """Visitors reaching each step, in order.
+
+    Each visitor's events are walked oldest first; a step counts only after the
+    previous one, so step 2 is never credited to someone who skipped step 1.
+    """
+    reached = [0] * len(steps)
+    progress: dict[object, int] = {}
+    for event in sorted(events, key=lambda e: e["created_at"]):
+        visitor = event["visitor_id"]
+        done = progress.get(visitor, 0)
+        if done < len(steps) and _matches_step(steps[done], event):
+            reached[done] += 1
+            progress[visitor] = done + 1
+    return reached
 
 
 @router.get("/{domainId}")
@@ -291,10 +323,13 @@ async def get_funnel(
         start_date = end_date - timedelta(days=METRICS_LOOKBACK_DAYS)
         events = await event_service.query_by_domain(domain["id"], start_date, end_date)
 
-        step_results = []
-        for step in funnel["steps"]:
-            matches = [e for e in events if _matches_step(step, e)]
-            step_results.append(
+        reached = _funnel_progress(funnel["steps"], events)
+        steps_with_conversion = []
+        for index, step in enumerate(funnel["steps"]):
+            visitors = reached[index]
+            previous = reached[index - 1] if index else visitors
+            dropoff = previous - visitors
+            steps_with_conversion.append(
                 {
                     "id": step["id"],
                     "name": step["name"],
@@ -302,34 +337,23 @@ async def get_funnel(
                     "matchType": step["match_type"],
                     "matchValue": step["match_value"],
                     "order": step["step_order"],
-                    "visitors": len({m["visitor_id"] for m in matches}),
-                    "events": len(matches),
+                    "visitors": visitors,
+                    # Of the previous step's visitors, the share that reached this one.
+                    "conversionRate": (
+                        100
+                        if index == 0
+                        else js_round(visitors / previous * 10000) / 100
+                        if previous
+                        else 0
+                    ),
+                    "dropoff": dropoff,
+                    "dropoffRate": js_round(dropoff / previous * 10000) / 100 if previous else 0,
                 }
             )
 
-        steps_with_conversion = []
-        for index, step in enumerate(step_results):
-            if index == 0:
-                conversion_rate = 100
-                dropoff = 0
-            else:
-                previous = step_results[index - 1]["visitors"]
-                conversion_rate = (
-                    js_round((step["visitors"] / previous) * 10000) / 100
-                    if previous > 0
-                    else 0
-                )
-                dropoff = previous - step["visitors"]
-            steps_with_conversion.append(
-                {**step, "conversionRate": conversion_rate, "dropoff": dropoff}
-            )
-
         overall = (
-            js_round(
-                (step_results[-1]["visitors"] / step_results[0]["visitors"]) * 10000
-            )
-            / 100
-            if step_results and step_results[0]["visitors"] > 0
+            js_round(reached[-1] / reached[0] * 10000) / 100
+            if reached and reached[0] > 0
             else 0
         )
 
@@ -339,6 +363,8 @@ async def get_funnel(
                 "name": funnel["name"],
                 "description": funnel["description"],
                 "steps": steps_with_conversion,
+                "totalVisitors": reached[0] if reached else 0,
+                "completedFunnel": reached[-1] if reached else 0,
                 "overallConversion": overall,
                 "period": {"start": start_date, "end": end_date},
             }

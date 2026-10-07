@@ -244,18 +244,81 @@ async def count_unique_visitors(
     return int((row or {}).get("count") or "0")
 
 
+# An event URL's path in SQL: `https://site.com/pricing?utm=x#top` -> `/pricing`,
+# so tagged links do not split one page into many rows. Non-absolute URLs are kept
+# as-is, matching `js_compat.url_path`.
+URL_PATH_SQL = (
+    "CASE WHEN url ~ '^[A-Za-z][A-Za-z0-9+.-]*://' THEN COALESCE(NULLIF("
+    "SUBSTRING(url FROM '^[A-Za-z][A-Za-z0-9+.-]*://[^/?#]*([^?#]*)'), ''), '/') "
+    "ELSE url END"
+)
+
+
 async def get_top_pages(
     domain_id: str,
     start_date: datetime,
     end_date: datetime,
     limit: int = DEFAULT_TOP_PAGES_LIMIT,
 ) -> list[dict[str, Any]]:
+    """Pageviews per page path, busiest first."""
     return await query(
-        """
-        SELECT url, COUNT(*)::int as views FROM events
+        f"""
+        SELECT {URL_PATH_SQL} AS path, COUNT(*)::int as views FROM events
         WHERE domain_id = $1 AND created_at >= $2 AND created_at <= $3
           AND type = 'pageview'
-        GROUP BY url
+        GROUP BY 1
+        ORDER BY views DESC
+        LIMIT $4
+        """,
+        domain_id,
+        start_date,
+        end_date,
+        limit,
+    )
+
+
+async def get_page_stats(
+    domain_id: str,
+    start_date: datetime,
+    end_date: datetime,
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    """Per page path: views, entrances, exits, bounces and average seconds on page.
+
+    Within each session, pageviews are ordered in time. The first is the entrance,
+    the last the exit, and a session with a single pageview is a bounce on its
+    entrance page. Time on a page runs to the session's next pageview or page-hide
+    (`session_end`); pages with neither, or gaps over 30 minutes, are left out of
+    the average rather than counted as zero.
+    """
+    return await query(
+        f"""
+        WITH timeline AS (
+            SELECT type, created_at, {URL_PATH_SQL} AS path,
+                   COALESCE(session_id::text, id::text) AS visit,
+                   LEAD(created_at) OVER w AS next_at
+            FROM events
+            WHERE domain_id = $1 AND created_at >= $2 AND created_at <= $3
+              AND type IN ('pageview', 'session_end')
+            WINDOW w AS (PARTITION BY COALESCE(session_id::text, id::text) ORDER BY created_at)
+        ),
+        views AS (
+            SELECT path, created_at, next_at,
+                   ROW_NUMBER() OVER (PARTITION BY visit ORDER BY created_at) AS position,
+                   COUNT(*) OVER (PARTITION BY visit) AS visit_views
+            FROM timeline
+            WHERE type = 'pageview'
+        )
+        SELECT path,
+               COUNT(*)::int AS views,
+               COUNT(*) FILTER (WHERE position = 1)::int AS entries,
+               COUNT(*) FILTER (WHERE position = visit_views)::int AS exits,
+               COUNT(*) FILTER (WHERE position = 1 AND visit_views = 1)::int AS bounces,
+               COALESCE(ROUND(AVG(EXTRACT(EPOCH FROM next_at - created_at)) FILTER (
+                   WHERE next_at IS NOT NULL AND next_at - created_at < INTERVAL '30 minutes'
+               )), 0)::int AS avg_seconds
+        FROM views
+        GROUP BY path
         ORDER BY views DESC
         LIMIT $4
         """,
@@ -272,17 +335,37 @@ async def get_timeseries(
     end_date: datetime,
     interval: str = "day",
 ) -> list[dict[str, Any]]:
+    """Pageviews, visitors and sessions per hour or day, with empty buckets as zero
+    so a chart spans the whole period instead of only the days that had traffic."""
     trunc = "hour" if interval == "hour" else "day"
     return await query(
         """
-        SELECT
-            date_trunc($4, created_at)::text as bucket,
-            COUNT(*) FILTER (WHERE type = 'pageview')::int as pageviews,
-            COUNT(DISTINCT visitor_id)::int as visitors
-        FROM events
-        WHERE domain_id = $1 AND created_at >= $2 AND created_at <= $3
-        GROUP BY bucket
-        ORDER BY bucket
+        WITH buckets AS (
+            SELECT generate_series(
+                date_trunc($4, $2::timestamptz),
+                date_trunc($4, $3::timestamptz),
+                ('1 ' || $4)::interval
+            ) AS bucket
+        ),
+        counts AS (
+            SELECT
+                date_trunc($4, created_at) AS bucket,
+                COUNT(*) FILTER (WHERE type = 'pageview') AS pageviews,
+                COUNT(DISTINCT visitor_id) AS visitors,
+                COUNT(DISTINCT session_id) AS sessions
+            FROM events
+            WHERE domain_id = $1 AND created_at >= $2 AND created_at <= $3
+            GROUP BY 1
+        )
+        -- ISO 8601 UTC: `bucket::text` gave "2026-10-07 00:00:00+00", which Safari
+        -- cannot parse as a date.
+        SELECT to_char(b.bucket AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS bucket,
+               COALESCE(c.pageviews, 0)::int AS pageviews,
+               COALESCE(c.visitors, 0)::int AS visitors,
+               COALESCE(c.sessions, 0)::int AS sessions
+        FROM buckets b
+        LEFT JOIN counts c ON c.bucket = b.bucket
+        ORDER BY b.bucket
         """,
         domain_id,
         start_date,
@@ -359,12 +442,14 @@ async def get_user_paths(
     end_date: datetime,
     limit: int = 10,
 ) -> list[dict[str, Any]]:
+    """Page-to-page steps within sessions, by page path (see URL_PATH_SQL)."""
     return await query(
-        """
+        f"""
         WITH numbered_events AS (
             SELECT
-                url as source_url,
-                LEAD(url) OVER (PARTITION BY session_id ORDER BY created_at) as target_url
+                {URL_PATH_SQL} as source_url,
+                LEAD({URL_PATH_SQL}) OVER (PARTITION BY session_id ORDER BY created_at)
+                    as target_url
             FROM events
             WHERE domain_id = $1 AND created_at >= $2 AND created_at <= $3
               AND type = 'pageview'
@@ -392,15 +477,15 @@ async def get_entries_and_exits(
     """Entry and exit pages, returned as one union ordered by count.
 
     `limit` is accepted for signature parity but unused — the Express query ignores
-    it too and the caller slices the result.
+    it too and the caller slices the result. Pages are grouped by path.
     """
     return await query(
-        """
+        f"""
         WITH session_edges AS (
             SELECT
                 session_id,
-                FIRST_VALUE(url) OVER w AS entry_url,
-                LAST_VALUE(url) OVER w AS exit_url
+                FIRST_VALUE({URL_PATH_SQL}) OVER w AS entry_url,
+                LAST_VALUE({URL_PATH_SQL}) OVER w AS exit_url
             FROM events
             WHERE domain_id = $1 AND created_at >= $2 AND created_at <= $3
               AND type = 'pageview'

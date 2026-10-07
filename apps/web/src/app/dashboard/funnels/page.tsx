@@ -12,7 +12,7 @@ import {
     Users,
     ChevronRight
 } from 'lucide-react';
-import { domains } from '@/lib/api';
+import { useDomain } from '@/contexts/DomainContext';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
@@ -40,6 +40,28 @@ interface FunnelMetrics {
     }>;
 }
 
+// GET /api/funnels/{domainId}/{funnelId} returns the steps with `visitors` (who
+// reached the step after the previous one), `dropoff`, `dropoffRate` and
+// `conversionRate`, plus `totalVisitors`, `completedFunnel` and `overallConversion`.
+function toMetrics(data: any): FunnelMetrics | null {
+    if (!data || !Array.isArray(data.steps)) return null;
+    return {
+        totalVisitors: data.totalVisitors ?? 0,
+        completedFunnel: data.completedFunnel ?? 0,
+        overallConversionRate: data.overallConversion ?? 0,
+        steps: data.steps.map((step: any) => ({
+            stepId: step.id,
+            name: step.name,
+            order: step.order,
+            visitors: step.visitors ?? 0,
+            conversions: step.visitors ?? 0,
+            dropoffs: step.dropoff ?? 0,
+            dropoffRate: step.dropoffRate ?? 0,
+            conversionRate: step.conversionRate ?? 0,
+        })),
+    };
+}
+
 async function getFunnels(domainId: string) {
     const token = localStorage.getItem('accessToken');
     const res = await fetch(`${API_URL}/api/funnels/${domainId}`, {
@@ -65,37 +87,32 @@ async function deleteFunnel(domainId: string, funnelId: string) {
 }
 
 export default function FunnelsPage() {
-    const [selectedDomainId, setSelectedDomainId] = useState<string | null>(null);
+    const { selectedDomainId, loading: domainLoading } = useDomain();
     const [funnelList, setFunnelList] = useState<Funnel[]>([]);
     const [selectedFunnel, setSelectedFunnel] = useState<string | null>(null);
     const [funnelMetrics, setFunnelMetrics] = useState<FunnelMetrics | null>(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        domains.list().then(result => {
-            if (result.data && result.data.domains.length > 0) {
-                setSelectedDomainId(result.data.domains[0].id);
-            } else {
-                setLoading(false);
-            }
-        });
-    }, []);
-
-    useEffect(() => {
-        if (!selectedDomainId) return;
+        if (!selectedDomainId) {
+            if (!domainLoading) setLoading(false);
+            return;
+        }
 
         setLoading(true);
+        setSelectedFunnel(null);
+        setFunnelMetrics(null);
         getFunnels(selectedDomainId).then(data => {
             setFunnelList(data.funnels || []);
             setLoading(false);
         });
-    }, [selectedDomainId]);
+    }, [selectedDomainId, domainLoading]);
 
     useEffect(() => {
         if (!selectedDomainId || !selectedFunnel) return;
 
         getFunnelDetails(selectedDomainId, selectedFunnel).then(data => {
-            setFunnelMetrics(data.metrics);
+            setFunnelMetrics(toMetrics(data));
         });
     }, [selectedDomainId, selectedFunnel]);
 

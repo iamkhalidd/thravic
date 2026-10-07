@@ -26,6 +26,7 @@ from ..json_response import jsjson
 from ..logging import create_logger
 from ..middleware.auth import AuthUser, require_auth
 from ..services import domain_service
+from ..services.event_service import URL_PATH_SQL
 
 log = create_logger("CustomEvents")
 
@@ -204,17 +205,18 @@ async def performance(
             end,
         )
 
+        # Grouped by path, so tagged links do not split one page into many rows.
         by_page = await query(
-            """
+            f"""
             SELECT
-                url,
+                {URL_PATH_SQL} as url,
                 ROUND(AVG((data->>'lcp')::numeric))::int as avg_lcp,
                 ROUND(AVG((data->>'fcp')::numeric))::int as avg_fcp,
                 COUNT(*)::int as count
              FROM events
              WHERE domain_id = $1 AND type = 'custom' AND data->>'event' = 'performance'
                AND created_at >= $2 AND created_at <= $3
-             GROUP BY url
+             GROUP BY 1
              ORDER BY count DESC
              LIMIT 20
             """,
@@ -316,12 +318,12 @@ async def rage_clicks(
         start, end = _get_date_range(request)
 
         rows = await query(
-            """
+            f"""
             SELECT
                 data->>'tag' as tag,
                 data->>'id' as element_id,
                 data->>'text' as text,
-                url,
+                {URL_PATH_SQL} as url,
                 COUNT(*)::int as count,
                 ROUND(AVG((data->>'clickCount')::numeric))::int as avg_click_count
              FROM events
@@ -330,7 +332,7 @@ async def rage_clicks(
                AND data->>'event' = 'rage_click'
                AND created_at >= $2
                AND created_at <= $3
-             GROUP BY data->>'tag', data->>'id', data->>'text', url
+             GROUP BY data->>'tag', data->>'id', data->>'text', 4
              ORDER BY count DESC
              LIMIT 50
             """,

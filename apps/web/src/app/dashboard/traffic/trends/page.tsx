@@ -51,7 +51,9 @@ export default function TrendsPage() {
         );
     }
 
-    const chartData = data?.chart?.data || [];
+    // GET /api/analytics/{id}/dashboard: one row per day in `timeseries`.
+    const chartData: Array<{ date: string; visitors: number; sessions: number; pageviews: number }> =
+        data?.timeseries || [];
     const maxValue = Math.max(...chartData.map((d: any) => d[metric] || 0), 1);
 
     // Calculate trend
@@ -59,7 +61,20 @@ export default function TrendsPage() {
     const firstHalf = chartData.slice(0, halfLength).reduce((sum: number, d: any) => sum + (d[metric] || 0), 0);
     const secondHalf = chartData.slice(halfLength).reduce((sum: number, d: any) => sum + (d[metric] || 0), 0);
     const trendPercent = firstHalf > 0 ? (((secondHalf - firstHalf) / firstHalf) * 100).toFixed(1) : 0;
-    const isPositive = Number(trendPercent) >= 0;
+    const trend = Number(trendPercent);
+    const isPositive = trend >= 0;
+    const hasTraffic = chartData.some((d: any) => (d[metric] || 0) > 0);
+    // No traffic in the first half means a percentage change cannot be computed.
+    const newTraffic = hasTraffic && firstHalf === 0 && secondHalf > 0;
+    const status = !hasTraffic ? 'No data yet' : newTraffic || trend > 0 ? 'Growing' : trend < 0 ? 'Declining' : 'Steady';
+    const statusDetail = !hasTraffic
+        ? 'No traffic recorded in this period'
+        : newTraffic
+            ? 'All traffic arrived in the second half of the period'
+            : trend > 0 ? 'Traffic is increasing' : trend < 0 ? 'Consider reviewing sources' : 'Traffic is level';
+    const bestDay = hasTraffic
+        ? chartData.reduce((max: any, d: any) => ((d[metric] || 0) > (max[metric] || 0) ? d : max), chartData[0])
+        : null;
 
     return (
         <div>
@@ -140,7 +155,7 @@ export default function TrendsPage() {
                             fontWeight: 600,
                             color: isPositive ? 'var(--color-success)' : 'var(--color-error)'
                         }}>
-                            {isPositive ? '+' : ''}{trendPercent}%
+                            {newTraffic ? 'New' : `${isPositive ? '+' : ''}${trendPercent}%`}
                         </span>
                         {isPositive ? (
                             <ArrowUpRight size={20} color="var(--color-success)" />
@@ -175,10 +190,8 @@ export default function TrendsPage() {
                         fontWeight: 600,
                         color: 'var(--color-text-primary)'
                     }}>
-                        {chartData.length > 0
-                            ? new Date(chartData.reduce((max: any, d: any) =>
-                                (d[metric] || 0) > (max[metric] || 0) ? d : max
-                            ).date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+                        {bestDay
+                            ? new Date(bestDay.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
                             : 'N/A'
                         }
                     </div>
@@ -207,12 +220,12 @@ export default function TrendsPage() {
                     <div style={{
                         fontSize: '1rem',
                         fontWeight: 600,
-                        color: isPositive ? 'var(--color-success)' : 'var(--color-warning)'
+                        color: status === 'Growing' ? 'var(--color-success)' : status === 'Declining' ? 'var(--color-warning)' : 'var(--color-text-primary)'
                     }}>
-                        {isPositive ? 'Growing' : 'Declining'}
+                        {status}
                     </div>
                     <span style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>
-                        {isPositive ? 'Traffic is increasing' : 'Consider reviewing sources'}
+                        {statusDetail}
                     </span>
                 </div>
             </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 
 // Mirrors the PlanFeature type from config/plans.ts on the server
@@ -63,13 +63,16 @@ export function useSubscription() {
         return () => { cancelled = true; };
     }, []);
 
-    const hasFeature = (feature: PlanFeature, domainFeatures?: string[]): boolean => {
+    // Stable between renders: pages list it in effect dependencies, and a new
+    // function each render re-ran those effects forever (the Team page refetched
+    // members until the API rate-limited the whole dashboard).
+    const hasFeature = useCallback((feature: PlanFeature, domainFeatures?: string[]): boolean => {
         if (domainFeatures && domainFeatures.length > 0) {
             return domainFeatures.includes(feature as string);
         }
         if (!subscription) return false;
         return subscription.features.includes(feature);
-    };
+    }, [subscription]);
 
     return {
         subscription,

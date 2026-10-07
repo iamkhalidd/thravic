@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
     Plus,
@@ -11,7 +11,7 @@ import {
     Globe,
     Zap
 } from 'lucide-react';
-import { domains } from '@/lib/api';
+import { useDomain } from '@/contexts/DomainContext';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
@@ -24,6 +24,22 @@ interface FunnelStep {
         operator: 'equals' | 'contains' | 'startsWith' | 'endsWith' | 'regex';
         value: string;
     };
+}
+
+const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// The API matches a step with `matchType` (exact | contains | regex) and
+// `matchValue`; this form's richer operators are expressed in those terms.
+// Sending the form's `condition` object instead made every create fail.
+function toApiStep(step: FunnelStep) {
+    const { operator, value } = step.condition;
+    const match =
+        operator === 'equals' ? { matchType: 'exact', matchValue: value }
+        : operator === 'contains' ? { matchType: 'contains', matchValue: value }
+        : operator === 'startsWith' ? { matchType: 'regex', matchValue: `^${escapeRegex(value)}` }
+        : operator === 'endsWith' ? { matchType: 'regex', matchValue: `${escapeRegex(value)}$` }
+        : { matchType: 'regex', matchValue: value };
+    return { name: step.name, type: step.type, ...match };
 }
 
 const stepTypes = [
@@ -48,7 +64,7 @@ const fieldsByType: Record<string, string[]> = {
 
 export default function NewFunnelPage() {
     const router = useRouter();
-    const [selectedDomainId, setSelectedDomainId] = useState<string | null>(null);
+    const { selectedDomainId } = useDomain();
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
     const [steps, setSteps] = useState<FunnelStep[]>([
@@ -67,14 +83,6 @@ export default function NewFunnelPage() {
     ]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
-
-    useEffect(() => {
-        domains.list().then(result => {
-            if (result.data && result.data.domains.length > 0) {
-                setSelectedDomainId(result.data.domains[0].id);
-            }
-        });
-    }, []);
 
     const addStep = () => {
         const newStep: FunnelStep = {
@@ -128,11 +136,7 @@ export default function NewFunnelPage() {
                 body: JSON.stringify({
                     name,
                     description,
-                    steps: steps.map(s => ({
-                        name: s.name,
-                        type: s.type,
-                        condition: s.condition
-                    }))
+                    steps: steps.map(toApiStep)
                 })
             });
 
