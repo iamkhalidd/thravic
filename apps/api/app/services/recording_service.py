@@ -9,16 +9,28 @@ from ..db import query, query_one
 
 
 async def create(
-    domain_id: str, session_id: str | None, url: str
+    domain_id: str, client_session_id: str | None, url: str
 ) -> dict[str, Any] | None:
+    """`session_id` is the FK to `sessions.id`; callers only know the tracker's
+    client-side id (`sessions.session_id`), so it is resolved here.
+
+    The tracker starts recording before its first pageview is flushed, so the
+    session row may not exist yet: the link stays NULL and `end_recording`
+    resolves it again from `client_session_id`.
+    """
     rows = await query(
         """
-        INSERT INTO session_recordings (domain_id, session_id, url, recording_data)
-        VALUES ($1, $2, $3, '{"events":[]}')
+        INSERT INTO session_recordings
+            (domain_id, session_id, client_session_id, url, recording_data)
+        VALUES (
+            $1,
+            (SELECT id FROM sessions WHERE session_id = $2 AND domain_id = $1),
+            $2, $3, '{"events":[]}'
+        )
         RETURNING *
         """,
         domain_id,
-        session_id,
+        client_session_id,
         url,
     )
     return rows[0] if rows else None
@@ -52,7 +64,12 @@ async def end_recording(recording_id: str) -> dict[str, Any] | None:
         """
         UPDATE session_recordings
         SET ended_at = NOW(),
-            duration = EXTRACT(EPOCH FROM (NOW() - started_at))::int
+            duration = EXTRACT(EPOCH FROM (NOW() - started_at))::int,
+            session_id = COALESCE(session_id, (
+                SELECT s.id FROM sessions s
+                WHERE s.session_id = session_recordings.client_session_id
+                  AND s.domain_id = session_recordings.domain_id
+            ))
         WHERE id = $1
         RETURNING *
         """,
