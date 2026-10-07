@@ -6,6 +6,10 @@ INSERT as NULL and surfaces as a 500. Preserved as-is.
 
 The Zod failure on the events route returns a hardcoded `Invalid event data`
 rather than the underlying message.
+
+The list takes `?device=desktop|tablet|mobile` (the linked session's screen width)
+and `?duration=short|medium|long` (under 30s, 30s-3min, over 3min); the
+pagination total applies the same filters.
 """
 
 from __future__ import annotations
@@ -20,7 +24,7 @@ from ..json_response import jsjson
 from ..logging import create_logger
 from ..middleware.auth import AuthUser, require_auth
 from ..middleware.feature_gate import require_feature
-from ..services import domain_service, recording_service
+from ..services import domain_service, recording_service, session_service
 from ..zod_lite import number_field
 
 log = create_logger("Recordings")
@@ -196,8 +200,17 @@ async def list_recordings(
         )
         offset = (page - 1) * limit
 
-        recordings = await recording_service.list_by_domain(domain["id"], limit, offset)
-        total = await recording_service.count_by_domain(domain["id"])
+        device = request.query_params.get("device") or None
+        if device is not None and device not in session_service.DEVICE_WIDTHS:
+            raise SimpleError("device must be one of: desktop, tablet, mobile", 400)
+        duration = request.query_params.get("duration") or None
+        if duration is not None and duration not in recording_service.DURATIONS:
+            raise SimpleError("duration must be one of: short, medium, long", 400)
+
+        recordings = await recording_service.list_by_domain(
+            domain["id"], limit, offset, device, duration
+        )
+        total = await recording_service.count_by_domain(domain["id"], device, duration)
 
         return jsjson(
             {
@@ -209,6 +222,7 @@ async def list_recordings(
                         "eventsCount": r["events_count"],
                         "startedAt": r["started_at"],
                         "endedAt": r["ended_at"],
+                        "device": r["device"],
                     }
                     for r in recordings
                 ],

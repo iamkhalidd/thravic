@@ -2,6 +2,9 @@
 
 Both handlers are gated by `requireFeature('heatmaps')`, which runs *before* the
 domain lookup, so a free-plan caller gets 403 rather than 404.
+
+`?viewport=desktop|tablet|mobile` limits the heatmap to sessions of that device
+class (by screen width, as in the analytics devices breakdown). Omitted means all.
 """
 
 from __future__ import annotations
@@ -17,7 +20,7 @@ from ..json_response import jsjson
 from ..logging import create_logger
 from ..middleware.auth import AuthUser, require_auth
 from ..middleware.feature_gate import require_feature
-from ..services import domain_service, event_service
+from ..services import domain_service, event_service, session_service
 
 log = create_logger("Heatmaps")
 
@@ -84,11 +87,14 @@ async def heatmap(
 
         page_url = request.query_params.get("page")
         event_type = request.query_params.get("type") or "click"
+        viewport = request.query_params.get("viewport") or None
+        if viewport is not None and viewport not in session_service.DEVICE_WIDTHS:
+            raise SimpleError("viewport must be one of: desktop, tablet, mobile", 400)
 
         start_date, end_date = _lookback_range()
 
-        events = await event_service.query_by_domain(
-            domain["id"], start_date, end_date, event_type
+        events = await event_service.query_for_heatmap(
+            domain["id"], start_date, end_date, event_type, viewport
         )
 
         # Filter by page path when requested; fall back to the raw URL on parse failure
@@ -116,6 +122,7 @@ async def heatmap(
                 "domainId": domain["id"],
                 "pageUrl": page_url or "all",
                 "type": event_type,
+                "viewport": viewport or "all",
                 "points": points,
                 "totalInteractions": len(filtered),
                 "uniqueVisitors": len({e["visitor_id"] for e in filtered}),

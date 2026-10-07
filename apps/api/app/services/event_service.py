@@ -32,6 +32,7 @@ from datetime import datetime
 from typing import Any
 
 from ..db import query, query_one, transaction
+from . import session_service
 
 DEFAULT_TOP_PAGES_LIMIT = 10
 DEFAULT_REALTIME_WINDOW_MINUTES = 30
@@ -169,6 +170,38 @@ async def query_by_domain(
         domain_id,
         start_date,
         end_date,
+    )
+
+
+async def query_for_heatmap(
+    domain_id: str,
+    start_date: datetime,
+    end_date: datetime,
+    event_type: str,
+    device: str | None = None,
+) -> list[dict[str, Any]]:
+    """`query_by_domain` for one event type, optionally limited to a device class.
+
+    The device comes from the event's session (`sessions.screen_width`); events
+    without a session match no device.
+    """
+    if device is None:
+        return await query_by_domain(domain_id, start_date, end_date, event_type)
+
+    width_sql, width_params = session_service.device_width_sql("s.screen_width", device, 5)
+    return await query(
+        f"""
+        SELECT e.* FROM events e
+        JOIN sessions s ON s.id = e.session_id
+        WHERE e.domain_id = $1 AND e.created_at >= $2 AND e.created_at <= $3
+          AND e.type = $4 AND {width_sql}
+        ORDER BY e.created_at DESC
+        """,
+        domain_id,
+        start_date,
+        end_date,
+        event_type,
+        *width_params,
     )
 
 

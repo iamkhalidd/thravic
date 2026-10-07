@@ -543,12 +543,21 @@ export const funnels = {
 
 // Recordings API
 // The list endpoint is /api/recordings/{domainId} and returns url/duration/
-// eventsCount - there is no visitorId, device, geo or page count on it.
+// eventsCount plus the session's device class - there is no visitorId, geo or
+// page count on it. Filters: device by screen width (same breakpoints as the
+// devices breakdown), duration short < 30s <= medium < 3min <= long.
+export type RecordingDevice = 'desktop' | 'tablet' | 'mobile';
+export type RecordingDuration = 'short' | 'medium' | 'long';
+
 export const recordings = {
-    async list(domainId: string, filters?: { device?: string; duration?: string }) {
+    async list(
+        domainId: string,
+        filters?: { device?: RecordingDevice; duration?: RecordingDuration; page?: number }
+    ) {
         const params = new URLSearchParams();
         if (filters?.device) params.set('device', filters.device);
         if (filters?.duration) params.set('duration', filters.duration);
+        if (filters?.page) params.set('page', String(filters.page));
         const query = params.toString() ? `?${params}` : '';
 
         return apiRequest<{
@@ -559,6 +568,7 @@ export const recordings = {
                 eventsCount: number;
                 startedAt: string;
                 endedAt: string | null;
+                device: RecordingDevice | 'unknown';
             }>;
             pagination: { page: number; limit: number; total: number; totalPages: number };
         }>(`/api/recordings/${domainId}${query}`);

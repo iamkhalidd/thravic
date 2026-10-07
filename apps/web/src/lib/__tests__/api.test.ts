@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { exportData, formatPlanPrice, payments } from '../api';
+import { exportData, formatPlanPrice, payments, recordings } from '../api';
 
 const fetchMock = vi.fn();
 
@@ -99,5 +99,17 @@ describe('exportData.downloadCsv', () => {
 
         expect(fetchMock).toHaveBeenCalledTimes(3);
         expect(result.error).toBe('Invalid or expired token');
+    });
+});
+
+describe('recordings.list', () => {
+    it('sends only the filters that are set', async () => {
+        fetchMock.mockResolvedValue(jsonResponse({ recordings: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 0 } }));
+
+        await recordings.list('dom-1');
+        await recordings.list('dom-1', { device: 'mobile', duration: 'long', page: 2 });
+
+        expect(fetchMock.mock.calls[0][0]).toMatch(/\/api\/recordings\/dom-1$/);
+        expect(fetchMock.mock.calls[1][0]).toMatch(/\/api\/recordings\/dom-1\?device=mobile&duration=long&page=2$/);
     });
 });

@@ -9,7 +9,7 @@ import {
     Tablet,
     Loader2
 } from 'lucide-react';
-import { domains } from '@/lib/api';
+import { useDomain } from '@/contexts/DomainContext';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
@@ -40,7 +40,7 @@ async function getPages(domainId: string) {
 }
 
 // The API serves one endpoint for both heatmap types, selected with ?type=click|scroll.
-// `viewport` is sent for forward compatibility - the API does not filter on it yet.
+// `viewport` limits it to sessions of that device class (by screen width).
 async function getHeatmap(domainId: string, type: 'click' | 'scroll', page: string, viewport: string) {
     const token = localStorage.getItem('accessToken');
     const params = new URLSearchParams({ type, page, viewport });
@@ -60,7 +60,7 @@ function getHeatmapColor(intensity: number): string {
 }
 
 export default function HeatmapsPage() {
-    const [selectedDomainId, setSelectedDomainId] = useState<string | null>(null);
+    const { selectedDomainId, loading: domainLoading } = useDomain();
     const [pages, setPages] = useState<PageWithHeatmap[]>([]);
     const [selectedPage, setSelectedPage] = useState<string | null>(null);
     const [heatmapType, setHeatmapType] = useState<'click' | 'scroll'>('click');
@@ -70,27 +70,19 @@ export default function HeatmapsPage() {
     const [loadingHeatmap, setLoadingHeatmap] = useState(false);
 
     useEffect(() => {
-        domains.list().then(result => {
-            if (result.data && result.data.domains.length > 0) {
-                setSelectedDomainId(result.data.domains[0].id);
-            } else {
-                setLoading(false);
-            }
-        });
-    }, []);
-
-    useEffect(() => {
-        if (!selectedDomainId) return;
+        if (!selectedDomainId) {
+            if (!domainLoading) setLoading(false);
+            return;
+        }
 
         setLoading(true);
         getPages(selectedDomainId).then(data => {
             setPages(data.pages || []);
-            if (data.pages && data.pages.length > 0) {
-                setSelectedPage(data.pages[0].path);
-            }
+            // Reset on every domain switch so a page from the previous domain is not kept.
+            setSelectedPage(data.pages?.length ? data.pages[0].path : null);
             setLoading(false);
         });
-    }, [selectedDomainId]);
+    }, [selectedDomainId, domainLoading]);
 
     useEffect(() => {
         if (!selectedDomainId || !selectedPage) return;
@@ -187,13 +179,16 @@ export default function HeatmapsPage() {
                         overflow: 'hidden'
                     }}>
                         {[
-                            { value: 'desktop', icon: Monitor },
-                            { value: 'tablet', icon: Tablet },
-                            { value: 'mobile', icon: Smartphone }
+                            { value: 'desktop', label: 'Desktop', icon: Monitor },
+                            { value: 'tablet', label: 'Tablet', icon: Tablet },
+                            { value: 'mobile', label: 'Mobile', icon: Smartphone }
                         ].map(v => (
                             <button
                                 key={v.value}
                                 onClick={() => setViewport(v.value as any)}
+                                aria-label={`${v.label} visitors`}
+                                aria-pressed={viewport === v.value}
+                                title={`${v.label} visitors`}
                                 style={{
                                     padding: 'var(--space-sm)',
                                     background: viewport === v.value ? 'var(--color-accent-primary)' : 'transparent',

@@ -80,3 +80,49 @@ async def test_session_id_from_another_domain_is_not_linked(seeded_domain, db_po
     recording = await recording_service.create(other_domain, payload["sessionId"], URL)
 
     assert recording["session_id"] is None
+
+
+async def _recording_on(domain_id: str, db_pool, screen_width: int | None, duration: int | None):
+    """A recording whose session has `screen_width`, with `duration` seconds."""
+    payload = {**_tracker_payload(domain_id), "screenWidth": screen_width}
+    await session_service.upsert(payload)
+    recording = await recording_service.create(domain_id, payload["sessionId"], URL)
+    async with db_pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE session_recordings SET duration = $2 WHERE id = $1",
+            recording["id"],
+            duration,
+        )
+    return recording["id"]
+
+
+async def test_list_filters_by_device_and_duration(seeded_domain, db_pool):
+    phone_short = await _recording_on(seeded_domain, db_pool, 390, 10)
+    tablet_medium = await _recording_on(seeded_domain, db_pool, 800, 60)
+    desktop_long = await _recording_on(seeded_domain, db_pool, 1920, 600)
+    in_progress = await _recording_on(seeded_domain, db_pool, 1920, None)
+
+    async def ids(**filters):
+        rows = await recording_service.list_by_domain(seeded_domain, 50, 0, **filters)
+        count = await recording_service.count_by_domain(seeded_domain, **filters)
+        assert count == len(rows), "pagination total disagrees with the filtered list"
+        return {row["id"] for row in rows}
+
+    assert await ids() == {phone_short, tablet_medium, desktop_long, in_progress}
+    assert await ids(device="mobile") == {phone_short}
+    assert await ids(device="tablet") == {tablet_medium}
+    assert await ids(device="desktop") == {desktop_long, in_progress}
+    assert await ids(duration="short") == {phone_short}
+    assert await ids(duration="medium") == {tablet_medium}
+    assert await ids(duration="long") == {desktop_long}
+    assert await ids(device="desktop", duration="long") == {desktop_long}
+    assert await ids(device="mobile", duration="long") == set()
+
+
+async def test_list_reports_the_device_class(seeded_domain, db_pool):
+    await _recording_on(seeded_domain, db_pool, 390, 10)
+    await recording_service.create(seeded_domain, None, URL)  # no session at all
+
+    rows = await recording_service.list_by_domain(seeded_domain, 50, 0)
+
+    assert sorted(row["device"] for row in rows) == ["mobile", "unknown"]

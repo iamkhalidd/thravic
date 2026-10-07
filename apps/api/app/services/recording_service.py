@@ -6,6 +6,7 @@ import json
 from typing import Any
 
 from ..db import query, query_one
+from . import session_service
 
 
 async def create(
@@ -77,22 +78,74 @@ async def end_recording(recording_id: str) -> dict[str, Any] | None:
     )
 
 
+# Duration classes in seconds: [lower, upper). Recordings still in progress have
+# no duration and match none of them.
+DURATIONS: dict[str, tuple[int, int | None]] = {
+    "short": (0, 30),
+    "medium": (30, 180),
+    "long": (180, None),
+}
+
+# Recordings reach their session through the tracker's id, which is set even when
+# the `session_id` FK could not be resolved yet (see `create`).
+_SESSION_JOIN = """
+    LEFT JOIN sessions s
+      ON s.session_id = r.client_session_id AND s.domain_id = r.domain_id
+"""
+
+
+def _filter_sql(
+    device: str | None, duration: str | None, first_param: int
+) -> tuple[str, list[Any]]:
+    """Extra `AND ...` conditions for the list and count queries, plus their params."""
+    clauses: list[str] = []
+    params: list[Any] = []
+
+    if device is not None:
+        sql, device_params = session_service.device_width_sql(
+            "s.screen_width", device, first_param + len(params)
+        )
+        clauses.append(sql)
+        params.extend(device_params)
+
+    if duration is not None:
+        lower, upper = DURATIONS[duration]
+        clauses.append(f"r.duration >= ${first_param + len(params)}")
+        params.append(lower)
+        if upper is not None:
+            clauses.append(f"r.duration < ${first_param + len(params)}")
+            params.append(upper)
+
+    return "".join(f" AND {clause}" for clause in clauses), params
+
+
 async def list_by_domain(
-    domain_id: str, limit: int = 20, offset: int = 0
+    domain_id: str,
+    limit: int = 20,
+    offset: int = 0,
+    device: str | None = None,
+    duration: str | None = None,
 ) -> list[dict[str, Any]]:
-    """List view deliberately omits the `recording_data` blob (returned NULL)."""
+    """List view deliberately omits the `recording_data` blob (returned NULL).
+
+    `device` is the session's device class (`unknown` without a linked session).
+    """
+    filters, params = _filter_sql(device, duration, 4)
     return await query(
-        """
-        SELECT id, domain_id, session_id, url, duration, events_count,
-               started_at, ended_at, NULL as recording_data
-        FROM session_recordings
-        WHERE domain_id = $1
-        ORDER BY started_at DESC
+        f"""
+        SELECT r.id, r.domain_id, r.session_id, r.url, r.duration, r.events_count,
+               r.started_at, r.ended_at, NULL as recording_data,
+               {session_service.device_case_sql("s.screen_width")} AS device
+        FROM session_recordings r
+        {_SESSION_JOIN}
+        WHERE r.domain_id = $1{filters}
+        ORDER BY r.started_at DESC
         LIMIT $2 OFFSET $3
         """,
         domain_id,
         limit,
         offset,
+        *params,
     )
 
 
@@ -106,9 +159,19 @@ async def remove(recording_id: str) -> None:
     await query("DELETE FROM session_recordings WHERE id = $1", recording_id)
 
 
-async def count_by_domain(domain_id: str) -> int:
+async def count_by_domain(
+    domain_id: str, device: str | None = None, duration: str | None = None
+) -> int:
+    """Counts with the same filters as `list_by_domain`, so pagination agrees."""
+    filters, params = _filter_sql(device, duration, 2)
     row = await query_one(
-        "SELECT COUNT(*)::text as count FROM session_recordings WHERE domain_id = $1",
+        f"""
+        SELECT COUNT(*)::text as count
+        FROM session_recordings r
+        {_SESSION_JOIN}
+        WHERE r.domain_id = $1{filters}
+        """,
         domain_id,
+        *params,
     )
     return int((row or {}).get("count") or "0")

@@ -15,12 +15,13 @@ import {
     MousePointer2,
     Trash2
 } from 'lucide-react';
-import { domains } from '@/lib/api';
+import { recordings, type RecordingDevice, type RecordingDuration } from '@/lib/api';
+import { useDomain } from '@/contexts/DomainContext';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
-// Mirrors /api/recordings/{domainId}: url/duration/eventsCount. There is no
-// visitor id, device, status or viewport size on a recording row.
+// Mirrors /api/recordings/{domainId}: url/duration/eventsCount and the session's
+// device class. There is no visitor id, status or viewport size on a recording row.
 interface Recording {
     id: string;
     url: string;
@@ -28,7 +29,24 @@ interface Recording {
     endedAt: string | null;
     duration: number;
     eventsCount: number;
+    device?: RecordingDevice | 'unknown';
 }
+
+const DEVICE_ICONS = { desktop: Monitor, tablet: Tablet, mobile: Smartphone, unknown: Monitor };
+
+const DEVICE_OPTIONS: Array<{ value: RecordingDevice | ''; label: string }> = [
+    { value: '', label: 'All devices' },
+    { value: 'desktop', label: 'Desktop' },
+    { value: 'tablet', label: 'Tablet' },
+    { value: 'mobile', label: 'Mobile' },
+];
+
+const DURATION_OPTIONS: Array<{ value: RecordingDuration | ''; label: string }> = [
+    { value: '', label: 'Any length' },
+    { value: 'short', label: 'Under 30s' },
+    { value: 'medium', label: '30s – 3 min' },
+    { value: 'long', label: 'Over 3 min' },
+];
 
 interface RecordingEvent {
     type: string;
@@ -62,14 +80,6 @@ function viewportOf(events: RecordingEvent[]): { width: number; height: number }
     return FALLBACK_VIEWPORT;
 }
 
-async function getRecordings(domainId: string) {
-    const token = localStorage.getItem('accessToken');
-    const res = await fetch(`${API_URL}/api/recordings/${domainId}?status=completed`, {
-        headers: { Authorization: `Bearer ${token}` }
-    });
-    return res.json();
-}
-
 async function getRecording(domainId: string, recordingId: string) {
     const token = localStorage.getItem('accessToken');
     const res = await fetch(`${API_URL}/api/recordings/${domainId}/${recordingId}`, {
@@ -93,8 +103,13 @@ function formatDuration(seconds: number): string {
 }
 
 export default function SessionsPage() {
-    const [selectedDomainId, setSelectedDomainId] = useState<string | null>(null);
+    const { selectedDomainId, loading: domainLoading } = useDomain();
     const [recordingsList, setRecordingsList] = useState<Recording[]>([]);
+    const [total, setTotal] = useState<number | null>(null);
+    const [page, setPage] = useState(1);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const [deviceFilter, setDeviceFilter] = useState<RecordingDevice | ''>('');
+    const [durationFilter, setDurationFilter] = useState<RecordingDuration | ''>('');
     const [selectedRecording, setSelectedRecording] = useState<FullRecording | null>(null);
     const [loading, setLoading] = useState(true);
     const [loadingPlayback, setLoadingPlayback] = useState(false);
@@ -112,23 +127,27 @@ export default function SessionsPage() {
         : FALLBACK_VIEWPORT;
 
     useEffect(() => {
-        domains.list().then(result => {
-            if (result.data && result.data.domains.length > 0) {
-                setSelectedDomainId(result.data.domains[0].id);
-            } else {
-                setLoading(false);
-            }
-        });
-    }, []);
-
-    useEffect(() => {
-        if (!selectedDomainId) return;
+        if (!selectedDomainId) {
+            if (!domainLoading) setLoading(false);
+            return;
+        }
 
         setLoading(true);
-        getRecordings(selectedDomainId).then(data => {
-            setRecordingsList(data.recordings || []);
+        recordings.list(selectedDomainId, {
+            device: deviceFilter || undefined,
+            duration: durationFilter || undefined,
+        }).then(({ data }) => {
+            setRecordingsList(data?.recordings || []);
+            setTotal(data?.pagination.total ?? 0);
+            setPage(1);
             setLoading(false);
         });
+    }, [selectedDomainId, domainLoading, deviceFilter, durationFilter]);
+
+    // A recording from the previous domain must not stay open.
+    useEffect(() => {
+        setSelectedRecording(null);
+        setIsPlaying(false);
     }, [selectedDomainId]);
 
     // Playback loop
@@ -179,11 +198,33 @@ export default function SessionsPage() {
         setLoadingPlayback(false);
     };
 
+    const handleLoadMore = async () => {
+        if (!selectedDomainId) return;
+        setLoadingMore(true);
+        const { data } = await recordings.list(selectedDomainId, {
+            device: deviceFilter || undefined,
+            duration: durationFilter || undefined,
+            page: page + 1,
+        });
+        if (data) {
+            // Skip rows already shown: a recording that started since the first page
+            // shifts the offsets by one.
+            setRecordingsList(prev => [
+                ...prev,
+                ...data.recordings.filter(r => !prev.some(p => p.id === r.id)),
+            ]);
+            setTotal(data.pagination.total);
+            setPage(page + 1);
+        }
+        setLoadingMore(false);
+    };
+
     const handleDelete = async (recordingId: string) => {
         if (!selectedDomainId || !confirm('Delete this recording?')) return;
 
         await deleteRecording(selectedDomainId, recordingId);
         setRecordingsList(prev => prev.filter(r => r.id !== recordingId));
+        setTotal(prev => (prev === null ? prev : Math.max(0, prev - 1)));
         if (selectedRecording?.id === recordingId) {
             setSelectedRecording(null);
         }
@@ -198,7 +239,8 @@ export default function SessionsPage() {
         );
     };
 
-    if (loading) {
+    // Full skeleton only for the first load; filter changes keep the page in place.
+    if (loading && total === null) {
         return (
             <div>
                 <div className="skeleton" style={{ height: '40px', width: '200px', marginBottom: 'var(--space-xl)' }} />
@@ -219,25 +261,56 @@ export default function SessionsPage() {
             <div className="flex items-center justify-between" style={{ marginBottom: 'var(--space-xl)' }}>
                 <h1>Sessions</h1>
                 <div className="flex items-center gap-sm">
+                    <select
+                        aria-label="Filter by device"
+                        value={deviceFilter}
+                        onChange={(e) => setDeviceFilter(e.target.value as RecordingDevice | '')}
+                        className="input"
+                        style={{ width: 'auto', padding: 'var(--space-xs) var(--space-sm)' }}
+                    >
+                        {DEVICE_OPTIONS.map(option => (
+                            <option key={option.value} value={option.value}>{option.label}</option>
+                        ))}
+                    </select>
+                    <select
+                        aria-label="Filter by length"
+                        value={durationFilter}
+                        onChange={(e) => setDurationFilter(e.target.value as RecordingDuration | '')}
+                        className="input"
+                        style={{ width: 'auto', padding: 'var(--space-xs) var(--space-sm)' }}
+                    >
+                        {DURATION_OPTIONS.map(option => (
+                            <option key={option.value} value={option.value}>{option.label}</option>
+                        ))}
+                    </select>
                     <span style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
-                        {recordingsList.length} sessions
+                        {(total ?? 0).toLocaleString()} {total === 1 ? 'session' : 'sessions'}
                     </span>
                 </div>
             </div>
 
             {recordingsList.length === 0 ? (
-                <div className="card" style={{ textAlign: 'center', padding: 'var(--space-2xl)' }}>
+                <div className="card" style={{ textAlign: 'center', padding: 'var(--space-2xl)', opacity: loading ? 0.6 : 1 }}>
                     <Video size={48} style={{ color: 'var(--color-text-muted)', marginBottom: 'var(--space-lg)' }} />
-                    <h3 style={{ marginBottom: 'var(--space-sm)' }}>No recordings yet</h3>
-                    <p>Session recordings will appear here once visitors interact with your site</p>
+                    {deviceFilter || durationFilter ? (
+                        <>
+                            <h3 style={{ marginBottom: 'var(--space-sm)' }}>No matching recordings</h3>
+                            <p>Try a different device or length filter</p>
+                        </>
+                    ) : (
+                        <>
+                            <h3 style={{ marginBottom: 'var(--space-sm)' }}>No recordings yet</h3>
+                            <p>Session recordings will appear here once visitors interact with your site</p>
+                        </>
+                    )}
                 </div>
             ) : (
                 <div className="grid grid-cols-3 gap-lg">
                     {/* Recording List */}
                     <div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)', opacity: loading ? 0.6 : 1 }}>
                             {recordingsList.map(recording => {
-                                const DeviceIcon = Monitor;
+                                const DeviceIcon = DEVICE_ICONS[recording.device ?? 'unknown'];
 
                                 return (
                                     <div
@@ -291,6 +364,15 @@ export default function SessionsPage() {
                                     </div>
                                 );
                             })}
+                            {total !== null && recordingsList.length < total && (
+                                <button
+                                    className="btn btn-secondary"
+                                    onClick={handleLoadMore}
+                                    disabled={loadingMore}
+                                >
+                                    {loadingMore ? 'Loading...' : `Load more (${(total - recordingsList.length).toLocaleString()} left)`}
+                                </button>
+                            )}
                         </div>
                     </div>
 
