@@ -52,6 +52,11 @@ services:
       # webhook URL) when using a custom domain.
       - key: API_URL
         sync: false
+      # Daily data retention (apps/api/app/jobs/retention.py). dry_run reports
+      # what is past each plan's retention in the admin Audit Log and deletes
+      # nothing; change to delete only after reviewing a few of those reports.
+      - key: RETENTION_MODE
+        value: dry_run
       - key: RATE_LIMIT_WINDOW_MS
         value: 900000
       - key: RATE_LIMIT_MAX
