@@ -26,7 +26,7 @@ const SWITCHES: Array<{ key: keyof DomainSettings; label: string; description: s
     {
         key: 'sessionRecording',
         label: 'Session recording',
-        description: 'Mouse movement, clicks, scrolling and typing activity (not what is typed) for replay on the Sessions page.',
+        description: 'A replay of each visit as the visitor saw it — page content, mouse, clicks and scrolling — on the Sessions page. Typed values are always hidden. Add class tf-block to an element to leave it out, or tf-mask to hide its text.',
         feature: 'recordings',
     },
 ];

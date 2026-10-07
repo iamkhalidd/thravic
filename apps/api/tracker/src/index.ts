@@ -24,7 +24,7 @@
  * - Error / crash tracking (window.onerror + unhandledrejection)
  * - Performance metrics (Web Vitals: LCP, FID, CLS, TTFB, FCP)
  * - Rage-click detection
- * - Session recording capture (mouse moves, clicks, scrolls, inputs, resizes)
+ * - Session recording: rrweb screen capture, loaded on demand from /recorder.js
  */
 
 interface TFConfig {
@@ -58,7 +58,7 @@ interface TFConfig {
     trackErrors: boolean;
     /** Capture Web Vitals performance metrics. Default: true */
     trackPerformance: boolean;
-    /** Capture session recordings (mouse, input, scroll, resize). Default: false — opt-in, heavier */
+    /** Record sessions for screen replay (rrweb, inputs masked). Default: false — opt-in, heavier */
     trackRecordings: boolean;
     /** Maximum recording duration in ms. Default: 600 000 (10 min) */
     recordingMaxDuration: number;
@@ -84,11 +84,21 @@ interface TFEvent {
     data?: Record<string, unknown>;
 }
 
-// ── Recording event shape (sent to /recording/:id/events) ──
-interface RecordingEvent {
-    type: 'mousemove' | 'click' | 'scroll' | 'input' | 'resize' | 'pageview';
+// ── Recording (rrweb) ──
+// The recorder's API as far as the tracker uses it; recorder.ts provides it.
+interface RecordedEvent {
+    type: number;
     timestamp: number;
-    data: Record<string, unknown>;
+    [key: string]: unknown;
+}
+type RecordFn = (options: {
+    emit: (event: RecordedEvent) => void;
+    [option: string]: unknown;
+}) => (() => void) | undefined;
+interface StoredRecording {
+    id: string;
+    sessionId: string;
+    startedAt: number;
 }
 
 // Storage keys
@@ -151,9 +161,11 @@ const RAGE_CLICK_THRESHOLD = 3;      // clicks needed
 const RAGE_CLICK_WINDOW   = 800;     // ms
 
 // ── Recording constants ──
-const REC_MOUSEMOVE_THROTTLE = 50;   // ms between mousemove captures
-const REC_FLUSH_INTERVAL     = 3000; // ms between recording event flushes
-const REC_FLUSH_SIZE          = 100;  // max events before auto-flush
+const REC_STORAGE_KEY = '_tf_rec';
+const REC_FLUSH_INTERVAL = 5000;         // ms between recording uploads
+const REC_FLUSH_BYTES = 512 * 1024;      // upload early once this much is buffered
+const BEACON_MAX_BYTES = 60 * 1024;      // under the browsers' 64 KB beacon cap
+const RRWEB_FULL_SNAPSHOT = 2;           // rrweb EventType.FullSnapshot
 
 class ThravicAnalytics {
     private trackingId: string = '';
@@ -181,10 +193,12 @@ class ThravicAnalytics {
 
     // ── Recording state ──
     private recordingId: string | null = null;
-    private recordingEvents: RecordingEvent[] = [];
+    private recordingStarting: boolean = false;
+    private recordingEvents: RecordedEvent[] = [];
+    private recordingBytes: number = 0;
     private recordingStartTime: number = 0;
     private recordingFlushTimer: number | null = null;
-    private lastMoveTs: number = 0;
+    private stopRecorder: (() => void) | null = null;
 
     // ── Performance state ──
     private perfSent: boolean = false;
@@ -312,6 +326,9 @@ class ThravicAnalytics {
         }
         // Track the page view that was missed while waiting for consent
         this.trackPageView();
+        if (this.config.trackRecordings && this.initialized) {
+            this.startRecording();
+        }
     }
 
     // Revoke consent (e.g. user withdraws permission)
@@ -320,6 +337,7 @@ class ThravicAnalytics {
         // Clear any queued events, including the persisted copy.
         this.eventQueue = [];
         this.persistQueue();
+        this.endRecording();
     }
 
     // ────────────────────────────────────
@@ -772,96 +790,167 @@ class ThravicAnalytics {
     //  Session Recording  (NEW)
     // ────────────────────────────────────
 
+    // Recordings are rrweb captures of the page itself (DOM snapshot + changes),
+    // so the dashboard can replay what the visitor saw. The recorder is a
+    // separate script, loaded only here, so sites without recording never pay
+    // for it. Inputs are always masked; elements with class `tf-block` are left
+    // out entirely and text inside `tf-mask` is masked.
+    //
+    // One recording spans the whole visit: its id is kept in sessionStorage and
+    // the next page appends to it (rrweb takes a fresh snapshot per page), until
+    // the session changes or recordingMaxDuration is reached.
+
+    private recorderUrl(): string {
+        return this.config.endpoint.replace(/\/api\/collect\/?$/, '') + '/recorder.js';
+    }
+
+    private loadRecorder(): Promise<RecordFn | null> {
+        const loaded = (window as any).__TF_RRWEB__;
+        if (loaded) return Promise.resolve(loaded.record);
+        return new Promise((resolve) => {
+            const script = document.createElement('script');
+            script.src = this.recorderUrl();
+            script.async = true;
+            script.onload = () => resolve((window as any).__TF_RRWEB__?.record ?? null);
+            script.onerror = () => resolve(null);
+            document.head.appendChild(script);
+        });
+    }
+
+    /** This visit's recording, if one was started on an earlier page and can go on. */
+    private resumableRecording(): StoredRecording | null {
+        try {
+            const stored = JSON.parse(sessionStorage.getItem(REC_STORAGE_KEY) || 'null');
+            if (
+                stored && typeof stored.id === 'string' &&
+                stored.sessionId === this.getSessionId() &&
+                Date.now() - stored.startedAt < this.config.recordingMaxDuration
+            ) {
+                return stored;
+            }
+        } catch { /* storage blocked or corrupt */ }
+        return null;
+    }
+
     private async startRecording(): Promise<void> {
-        if (this.recordingId) return; // already recording
+        if (this.recordingId || this.recordingStarting) return;
+        this.recordingStarting = true;
 
         try {
-            const url = `${this.config.endpoint}/${this.trackingId}/recording/start`;
-            const res = await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    sessionId: this.getSessionId(),
-                    url: window.location.href,
-                }),
-            });
+            const record = await this.loadRecorder();
+            if (!record) return;
 
-            if (!res.ok) return;
+            let current = this.resumableRecording();
+            if (!current) {
+                const res = await fetch(`${this.config.endpoint}/${this.trackingId}/recording/start`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        sessionId: this.getSessionId(),
+                        url: window.location.href,
+                    }),
+                });
+                if (!res.ok) return;
+                const data = await res.json();
+                current = { id: data.id, sessionId: this.getSessionId(), startedAt: Date.now() };
+                try {
+                    sessionStorage.setItem(REC_STORAGE_KEY, JSON.stringify(current));
+                } catch { /* blocked: this page is still recorded */ }
+            }
+            // Consent may have been withdrawn while the requests above were out.
+            if (!this.shouldTrack()) return;
 
-            const data = await res.json();
-            this.recordingId = data.id;
-            this.recordingStartTime = Date.now();
+            this.recordingId = current.id;
+            this.recordingStartTime = current.startedAt;
             this.recordingEvents = [];
+            this.recordingBytes = 0;
 
-            // Push initial pageview recording event
-            this.pushRecordingEvent('pageview', {
-                url: window.location.href,
-                screenWidth: window.screen.width,
-                screenHeight: window.screen.height,
-                viewportWidth: window.innerWidth,
-                viewportHeight: window.innerHeight,
-            });
+            this.stopRecorder = record({
+                emit: (event) => this.pushRecordingEvent(event),
+                maskAllInputs: true,
+                maskTextClass: 'tf-mask',
+                blockClass: 'tf-block',
+                ignoreClass: 'tf-ignore',
+                slimDOMOptions: 'all',
+                sampling: { mousemove: 50, scroll: 150, input: 'last', media: 800 },
+            }) || null;
 
-            // Set up recording-specific listeners
-            this.setupRecordingListeners();
-
-            // Set up periodic flush
             this.recordingFlushTimer = window.setInterval(
                 () => this.flushRecordingEvents(),
                 REC_FLUSH_INTERVAL
             );
         } catch {
             /* silent — recording is best-effort */
+        } finally {
+            this.recordingStarting = false;
         }
     }
 
-    private pushRecordingEvent(type: RecordingEvent['type'], data: Record<string, unknown>): void {
+    private pushRecordingEvent(event: RecordedEvent): void {
         if (!this.recordingId) return;
 
-        // Enforce max recording duration
         if (Date.now() - this.recordingStartTime > this.config.recordingMaxDuration) {
             this.endRecording();
             return;
         }
 
-        this.recordingEvents.push({
-            type,
-            timestamp: Date.now() - this.recordingStartTime,
-            data,
-        });
+        this.recordingEvents.push(event);
+        this.recordingBytes += JSON.stringify(event).length;
 
-        if (this.recordingEvents.length >= REC_FLUSH_SIZE) {
-            this.flushRecordingEvents();
+        // Send the page snapshot straight away, while a normal request can still
+        // carry it: an unload beacon is capped at 64 KB and a snapshot is often more.
+        if (event.type === RRWEB_FULL_SNAPSHOT || this.recordingBytes >= REC_FLUSH_BYTES) {
+            setTimeout(() => this.flushRecordingEvents(), 0);
         }
     }
 
-    // `final`: the page is being hidden or unloaded, so only a beacon survives.
+    // `final`: the page is being hidden or unloaded, so only beacons survive.
+    // Each is kept under the beacon size limit; the server orders events by
+    // timestamp, so beacons arriving out of order are fine.
     private flushRecordingEvents(final: boolean = false): void {
         if (!this.recordingId || this.recordingEvents.length === 0) return;
 
-        const events = [...this.recordingEvents];
+        const events = this.recordingEvents;
         this.recordingEvents = [];
+        this.recordingBytes = 0;
 
         const url = `${this.config.endpoint}/${this.trackingId}/recording/${this.recordingId}/events`;
         if (final) {
-            beacon(url, { events });
+            let batch: RecordedEvent[] = [];
+            let size = 0;
+            for (const event of events) {
+                const eventSize = JSON.stringify(event).length;
+                if (batch.length && size + eventSize > BEACON_MAX_BYTES) {
+                    beacon(url, { format: 'rrweb', events: batch });
+                    batch = [];
+                    size = 0;
+                }
+                batch.push(event);
+                size += eventSize;
+            }
+            beacon(url, { format: 'rrweb', events: batch });
             return;
         }
+
+        const body = JSON.stringify({ format: 'rrweb', events });
         fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ events }),
-            keepalive: true,
+            body,
+            // keepalive requests are capped at 64 KB in total.
+            keepalive: body.length < BEACON_MAX_BYTES,
         }).catch(() => {});
     }
 
     private endRecording(): void {
         if (!this.recordingId) return;
 
-        // Flush remaining events first
+        if (this.stopRecorder) {
+            this.stopRecorder();
+            this.stopRecorder = null;
+        }
         this.flushRecordingEvents(true);
 
-        // Clear the periodic flush timer
         if (this.recordingFlushTimer) {
             clearInterval(this.recordingFlushTimer);
             this.recordingFlushTimer = null;
@@ -870,70 +959,9 @@ class ThravicAnalytics {
         beacon(`${this.config.endpoint}/${this.trackingId}/recording/${this.recordingId}/end`, {});
 
         this.recordingId = null;
-    }
-
-    private setupRecordingListeners(): void {
-        // ── Mouse move (throttled) ──
-        document.addEventListener('mousemove', (e: MouseEvent) => {
-            const now = Date.now();
-            if (now - this.lastMoveTs < REC_MOUSEMOVE_THROTTLE) return;
-            this.lastMoveTs = now;
-
-            this.pushRecordingEvent('mousemove', {
-                x: e.clientX,
-                y: e.clientY,
-            });
-        }, { passive: true });
-
-        // ── Clicks ──
-        document.addEventListener('click', (e: MouseEvent) => {
-            const target = e.target as HTMLElement;
-            this.pushRecordingEvent('click', {
-                x: e.clientX,
-                y: e.clientY,
-                tag: target?.tagName?.toLowerCase(),
-                id: target?.id || undefined,
-            });
-        }, { passive: true });
-
-        // ── Scroll ──
-        let recScrollTimeout: number;
-        window.addEventListener('scroll', () => {
-            if (recScrollTimeout) return;
-            recScrollTimeout = window.setTimeout(() => {
-                this.pushRecordingEvent('scroll', {
-                    scrollX: window.scrollX,
-                    scrollY: window.scrollY,
-                });
-                recScrollTimeout = 0;
-            }, 100);
-        }, { passive: true });
-
-        // ── Input changes (capture value length only, NOT the actual value, for privacy) ──
-        document.addEventListener('input', (e: Event) => {
-            const target = e.target as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
-            if (!target) return;
-            this.pushRecordingEvent('input', {
-                tag: target.tagName?.toLowerCase(),
-                inputType: (target as HTMLInputElement).type || undefined,
-                id: target.id || undefined,
-                name: target.name || undefined,
-                valueLength: target.value?.length ?? 0,
-            });
-        }, { passive: true });
-
-        // ── Resize ──
-        let recResizeTimeout: number;
-        window.addEventListener('resize', () => {
-            if (recResizeTimeout) return;
-            recResizeTimeout = window.setTimeout(() => {
-                this.pushRecordingEvent('resize', {
-                    viewportWidth: window.innerWidth,
-                    viewportHeight: window.innerHeight,
-                });
-                recResizeTimeout = 0;
-            }, 200);
-        }, { passive: true });
+        try {
+            sessionStorage.removeItem(REC_STORAGE_KEY);
+        } catch { /* blocked */ }
     }
 
     // ────────────────────────────────────
@@ -986,19 +1014,10 @@ class ThravicAnalytics {
         });
 
         // The page is really going away (navigation, close, or into bfcache).
+        // The recording is not ended: the next page of the visit carries it on.
         window.addEventListener('pagehide', () => {
             this.flush(true);
-            if (this.recordingId) {
-                this.endRecording();
-            }
-        });
-
-        // Restored from the back/forward cache: the old recording was ended on
-        // pagehide, so this visit gets a new one.
-        window.addEventListener('pageshow', (e: PageTransitionEvent) => {
-            if (e.persisted && this.config.trackRecordings && !this.recordingId && this.shouldTrack()) {
-                this.startRecording();
-            }
+            this.flushRecordingEvents(true);
         });
 
         // Track SPA navigation

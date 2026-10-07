@@ -1,7 +1,17 @@
-"""Recording service — port of `services/recordingService.ts`."""
+"""Recording service — port of `services/recordingService.ts`.
+
+Two storage formats (`session_recordings.format`):
+
+* `rrweb` — screen recordings from the current tracker. Each upload is one
+  `recording_chunks` row holding its events as gzip-compressed JSON.
+* `legacy` — cursor-only events from the old tracker, appended to the
+  `recording_data` jsonb. Old cached trackers may still send them for a while.
+"""
 
 from __future__ import annotations
 
+import gzip
+import json
 from typing import Any
 
 from ..db import query, query_one
@@ -36,6 +46,67 @@ async def create(
     return rows[0] if rows else None
 
 
+# Compressed bytes one recording may hold; uploads past it are dropped. A busy
+# 10-minute visit is typically well under 1 MB.
+MAX_RECORDING_BYTES = 5 * 1024 * 1024
+
+
+async def append_rrweb_events(recording_id: str, events: list[dict[str, Any]]) -> bool:
+    """Store one upload of rrweb events; False when the recording is full.
+
+    rrweb timestamps are the visitor's clock in epoch ms, so the duration is the
+    span between the earliest and latest event seen — right even when the page
+    never says the recording ended. `ended_at` follows the latest upload.
+    """
+    data = gzip.compress(json.dumps(events, separators=(",", ":")).encode("utf-8"))
+    timestamps = [event["timestamp"] for event in events]
+    row = await query_one(
+        """
+        WITH rec AS (
+            UPDATE session_recordings
+            SET format = 'rrweb',
+                events_count = COALESCE(events_count, 0) + $2,
+                first_event_ms = LEAST(COALESCE(first_event_ms, $3), $3),
+                last_event_ms = GREATEST(COALESCE(last_event_ms, $4), $4),
+                duration = CEIL((
+                    GREATEST(COALESCE(last_event_ms, $4), $4)
+                    - LEAST(COALESCE(first_event_ms, $3), $3)
+                ) / 1000.0)::int,
+                size_bytes = size_bytes + $5,
+                ended_at = NOW()
+            WHERE id = $1 AND size_bytes + $5 <= $6
+            RETURNING id
+        )
+        INSERT INTO recording_chunks (recording_id, events_count, data)
+        SELECT id, $2, $7 FROM rec
+        RETURNING id
+        """,
+        recording_id,
+        len(events),
+        int(min(timestamps)),
+        int(max(timestamps)),
+        len(data),
+        MAX_RECORDING_BYTES,
+        data,
+    )
+    return row is not None
+
+
+async def rrweb_events_json(recording_id: str) -> str:
+    """The recording's events as one JSON array, in upload order.
+
+    Built from the stored JSON text without parsing it, so a large recording
+    costs little memory. Uploads sent as the page closed can arrive out of
+    order; the player sorts by timestamp.
+    """
+    rows = await query(
+        "SELECT data FROM recording_chunks WHERE recording_id = $1 ORDER BY id",
+        recording_id,
+    )
+    parts = [gzip.decompress(row["data"]).decode("utf-8")[1:-1] for row in rows]
+    return "[" + ",".join(part for part in parts if part) + "]"
+
+
 async def append_events(
     recording_id: str, new_events: list[Any]
 ) -> dict[str, Any] | None:
@@ -56,7 +127,8 @@ async def append_events(
     return await query_one(
         """
         UPDATE session_recordings
-        SET recording_data = jsonb_set(
+        SET format = 'legacy',
+            recording_data = jsonb_set(
                COALESCE(recording_data, '{"events":[]}'::jsonb),
                '{events}',
                COALESCE(recording_data->'events', '[]'::jsonb) || $2::jsonb
@@ -150,7 +222,7 @@ async def list_by_domain(
     return await query(
         f"""
         SELECT r.id, r.domain_id, r.session_id, r.url, r.duration, r.events_count,
-               r.started_at, r.ended_at, NULL as recording_data,
+               r.started_at, r.ended_at, r.format, NULL as recording_data,
                {session_service.device_case_sql("s.screen_width")} AS device
         FROM session_recordings r
         {_SESSION_JOIN}
@@ -162,6 +234,18 @@ async def list_by_domain(
         limit,
         offset,
         *params,
+    )
+
+
+async def get_by_id_light(recording_id: str) -> dict[str, Any] | None:
+    """The row without its `recording_data` blob, for ownership checks."""
+    return await query_one(
+        """
+        SELECT id, domain_id, session_id, url, duration, events_count, format,
+               started_at, ended_at
+        FROM session_recordings WHERE id = $1
+        """,
+        recording_id,
     )
 
 

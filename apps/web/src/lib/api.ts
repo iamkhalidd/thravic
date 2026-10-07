@@ -580,6 +580,7 @@ export const recordings = {
                 url: string;
                 duration: number;
                 eventsCount: number;
+                format: 'rrweb' | 'legacy';
                 startedAt: string;
                 endedAt: string | null;
                 device: RecordingDevice | 'unknown';
@@ -594,7 +595,9 @@ export const recordings = {
             url: string;
             duration: number;
             eventsCount: number;
-            events: Array<{ type: string; timestamp: number; data: any }>;
+            // rrweb events (numeric type) for `rrweb`; cursor-only events for `legacy`.
+            format: 'rrweb' | 'legacy';
+            events: Array<{ type: number | string; timestamp: number; [key: string]: unknown }>;
             startedAt: string;
             endedAt: string | null;
         }>(`/api/recordings/${domainId}/${recordingId}`);

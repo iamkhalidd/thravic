@@ -27,10 +27,10 @@ SWAGGER_CDN = "https://cdn.jsdelivr.net"
 # the strict policy.
 DOCS_PATHS = frozenset({"/docs", "/docs/", "/redoc", "/redoc/", "/openapi.json"})
 
-# The tracking script is embedded by customer sites, i.e. loaded cross-origin.
+# The tracking script and its screen recorder are loaded by customer sites, i.e. cross-origin.
 # With `Cross-Origin-Resource-Policy: same-origin` browsers refuse to run it
 # (ERR_BLOCKED_BY_RESPONSE.NotSameOrigin), so these paths opt out of that header.
-CROSS_ORIGIN_SCRIPT_PATHS = frozenset({"/tf.js", "/v.js"})
+CROSS_ORIGIN_SCRIPT_PATHS = frozenset({"/tf.js", "/v.js", "/recorder.js"})
 
 CallNext = Callable[[Request], Awaitable[Response]]
 

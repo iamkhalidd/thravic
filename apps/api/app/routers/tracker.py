@@ -17,6 +17,11 @@ stale copy instantly while revalidating in the background — so refreshing the
 tracker never blocks a page. Revalidation is a bodiless `304`, which is why the
 TTL can be short without cost.
 
+The screen recorder (rrweb, ~23 KB gzipped) is a separate build at
+`/recorder.js`, which the tracker loads only when the site has session recording
+on — so sites without it never download it. It is served with the same cache
+policy; it has no placeholder to fill.
+
 Customers install this with a fixed URL (`<script src=".../tf.js">`), so the URL
 cannot be version-busted. Header TTL is the only lever, and it cannot reach a
 browser that is already holding an older copy — those expire on their own.
@@ -42,6 +47,10 @@ TRACKER_PATH = Path(__file__).resolve().parents[1] / "static" / "tracker.js"
 
 # Read once — the asset never changes while the process is running.
 TRACKER_TEMPLATE = TRACKER_PATH.read_bytes()
+
+# Built from apps/api/tracker/src/recorder.ts by the same `npm run build`.
+RECORDER = (TRACKER_PATH.parent / "recorder.js").read_bytes()
+RECORDER_ETAG = '"' + hashlib.sha1(RECORDER).hexdigest()[:16] + '"'
 
 CONTENT_TYPE = "application/javascript; charset=utf-8"
 
@@ -110,3 +119,16 @@ async def tracker_script(request: Request):
     except Exception as exc:  # noqa: BLE001
         log.error(f"Tracker script error: {exc}")
         return Response(status_code=500)
+
+
+@router.get("/recorder.js")
+async def recorder_script(request: Request):
+    headers = {
+        "content-type": CONTENT_TYPE,
+        "cache-control": CACHE_CONTROL,
+        "access-control-allow-origin": "*",
+        "etag": RECORDER_ETAG,
+    }
+    if request.headers.get("if-none-match") == RECORDER_ETAG:
+        return Response(status_code=304, headers=headers)
+    return Response(content=RECORDER, headers=headers)

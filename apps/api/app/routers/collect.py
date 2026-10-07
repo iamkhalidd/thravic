@@ -60,6 +60,12 @@ MIN_BATCH_EVENTS = 1
 MAX_BATCH_EVENTS = 50
 MAX_RECORDING_EVENTS = 500
 
+# rrweb uploads: a page snapshot alone can be a few hundred KB.
+MAX_RRWEB_BATCH_BYTES = 5 * 1024 * 1024
+MAX_RRWEB_BATCH_EVENTS = 5000
+# `dropped` value on a 202 when the recording has reached its size cap.
+RECORDING_SIZE_LIMIT = "recording_size_limit"
+
 REALTIME_WINDOW_MINUTES = 5
 
 INVALID_TRACKING_ID = "Invalid tracking ID"
@@ -583,19 +589,95 @@ async def recording_start(trackingId: str, request: Request):
         raise SimpleError("Failed to start recording", 500) from None
 
 
+async def _capped_body(request: Request, limit: int) -> dict:
+    """The JSON body, refusing anything over `limit` bytes before parsing it.
+
+    Parsed whatever the content type: unload beacons arrive as text/plain.
+    """
+    declared = request.headers.get("content-length", "")
+    if declared.isdigit() and int(declared) > limit:
+        raise SimpleError("Recording upload too large", 413)
+    raw = bytearray()
+    async for chunk in request.stream():
+        raw += chunk
+        if len(raw) > limit:
+            raise SimpleError("Recording upload too large", 413)
+    try:
+        body = json.loads(raw)
+    except ValueError:
+        body = {}
+    return body if isinstance(body, dict) else {}
+
+
+def _rrweb_events_issues(body: dict) -> list[dict]:
+    """An rrweb upload: 1..MAX_RRWEB_BATCH_EVENTS objects, each with a numeric
+    `type` and `timestamp`. The rest of an event is rrweb's and stored as sent."""
+    events = body.get("events")
+    if not isinstance(events, list):
+        return [issue_invalid_type("events", "array", js_type_of(events))]
+    if not events:
+        return [issue_too_small("events", 1, "array", "At least one event required")]
+    if len(events) > MAX_RRWEB_BATCH_EVENTS:
+        return [
+            issue_too_big(
+                "events",
+                MAX_RRWEB_BATCH_EVENTS,
+                "array",
+                f"Maximum {MAX_RRWEB_BATCH_EVENTS} events per batch",
+            )
+        ]
+
+    issues: list[dict] = []
+    for index, event in enumerate(events):
+        if not isinstance(event, dict):
+            issues.append(
+                {
+                    **issue_invalid_type("events", "object", js_type_of(event)),
+                    "path": ["events", index],
+                }
+            )
+            continue
+        for key in ("type", "timestamp"):
+            _, issue = number_field(event, key)
+            if issue:
+                issues.append({**issue, "path": ["events", index, key]})
+    return issues
+
+
 @router.post("/{trackingId}/recording/{recordingId}/events")
 async def recording_events(trackingId: str, recordingId: str, request: Request):
     try:
         domain = await _domain_by_tracking_id(trackingId)
 
-        body = await _body(request)
+        body = await _capped_body(request, MAX_RRWEB_BATCH_BYTES)
+        if body.get("format") == "rrweb":
+            issues = _rrweb_events_issues(body)
+            if issues:
+                raise PayloadError(
+                    {"error": "Invalid recording events", "details": issues}, 400
+                )
+            recording = await recording_service.get_by_id_light(recordingId)
+            if not recording or not _same_id(recording["domain_id"], domain["id"]):
+                raise SimpleError("Recording not found", 404)
+
+            stored = await recording_service.append_rrweb_events(
+                recording["id"], body["events"]
+            )
+            if not stored:
+                return jsjson(
+                    {"success": True, "dropped": RECORDING_SIZE_LIMIT}, status_code=202
+                )
+            return jsjson(
+                {"success": True, "appended": len(body["events"])}, status_code=202
+            )
+
         issues = _recording_events_issues(body)
         if issues:
             raise PayloadError(
                 {"error": "Invalid recording events", "details": issues}, 400
             )
 
-        recording = await recording_service.get_by_id(recordingId)
+        recording = await recording_service.get_by_id_light(recordingId)
         if not recording or not _same_id(recording["domain_id"], domain["id"]):
             raise SimpleError("Recording not found", 404)
 

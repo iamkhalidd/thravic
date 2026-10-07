@@ -1,13 +1,9 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import {
     Video,
-    Play,
-    Pause,
-    SkipBack,
-    SkipForward,
-    Maximize2,
     Monitor,
     Smartphone,
     Tablet,
@@ -17,6 +13,13 @@ import {
 } from 'lucide-react';
 import { recordings, type RecordingDevice, type RecordingDuration } from '@/lib/api';
 import { useDomain } from '@/contexts/DomainContext';
+import type { ReplayEvent } from '@/components/ScreenReplay';
+
+// rrweb needs the browser; load the player only when a recording is opened.
+const ScreenReplay = dynamic(() => import('@/components/ScreenReplay'), {
+    ssr: false,
+    loading: () => <div className="skeleton" style={{ width: '100%', height: '400px' }} />,
+});
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
@@ -29,6 +32,8 @@ interface Recording {
     endedAt: string | null;
     duration: number;
     eventsCount: number;
+    /** `rrweb`: a screen recording. `legacy`: cursor-only data from the old tracker. */
+    format?: 'rrweb' | 'legacy';
     device?: RecordingDevice | 'unknown';
 }
 
@@ -48,36 +53,8 @@ const DURATION_OPTIONS: Array<{ value: RecordingDuration | ''; label: string }> 
     { value: 'long', label: 'Over 3 min' },
 ];
 
-interface RecordingEvent {
-    type: string;
-    timestamp: number;
-    data: Record<string, any>;
-}
-
 interface FullRecording extends Recording {
-    events: RecordingEvent[];
-}
-
-const FALLBACK_VIEWPORT = { width: 1280, height: 720 };
-
-/**
- * The recording row carries no viewport size, but the tracker stores it on the
- * recording's own first `pageview` event (and on every `resize`), and mouse
- * coordinates are clientX/clientY - i.e. relative to the viewport. So the replay
- * canvas is derived from those events rather than assumed.
- *
- * A session that is resized mid-recording is replayed against its initial
- * viewport; positions after the resize are therefore approximate.
- */
-function viewportOf(events: RecordingEvent[]): { width: number; height: number } {
-    for (const event of events) {
-        const width = Number(event.data?.viewportWidth);
-        const height = Number(event.data?.viewportHeight);
-        if (width > 0 && height > 0) {
-            return { width, height };
-        }
-    }
-    return FALLBACK_VIEWPORT;
+    events: ReplayEvent[];
 }
 
 async function getRecording(domainId: string, recordingId: string) {
@@ -114,18 +91,6 @@ export default function SessionsPage() {
     const [loading, setLoading] = useState(true);
     const [loadingPlayback, setLoadingPlayback] = useState(false);
 
-    // Playback state
-    const [isPlaying, setIsPlaying] = useState(false);
-    const [playbackTime, setPlaybackTime] = useState(0);
-    const [playbackSpeed, setPlaybackSpeed] = useState(1);
-    const [cursorPosition, setCursorPosition] = useState({ x: 0, y: 0 });
-    const playbackRef = useRef<number>();
-
-    // Derived from the loaded recording's events; see viewportOf().
-    const viewport = selectedRecording
-        ? viewportOf(selectedRecording.events)
-        : FALLBACK_VIEWPORT;
-
     useEffect(() => {
         if (!selectedDomainId) {
             if (!domainLoading) setLoading(false);
@@ -147,44 +112,7 @@ export default function SessionsPage() {
     // A recording from the previous domain must not stay open.
     useEffect(() => {
         setSelectedRecording(null);
-        setIsPlaying(false);
     }, [selectedDomainId]);
-
-    // Playback loop
-    useEffect(() => {
-        if (!isPlaying || !selectedRecording) return;
-
-        const interval = setInterval(() => {
-            setPlaybackTime(prev => {
-                const newTime = prev + (16 * playbackSpeed); // ~60fps
-
-                if (newTime >= selectedRecording.duration * 1000) {
-                    setIsPlaying(false);
-                    return selectedRecording.duration * 1000;
-                }
-
-                // Find events at current time and update cursor
-                const currentEvents = selectedRecording.events.filter(
-                    e => e.timestamp >= prev && e.timestamp < newTime
-                );
-
-                for (const event of currentEvents) {
-                    if (event.type === 'mousemove' && event.data) {
-                        setCursorPosition({
-                            x: (event.data.x / viewport.width) * 100,
-                            y: (event.data.y / viewport.height) * 100
-                        });
-                    }
-                }
-
-                return newTime;
-            });
-        }, 16);
-
-        playbackRef.current = interval as any;
-
-        return () => clearInterval(interval);
-    }, [isPlaying, selectedRecording, playbackSpeed]);
 
     const handleSelectRecording = async (recordingId: string) => {
         if (!selectedDomainId) return;
@@ -192,9 +120,6 @@ export default function SessionsPage() {
         setLoadingPlayback(true);
         const data = await getRecording(selectedDomainId, recordingId);
         setSelectedRecording(data);
-        setPlaybackTime(0);
-        setIsPlaying(false);
-        setCursorPosition({ x: 50, y: 50 });
         setLoadingPlayback(false);
     };
 
@@ -228,15 +153,6 @@ export default function SessionsPage() {
         if (selectedRecording?.id === recordingId) {
             setSelectedRecording(null);
         }
-    };
-
-    const togglePlayback = () => setIsPlaying(!isPlaying);
-
-    const skipTime = (seconds: number) => {
-        if (!selectedRecording) return;
-        setPlaybackTime(prev =>
-            Math.max(0, Math.min(prev + seconds * 1000, selectedRecording.duration * 1000))
-        );
     };
 
     // Full skeleton only for the first load; filter changes keep the page in place.
@@ -346,7 +262,7 @@ export default function SessionsPage() {
                                         <div className="flex items-center gap-md" style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
                                             <span className="flex items-center gap-xs">
                                                 <Clock size={12} />
-                                                {formatDuration(recording.duration)}
+                                                {formatDuration(recording.duration ?? 0)}
                                             </span>
                                             <span className="flex items-center gap-xs">
                                                 <MousePointer2 size={12} />
@@ -389,137 +305,24 @@ export default function SessionsPage() {
                             </div>
                         ) : selectedRecording ? (
                             <div className="card">
-                                {/* Player Header */}
                                 <div className="card-header" style={{ marginBottom: 'var(--space-md)' }}>
                                     <h4 className="card-title">{selectedRecording.url}</h4>
                                     <span style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
-                                        {viewport.width}x{viewport.height}
+                                        {formatDuration(selectedRecording.duration ?? 0)}
                                     </span>
                                 </div>
-
-                                {/* Player Screen */}
-                                <div style={{
-                                    position: 'relative',
-                                    width: '100%',
-                                    aspectRatio: `${viewport.width}/${viewport.height}`,
-                                    maxHeight: '400px',
-                                    background: 'var(--color-bg-primary)',
-                                    borderRadius: 'var(--radius-md)',
-                                    overflow: 'hidden',
-                                    margin: '0 auto'
-                                }}>
-                                    {/* Simulated page content */}
-                                    <div style={{
-                                        position: 'absolute',
-                                        inset: 0,
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        color: 'var(--color-text-muted)',
-                                        fontSize: '0.875rem'
-                                    }}>
-                                        [Session Playback - {selectedRecording.url}]
+                                {selectedRecording.format === 'rrweb' && selectedRecording.events.length > 1 ? (
+                                    <ScreenReplay events={selectedRecording.events} />
+                                ) : (
+                                    <div style={{ padding: 'var(--space-2xl)', textAlign: 'center', color: 'var(--color-text-muted)' }}>
+                                        <Video size={40} style={{ marginBottom: 'var(--space-md)', opacity: 0.5 }} />
+                                        <p>
+                                            {selectedRecording.format === 'rrweb'
+                                                ? 'Nothing to replay yet — the visitor’s page has not been captured.'
+                                                : 'This session was recorded before screen replay, so there is no screen to show.'}
+                                        </p>
                                     </div>
-
-                                    {/* Cursor */}
-                                    <div style={{
-                                        position: 'absolute',
-                                        left: `${cursorPosition.x}%`,
-                                        top: `${cursorPosition.y}%`,
-                                        transform: 'translate(-50%, -50%)',
-                                        width: '20px',
-                                        height: '20px',
-                                        pointerEvents: 'none',
-                                        transition: isPlaying ? 'left 16ms linear, top 16ms linear' : 'none'
-                                    }}>
-                                        <MousePointer2
-                                            size={20}
-                                            style={{
-                                                color: 'var(--color-accent-primary)',
-                                                filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.5))'
-                                            }}
-                                        />
-                                    </div>
-                                </div>
-
-                                {/* Progress Bar */}
-                                <div style={{ marginTop: 'var(--space-lg)' }}>
-                                    <div
-                                        style={{
-                                            height: '6px',
-                                            background: 'var(--color-bg-secondary)',
-                                            borderRadius: 'var(--radius-full)',
-                                            cursor: 'pointer',
-                                            overflow: 'hidden'
-                                        }}
-                                        onClick={(e) => {
-                                            if (!selectedRecording) return;
-                                            const rect = e.currentTarget.getBoundingClientRect();
-                                            const percent = (e.clientX - rect.left) / rect.width;
-                                            setPlaybackTime(percent * selectedRecording.duration * 1000);
-                                        }}
-                                    >
-                                        <div style={{
-                                            height: '100%',
-                                            width: `${(playbackTime / (selectedRecording.duration * 1000)) * 100}%`,
-                                            background: 'var(--color-accent-primary)',
-                                            borderRadius: 'var(--radius-full)',
-                                            transition: 'width 16ms linear'
-                                        }} />
-                                    </div>
-                                </div>
-
-                                {/* Controls */}
-                                <div className="flex items-center justify-between" style={{ marginTop: 'var(--space-md)' }}>
-                                    <div className="flex items-center gap-md">
-                                        <button
-                                            onClick={() => skipTime(-10)}
-                                            className="btn btn-ghost"
-                                            style={{ padding: 'var(--space-sm)' }}
-                                        >
-                                            <SkipBack size={18} />
-                                        </button>
-                                        <button
-                                            onClick={togglePlayback}
-                                            className="btn btn-primary"
-                                            style={{
-                                                width: '48px',
-                                                height: '48px',
-                                                borderRadius: 'var(--radius-full)',
-                                                padding: 0,
-                                                justifyContent: 'center'
-                                            }}
-                                        >
-                                            {isPlaying ? <Pause size={20} /> : <Play size={20} />}
-                                        </button>
-                                        <button
-                                            onClick={() => skipTime(10)}
-                                            className="btn btn-ghost"
-                                            style={{ padding: 'var(--space-sm)' }}
-                                        >
-                                            <SkipForward size={18} />
-                                        </button>
-                                    </div>
-
-                                    <div className="flex items-center gap-md">
-                                        <span style={{ fontSize: '0.875rem', fontFamily: 'var(--font-mono)' }}>
-                                            {formatDuration(playbackTime / 1000)} / {formatDuration(selectedRecording.duration)}
-                                        </span>
-
-                                        {/* Speed selector */}
-                                        <select
-                                            value={playbackSpeed}
-                                            onChange={(e) => setPlaybackSpeed(parseFloat(e.target.value))}
-                                            className="input"
-                                            style={{ width: 'auto', padding: 'var(--space-xs) var(--space-sm)' }}
-                                        >
-                                            <option value="0.5">0.5x</option>
-                                            <option value="1">1x</option>
-                                            <option value="2">2x</option>
-                                            <option value="4">4x</option>
-                                        </select>
-                                    </div>
-                                </div>
+                                )}
                             </div>
                         ) : (
                             <div className="card" style={{

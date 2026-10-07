@@ -7,6 +7,9 @@ INSERT as NULL and surfaces as a 500. Preserved as-is.
 The Zod failure on the events route returns a hardcoded `Invalid event data`
 rather than the underlying message.
 
+`GET /:domainId/:recordingId` returns the events of either format (see
+`recording_service`); `format` tells the player which it got.
+
 The list takes `?device=desktop|tablet|mobile` (the linked session's screen width)
 and `?duration=short|medium|long` (under 30s, 30s-3min, over 3min); the
 pagination total applies the same filters.
@@ -17,10 +20,11 @@ from __future__ import annotations
 import math
 
 from fastapi import APIRouter, Depends, Request
+from starlette.responses import Response
 
 from ..errors import SimpleError
 from ..js_compat import js_parse_int
-from ..json_response import jsjson
+from ..json_response import JSON_CONTENT_TYPE, js_json_dumps, jsjson
 from ..logging import create_logger
 from ..middleware.auth import AuthUser, require_auth
 from ..middleware.feature_gate import require_feature
@@ -131,7 +135,7 @@ async def append_events(
     try:
         domain = await _require_owned_domain(domainId, user.user_id)
 
-        recording = await recording_service.get_by_id(recordingId)
+        recording = await recording_service.get_by_id_light(recordingId)
         if not recording or recording["domain_id"] != domain["id"]:
             raise SimpleError("Recording not found", 404)
 
@@ -220,6 +224,7 @@ async def list_recordings(
                         "url": r["url"],
                         "duration": r["duration"],
                         "eventsCount": r["events_count"],
+                        "format": r["format"],
                         "startedAt": r["started_at"],
                         "endedAt": r["ended_at"],
                         "device": r["device"],
@@ -251,23 +256,34 @@ async def get_recording(
     try:
         domain = await _require_owned_domain(domainId, user.user_id)
 
-        recording = await recording_service.get_by_id(recordingId)
+        recording = await recording_service.get_by_id_light(recordingId)
         if not recording or recording["domain_id"] != domain["id"]:
             raise SimpleError("Recording not found", 404)
 
-        recording_data = recording.get("recording_data") or {}
+        meta = {
+            "id": recording["id"],
+            "url": recording["url"],
+            "format": recording["format"],
+            "duration": recording["duration"],
+            "eventsCount": recording["events_count"],
+            "startedAt": recording["started_at"],
+            "endedAt": recording["ended_at"],
+        }
 
-        return jsjson(
-            {
-                "id": recording["id"],
-                "url": recording["url"],
-                "duration": recording["duration"],
-                "eventsCount": recording["events_count"],
-                "events": recording_data.get("events") or [],
-                "startedAt": recording["started_at"],
-                "endedAt": recording["ended_at"],
-            }
-        )
+        if recording["format"] == "rrweb":
+            # Spliced in as stored JSON rather than parsed and re-encoded: a
+            # screen recording can run to tens of MB uncompressed.
+            events = await recording_service.rrweb_events_json(recording["id"])
+            head = js_json_dumps(meta)[:-1]
+            return Response(
+                content=f'{head},"events":{events}}}',
+                media_type=None,
+                headers={"content-type": JSON_CONTENT_TYPE},
+            )
+
+        full = await recording_service.get_by_id(recording["id"]) or {}
+        recording_data = full.get("recording_data") or {}
+        return jsjson({**meta, "events": recording_data.get("events") or []})
     except SimpleError:
         raise
     except Exception as exc:
@@ -285,7 +301,7 @@ async def delete_recording(
     try:
         domain = await _require_owned_domain(domainId, user.user_id)
 
-        recording = await recording_service.get_by_id(recordingId)
+        recording = await recording_service.get_by_id_light(recordingId)
         if not recording or recording["domain_id"] != domain["id"]:
             raise SimpleError("Recording not found", 404)
 
