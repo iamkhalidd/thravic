@@ -624,7 +624,27 @@ export const insights = {
 };
 
 // Payments API (Paystack)
+export interface Plan {
+    id: string;
+    name: string;
+    price: number; // whole currency units, e.g. 45000 = ₦45,000
+    currency?: string; // absent on the config fallback, which is NGN
+}
+
+const CURRENCY_SYMBOLS: Record<string, string> = { NGN: '₦', USD: '$', GBP: '£', EUR: '€' };
+
+/** 'Free' for a zero price, otherwise the amount with its currency symbol. */
+export function formatPlanPrice(price: number, currency = 'NGN'): string {
+    if (price <= 0) return 'Free';
+    return `${CURRENCY_SYMBOLS[currency] ?? `${currency} `}${price.toLocaleString()}`;
+}
+
 export const payments = {
+    /** Public. The admin-managed plans table, or the config plans if it is empty. */
+    async getPlans() {
+        return apiRequest<{ success: boolean; plans: Plan[] }>('/api/payments/plans');
+    },
+
     /** Initialise a Paystack checkout session. On success, redirect to checkoutUrl. */
     async checkout(plan: string, promoCode?: string): Promise<{ checkoutUrl?: string; reference?: string; error?: string } | null> {
         const result = await apiRequest<{ success: boolean; checkoutUrl: string; reference: string; error?: string }>(
@@ -740,3 +760,38 @@ export const customEvents = {
     },
 };
 
+
+// Export API — GET /api/export/{domainId}?type=sessions|events returns a CSV file
+// (up to 10,000 most recent rows). Pro plan and above.
+export type ExportType = 'sessions' | 'events';
+
+export const exportData = {
+    /** Fetch the CSV and hand it to the browser as a download. */
+    async downloadCsv(domainId: string, type: ExportType, retried = false): Promise<{ error?: string; upgrade?: boolean }> {
+        const { accessToken } = getTokens();
+        let response: Response;
+        try {
+            response = await fetch(`${API_URL}/api/export/${domainId}?type=${type}`, {
+                headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+            });
+        } catch {
+            return { error: 'Network error' };
+        }
+
+        if (!response.ok) {
+            if (response.status === 401 && !retried && (await refreshToken())) {
+                return exportData.downloadCsv(domainId, type, true);
+            }
+            const body = await response.json().catch(() => ({}));
+            return { error: body.error || 'Export failed', upgrade: !!body.upgrade };
+        }
+
+        const url = URL.createObjectURL(await response.blob());
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `thravic-${type}-${new Date().toISOString().slice(0, 10)}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+        return {};
+    },
+};

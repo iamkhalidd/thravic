@@ -62,6 +62,7 @@ const navStructure = [
             { href: '/dashboard/errors', label: 'Errors' },
             { href: '/dashboard/performance', label: 'Performance' },
             { href: '/dashboard/forms', label: 'Forms' },
+            { href: '/dashboard/rage-clicks', label: 'Rage Clicks' },
         ]
     },
     { href: '/dashboard/funnels', icon: Target, label: 'Funnels' },
@@ -592,8 +593,9 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                             <span>Live</span>
                         </button>
 
-                        {/* Export — desktop only */}
-                        <button
+                        {/* Export — desktop only; the downloads live on the Reports page */}
+                        <Link
+                            href="/dashboard/reports"
                             className="desktop-only"
                             style={{
                                 alignItems: 'center', gap: '6px',
@@ -602,11 +604,12 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                                 border: '1px solid var(--color-border)',
                                 borderRadius: '6px', cursor: 'pointer',
                                 fontSize: '0.8125rem', color: 'var(--color-text-secondary)',
+                                textDecoration: 'none',
                             }}
                         >
                             <Download size={13} />
                             <span>Export</span>
-                        </button>
+                        </Link>
                     </div>
                 </header>
 

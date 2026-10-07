@@ -1,44 +1,46 @@
 'use client';
 
 import { useState } from 'react';
-import {
-    FileBarChart,
-    Download,
-    Mail,
-    Calendar,
-    Plus,
-    FileText,
-    Trash2,
-    Clock
-} from 'lucide-react';
+import Link from 'next/link';
+import { Download, FileText, Loader } from 'lucide-react';
+import { exportData, type ExportType } from '@/lib/api';
+import { useDomain } from '@/contexts/DomainContext';
 
-const savedReports = [
-    { id: '1', name: 'Weekly Traffic Summary', type: 'traffic', lastRun: '2024-02-05', schedule: 'weekly' },
-    { id: '2', name: 'Monthly Conversion Report', type: 'conversions', lastRun: '2024-02-01', schedule: 'monthly' },
-    { id: '3', name: 'Campaign Performance', type: 'campaigns', lastRun: '2024-02-04', schedule: null }
-];
-
-const reportTypes = [
-    { id: 'traffic', name: 'Traffic Overview', description: 'Visitors, sessions, pageviews, and sources' },
-    { id: 'behavior', name: 'User Behavior', description: 'Pages, paths, devices, and engagement' },
-    { id: 'conversions', name: 'Conversions & Funnels', description: 'Funnel performance and conversion rates' },
-    { id: 'campaigns', name: 'Campaign Analysis', description: 'UTM campaign performance metrics' }
+// What GET /api/export/{domainId}?type=... returns: the 10,000 most recent rows.
+const datasets: Array<{ type: ExportType; name: string; description: string }> = [
+    {
+        type: 'sessions',
+        name: 'Sessions',
+        description: 'One row per visit: start and end time, source, UTM source, browser, screen width and language.',
+    },
+    {
+        type: 'events',
+        name: 'Events',
+        description: 'One row per tracked event: type, page URL, referrer and time.',
+    },
 ];
 
 export default function ReportsPage() {
-    const [activeTab, setActiveTab] = useState<'saved' | 'create'>('saved');
-    const [selectedType, setSelectedType] = useState<string | null>(null);
-    const [exportFormat, setExportFormat] = useState<'csv' | 'json' | 'pdf'>('csv');
+    const { selectedDomainId, loading: domainLoading } = useDomain();
+    const [downloading, setDownloading] = useState<ExportType | null>(null);
+    const [error, setError] = useState<{ message: string; upgrade: boolean } | null>(null);
 
-    const handleExport = (format: string) => {
-        // This would trigger actual export
-        alert(`Exporting as ${format.toUpperCase()}...`);
+    const handleDownload = async (type: ExportType) => {
+        if (!selectedDomainId) return;
+        setDownloading(type);
+        setError(null);
+        const result = await exportData.downloadCsv(selectedDomainId, type);
+        if (result.error) setError({ message: result.error, upgrade: !!result.upgrade });
+        setDownloading(null);
     };
 
-    const handleCreateReport = () => {
-        if (!selectedType) return;
-        alert(`Creating ${selectedType} report...`);
-    };
+    if (!selectedDomainId && !domainLoading) {
+        return (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-xl)', color: 'var(--color-text-secondary)' }}>
+                <p>Please select a domain to export its data</p>
+            </div>
+        );
+    }
 
     return (
         <div>
@@ -53,287 +55,104 @@ export default function ReportsPage() {
                     Reports
                 </h1>
                 <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>
-                    Generate and schedule custom analytics reports
+                    Download this domain&apos;s raw data as CSV, up to the 10,000 most recent rows
                 </p>
             </div>
 
-            {/* Tab Selector */}
-            <div style={{ 
-                display: 'inline-flex', 
-                gap: '4px', 
-                marginBottom: 'var(--space-lg)',
-                background: 'var(--color-bg-secondary)',
-                padding: '4px',
-                borderRadius: '8px',
-                border: '1px solid var(--color-border)'
-            }}>
-                <button
-                    onClick={() => setActiveTab('saved')}
-                    style={{
-                        padding: '6px 16px',
-                        background: activeTab === 'saved' ? 'var(--color-bg-hover)' : 'transparent',
-                        color: activeTab === 'saved' ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
-                        border: activeTab === 'saved' ? '1px solid var(--color-border)' : '1px solid transparent',
-                        borderRadius: '6px',
-                        cursor: 'pointer',
-                        fontSize: '0.8125rem',
-                        fontWeight: activeTab === 'saved' ? 500 : 400
-                    }}
-                >
-                    Saved Reports
-                </button>
-                <button
-                    onClick={() => setActiveTab('create')}
-                    style={{
-                        padding: '6px 16px',
-                        background: activeTab === 'create' ? 'var(--color-bg-hover)' : 'transparent',
-                        color: activeTab === 'create' ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
-                        border: activeTab === 'create' ? '1px solid var(--color-border)' : '1px solid transparent',
-                        borderRadius: '6px',
-                        cursor: 'pointer',
-                        fontSize: '0.8125rem',
-                        fontWeight: activeTab === 'create' ? 500 : 400,
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px'
-                    }}
-                >
-                    <Plus size={14} />
-                    Create Report
-                </button>
-            </div>
-
-            {/* Saved Reports */}
-            {activeTab === 'saved' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
-                    {savedReports.map(report => (
-                        <div
-                            key={report.id}
-                            style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: 'var(--space-md)',
-                                padding: 'var(--space-lg)',
-                                background: 'var(--color-bg-secondary)',
-                                borderRadius: 'var(--radius-lg)',
-                                border: '1px solid var(--color-border)'
-                            }}
-                        >
-                            <div style={{
-                                width: '48px',
-                                height: '48px',
-                                borderRadius: 'var(--radius-md)',
-                                background: 'var(--color-primary-alpha)',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center'
-                            }}>
-                                <FileBarChart size={24} style={{ color: 'var(--color-primary)' }} />
-                            </div>
-
-                            <div style={{ flex: 1 }}>
-                                <div style={{
-                                    fontSize: '0.9375rem',
-                                    fontWeight: 500,
-                                    color: 'var(--color-text-primary)',
-                                    marginBottom: '4px'
-                                }}>
-                                    {report.name}
-                                </div>
-                                <div style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 'var(--space-md)',
-                                    fontSize: '0.75rem',
-                                    color: 'var(--color-text-tertiary)'
-                                }}>
-                                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                        <Clock size={12} />
-                                        Last run: {report.lastRun}
-                                    </span>
-                                    {report.schedule && (
-                                        <span style={{
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '4px',
-                                            color: 'var(--color-primary)',
-                                            background: 'var(--color-primary-alpha)',
-                                            padding: '2px 6px',
-                                            borderRadius: 'var(--radius-sm)'
-                                        }}>
-                                            <Mail size={10} />
-                                            {report.schedule}
-                                        </span>
-                                    )}
-                                </div>
-                            </div>
-
-                            <div style={{ display: 'flex', gap: 'var(--space-sm)' }}>
-                                <button
-                                    onClick={() => handleExport('csv')}
-                                    style={{
-                                        padding: 'var(--space-xs) var(--space-sm)',
-                                        background: 'var(--color-bg-tertiary)',
-                                        border: '1px solid var(--color-border)',
-                                        borderRadius: 'var(--radius-md)',
-                                        cursor: 'pointer',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '4px',
-                                        fontSize: '0.75rem',
-                                        color: 'var(--color-text-secondary)'
-                                    }}
-                                >
-                                    <Download size={12} />
-                                    CSV
-                                </button>
-                                <button
-                                    onClick={() => handleExport('pdf')}
-                                    style={{
-                                        padding: 'var(--space-xs) var(--space-sm)',
-                                        background: 'var(--color-bg-tertiary)',
-                                        border: '1px solid var(--color-border)',
-                                        borderRadius: 'var(--radius-md)',
-                                        cursor: 'pointer',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '4px',
-                                        fontSize: '0.75rem',
-                                        color: 'var(--color-text-secondary)'
-                                    }}
-                                >
-                                    <Download size={12} />
-                                    PDF
-                                </button>
-                                <button
-                                    style={{
-                                        padding: 'var(--space-xs)',
-                                        background: 'transparent',
-                                        border: 'none',
-                                        cursor: 'pointer',
-                                        color: 'var(--color-text-tertiary)'
-                                    }}
-                                >
-                                    <Trash2 size={14} />
-                                </button>
-                            </div>
-                        </div>
-                    ))}
+            {error && (
+                <div style={{
+                    padding: 'var(--space-md)',
+                    marginBottom: 'var(--space-lg)',
+                    background: 'var(--color-bg-secondary)',
+                    borderRadius: 'var(--radius-md)',
+                    borderLeft: '3px solid #ff5555',
+                    fontSize: '0.875rem',
+                    color: 'var(--color-text-primary)'
+                }}>
+                    {error.message}
+                    {error.upgrade && (
+                        <>
+                            {' '}
+                            <Link href="/dashboard/settings" style={{ color: 'var(--color-text-primary)', textDecoration: 'underline' }}>
+                                Upgrade your plan
+                            </Link>
+                        </>
+                    )}
                 </div>
             )}
 
-            {/* Create Report */}
-            {activeTab === 'create' && (
-                <div>
-                    <div style={{
-                        padding: 'var(--space-lg)',
-                        background: 'var(--color-bg-secondary)',
-                        borderRadius: 'var(--radius-lg)',
-                        border: '1px solid var(--color-border)',
-                        marginBottom: 'var(--space-lg)'
-                    }}>
-                        <h3 style={{
-                            fontSize: '0.9375rem',
-                            fontWeight: 500,
-                            marginBottom: 'var(--space-md)',
-                            color: 'var(--color-text-primary)'
-                        }}>
-                            Select Report Type
-                        </h3>
-                        <div className="dash-grid-2">
-                            {reportTypes.map(type => (
-                                <button
-                                    key={type.id}
-                                    onClick={() => setSelectedType(type.id)}
-                                    style={{
-                                        padding: 'var(--space-md)',
-                                        background: selectedType === type.id ? 'var(--color-primary-alpha)' : 'var(--color-bg-tertiary)',
-                                        border: '1px solid',
-                                        borderColor: selectedType === type.id ? 'var(--color-primary)' : 'var(--color-border)',
-                                        borderRadius: 'var(--radius-md)',
-                                        cursor: 'pointer',
-                                        textAlign: 'left'
-                                    }}
-                                >
-                                    <div style={{
-                                        fontSize: '0.875rem',
-                                        fontWeight: 500,
-                                        color: selectedType === type.id ? 'var(--color-primary)' : 'var(--color-text-primary)',
-                                        marginBottom: '4px'
-                                    }}>
-                                        {type.name}
-                                    </div>
-                                    <div style={{
-                                        fontSize: '0.75rem',
-                                        color: 'var(--color-text-tertiary)'
-                                    }}>
-                                        {type.description}
-                                    </div>
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
-                    <div style={{
-                        padding: 'var(--space-lg)',
-                        background: 'var(--color-bg-secondary)',
-                        borderRadius: 'var(--radius-lg)',
-                        border: '1px solid var(--color-border)',
-                        marginBottom: 'var(--space-lg)'
-                    }}>
-                        <h3 style={{
-                            fontSize: '0.9375rem',
-                            fontWeight: 500,
-                            marginBottom: 'var(--space-md)',
-                            color: 'var(--color-text-primary)'
-                        }}>
-                            Export Format
-                        </h3>
-                        <div style={{ display: 'flex', gap: 'var(--space-sm)' }}>
-                            {(['csv', 'json', 'pdf'] as const).map(format => (
-                                <button
-                                    key={format}
-                                    onClick={() => setExportFormat(format)}
-                                    style={{
-                                        padding: 'var(--space-sm) var(--space-lg)',
-                                        background: exportFormat === format ? 'var(--color-primary)' : 'var(--color-bg-tertiary)',
-                                        color: exportFormat === format ? 'white' : 'var(--color-text-secondary)',
-                                        border: 'none',
-                                        borderRadius: 'var(--radius-md)',
-                                        cursor: 'pointer',
-                                        fontSize: '0.8125rem',
-                                        fontWeight: 500,
-                                        textTransform: 'uppercase'
-                                    }}
-                                >
-                                    {format}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
-                    <button
-                        onClick={handleCreateReport}
-                        disabled={!selectedType}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
+                {datasets.map(dataset => (
+                    <div
+                        key={dataset.type}
                         style={{
-                            padding: 'var(--space-md) var(--space-xl)',
-                            background: selectedType ? 'var(--gradient-primary)' : 'var(--color-bg-tertiary)',
-                            color: selectedType ? 'white' : 'var(--color-text-tertiary)',
-                            border: 'none',
-                            borderRadius: 'var(--radius-md)',
-                            cursor: selectedType ? 'pointer' : 'not-allowed',
-                            fontSize: '0.875rem',
-                            fontWeight: 500,
                             display: 'flex',
                             alignItems: 'center',
-                            gap: 'var(--space-sm)'
+                            gap: 'var(--space-md)',
+                            padding: 'var(--space-lg)',
+                            background: 'var(--color-bg-secondary)',
+                            borderRadius: 'var(--radius-lg)',
+                            border: '1px solid var(--color-border)'
                         }}
                     >
-                        <Download size={16} />
-                        Generate Report
-                    </button>
-                </div>
-            )}
+                        <div style={{
+                            width: '48px',
+                            height: '48px',
+                            flexShrink: 0,
+                            borderRadius: 'var(--radius-md)',
+                            background: 'var(--color-primary-alpha)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                        }}>
+                            <FileText size={24} style={{ color: 'var(--color-text-primary)', textDecoration: 'underline' }} />
+                        </div>
+
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{
+                                fontSize: '0.9375rem',
+                                fontWeight: 500,
+                                color: 'var(--color-text-primary)',
+                                marginBottom: '4px'
+                            }}>
+                                {dataset.name}
+                            </div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>
+                                {dataset.description}
+                            </div>
+                        </div>
+
+                        <button
+                            onClick={() => handleDownload(dataset.type)}
+                            disabled={!selectedDomainId || downloading !== null}
+                            style={{
+                                padding: 'var(--space-xs) var(--space-md)',
+                                background: 'var(--color-bg-tertiary)',
+                                border: '1px solid var(--color-border)',
+                                borderRadius: 'var(--radius-md)',
+                                cursor: downloading ? 'wait' : 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                fontSize: '0.8125rem',
+                                color: 'var(--color-text-secondary)',
+                                flexShrink: 0
+                            }}
+                        >
+                            {downloading === dataset.type
+                                ? <Loader size={14} style={{ animation: 'spin 1s linear infinite' }} />
+                                : <Download size={14} />}
+                            Download CSV
+                        </button>
+                    </div>
+                ))}
+            </div>
+
+            <style>{`
+                @keyframes spin {
+                    to { transform: rotate(360deg); }
+                }
+            `}</style>
         </div>
     );
 }
