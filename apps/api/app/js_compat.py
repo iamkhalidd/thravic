@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import math
 import re
-from datetime import UTC, datetime
 from urllib.parse import urlparse
 
 
@@ -72,43 +71,6 @@ def url_path(raw: str) -> str:
         return parsed.path or "/"
     except Exception:
         return raw
-
-
-_WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
-_MONTHS = (
-    "Jan",
-    "Feb",
-    "Mar",
-    "Apr",
-    "May",
-    "Jun",
-    "Jul",
-    "Aug",
-    "Sep",
-    "Oct",
-    "Nov",
-    "Dec",
-)
-
-
-def js_date_to_string(value: datetime) -> str:
-    """`Date.prototype.toString()`.
-
-    Reached through `Array.prototype.join(",")`, which stringifies each element —
-    so a Date column lands in a CSV cell as `Wed Sep 17 2026 00:00:00 GMT+0000
-    (Coordinated Universal Time)`. The day is **not** zero-padded, and V8 uses the
-    long timezone name for UTC. Assumes the server runs in UTC, which is what the
-    deployed Node process does; a non-UTC TZ would change this output.
-    """
-    utc = value.astimezone(UTC)
-    weekday = _WEEKDAYS[utc.weekday()]
-    month = _MONTHS[utc.month - 1]
-    # V8 zero-pads the day ("Sep 07"), unlike the month name or the year.
-    return (
-        f"{weekday} {month} {utc.day:02d} {utc.year} "
-        f"{utc.hour:02d}:{utc.minute:02d}:{utc.second:02d} "
-        "GMT+0000 (Coordinated Universal Time)"
-    )
 
 
 def js_to_locale_string(value: float) -> str:
