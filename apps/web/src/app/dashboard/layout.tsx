@@ -10,6 +10,7 @@ import {
     Users,
     UsersRound,
     Webhook,
+    SlidersHorizontal,
     Target,
     MousePointer2,
     Video,
@@ -432,6 +433,26 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                     >
                         <Webhook size={18} style={{ flexShrink: 0 }} />
                         {!(sidebarCollapsed && !isMobile) && <span>Webhooks</span>}
+                    </Link>
+
+                    {/* Tracking link */}
+                    <Link
+                        href="/dashboard/tracking"
+                        title={(sidebarCollapsed && !isMobile) ? 'Tracking' : undefined}
+                        style={{
+                            display: 'flex', alignItems: 'center',
+                            gap: (sidebarCollapsed && !isMobile) ? '0' : '10px',
+                            padding: (sidebarCollapsed && !isMobile) ? '10px 0' : '8px 12px',
+                            justifyContent: (sidebarCollapsed && !isMobile) ? 'center' : 'flex-start',
+                            color: pathname.startsWith('/dashboard/tracking') ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
+                            fontWeight: pathname.startsWith('/dashboard/tracking') ? 500 : 400,
+                            textDecoration: 'none', fontSize: '0.8125rem',
+                            background: 'transparent',
+                            whiteSpace: 'nowrap', overflow: 'hidden',
+                        }}
+                    >
+                        <SlidersHorizontal size={18} style={{ flexShrink: 0 }} />
+                        {!(sidebarCollapsed && !isMobile) && <span>Tracking</span>}
                     </Link>
 
                     {/* Settings link */}

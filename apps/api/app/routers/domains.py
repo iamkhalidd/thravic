@@ -9,12 +9,12 @@ import httpx
 from fastapi import APIRouter, Depends, Request
 
 from ..config import get_settings
-from ..errors import SimpleError
+from ..errors import PayloadError, SimpleError
 from ..json_response import jsjson
 from ..logging import create_logger
 from ..middleware.auth import AuthUser, require_auth
 from ..plans import PLAN_FEATURES
-from ..services import domain_service
+from ..services import domain_service, plan_service
 from ..zod_lite import (
     first_message,
     issue_invalid_type,
@@ -43,7 +43,9 @@ FAILED_DELETE = "Failed to delete domain"
 # message ordering matches Zod's (min runs before regex).
 DOMAIN_PATTERN = r"^[a-zA-Z0-9][a-zA-Z0-9\-_.]+[a-zA-Z0-9]$"
 
-# `updateSettingsSchema` — every key optional
+# `updateSettingsSchema` — every key optional. `heatmaps` is still accepted so old
+# clients do not get a 400, but it is not stored: heatmaps are built from the click
+# and scroll events, which `trackClicks` / `trackScrolls` already control.
 SETTINGS_KEYS = (
     "trackClicks",
     "trackScrolls",
@@ -51,6 +53,7 @@ SETTINGS_KEYS = (
     "sessionRecording",
     "heatmaps",
 )
+STORED_SETTINGS = frozenset(domain_service.DEFAULT_SETTINGS)
 
 
 def generate_tracking_id() -> str:
@@ -296,8 +299,22 @@ async def update_settings(
         if message is not None:
             raise SimpleError(message, 400)
 
-        # Settings are not persisted — the domains table has no settings column.
-        return jsjson({"settings": settings})
+        changes = {key: value for key, value in settings.items() if key in STORED_SETTINGS}
+
+        # Recording is a plan feature; switching it on must not bypass the gate.
+        if changes.get("sessionRecording"):
+            plan = await plan_service.owner_plan(domainId)
+            if "recordings" not in plan.features:
+                raise PayloadError(
+                    {
+                        "error": "Session recording requires the pro plan or above.",
+                        "upgrade": True,
+                    },
+                    403,
+                )
+
+        domain = await domain_service.update_settings(domainId, changes)
+        return jsjson({"settings": domain_service.effective_settings(domain)})
     except SimpleError:
         raise
     except Exception as exc:
@@ -337,6 +354,7 @@ async def get_domain(domainId: str, user: AuthUser = Depends(require_auth)):
                 "trackingId": domain["tracking_id"],
                 "verified": domain["verified"],
                 "createdAt": domain["created_at"],
+                "settings": domain_service.effective_settings(domain),
             }
         )
     except SimpleError:

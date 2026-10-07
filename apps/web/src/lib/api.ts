@@ -204,6 +204,15 @@ export const auth = {
     }
 };
 
+// What the collector stores for a domain, and what the tracker is told to send
+// (GET /api/collect/{trackingId}/config). Session recording also needs Pro.
+export interface DomainSettings {
+    trackClicks: boolean;
+    trackScrolls: boolean;
+    trackForms: boolean;
+    sessionRecording: boolean;
+}
+
 // Domains API
 export const domains = {
     async list() {
@@ -238,7 +247,7 @@ export const domains = {
             name: string;
             trackingId: string;
             verified: boolean;
-            settings: Record<string, boolean>;
+            settings: DomainSettings;
         }>(`/api/domains/${id}`);
     },
 
@@ -259,6 +268,14 @@ export const domains = {
     async delete(id: string) {
         return apiRequest<{ message: string }>(`/api/domains/${id}`, {
             method: 'DELETE'
+        });
+    },
+
+    /** Merge tracking switches into the domain's settings; returns the full set. */
+    async updateSettings(id: string, changes: Partial<DomainSettings>) {
+        return apiRequest<{ settings: DomainSettings }>(`/api/domains/${id}/settings`, {
+            method: 'PATCH',
+            body: JSON.stringify(changes)
         });
     }
 };
