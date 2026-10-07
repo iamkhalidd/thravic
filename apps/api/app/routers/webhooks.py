@@ -2,6 +2,10 @@
 
 Reads and writes return the raw row / array with no envelope. The access guard
 allows the owner or a domain **admin** member.
+
+The signing secret is write-only: responses carry `hasSecret` instead, so it is
+not shown again after it is saved. Destinations on loopback or private networks
+are refused (see `webhook_service.destination_error`).
 """
 
 from __future__ import annotations
@@ -13,6 +17,7 @@ from ..errors import PayloadError, SimpleError
 from ..json_response import jsjson
 from ..middleware.auth import AuthUser, require_auth
 from ..middleware.feature_gate import require_feature
+from ..services import webhook_service
 from ..zod_lite import (
     issue_invalid_type,
     issue_too_small,
@@ -22,7 +27,17 @@ from ..zod_lite import (
 
 router = APIRouter()
 
+
+def _public(webhook: dict) -> dict:
+    """The row without its signing secret."""
+    row = {key: value for key, value in webhook.items() if key != "secret"}
+    row["hasSecret"] = bool(webhook.get("secret"))
+    return row
+
 ACCESS_DENIED = "Access denied"
+
+# Event types the collector stores; a webhook subscribes to one or more of them.
+EVENT_TYPES = ("pageview", "click", "scroll", "form", "custom", "session_end")
 FAILED_CREATE = "Failed to create webhook"
 
 
@@ -51,7 +66,7 @@ async def list_webhooks(
     webhooks = await query(
         "SELECT * FROM webhooks WHERE domain_id = $1 ORDER BY created_at DESC", domainId
     )
-    return jsjson(webhooks)
+    return jsjson([_public(webhook) for webhook in webhooks])
 
 
 @router.post("/{domainId}")
@@ -113,6 +128,18 @@ async def create_webhook(
             # Express returns the whole Zod issue array here, not a single message
             raise PayloadError({"error": issues}, 400)
 
+        unknown = sorted(set(events) - set(EVENT_TYPES))
+        if unknown:
+            raise SimpleError(
+                f"Unknown event type(s): {', '.join(unknown)}. "
+                f"Use: {', '.join(EVENT_TYPES)}",
+                400,
+            )
+
+        refusal = await webhook_service.destination_error(url)
+        if refusal:
+            raise SimpleError(refusal, 400)
+
         result = await query(
             """
             INSERT INTO webhooks (domain_id, url, events, secret, enabled)
@@ -125,7 +152,7 @@ async def create_webhook(
             secret or None,
             True if enabled is None else enabled,
         )
-        return jsjson(result[0], status_code=201)
+        return jsjson(_public(result[0]), status_code=201)
     except (PayloadError, SimpleError):
         raise
     except Exception:

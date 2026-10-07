@@ -67,11 +67,14 @@ async def insert_event(params: dict[str, Any]) -> dict[str, Any] | None:
     return dict(rows[0]) if rows else None
 
 
-async def batch_insert(event_list: list[dict[str, Any]]) -> int:
+async def batch_insert(
+    event_list: list[dict[str, Any]], stored: list[dict[str, Any]] | None = None
+) -> int:
     """Insert many events in one transaction; returns the number actually stored.
 
     A duplicate `eventId` is ignored, so a retried batch reports the rows written
-    rather than the rows offered — the same batch sent twice stores once.
+    rather than the rows offered — the same batch sent twice stores once. Pass
+    `stored` to collect the events that were new, e.g. to notify webhooks once.
     """
     if not event_list:
         return 0
@@ -103,6 +106,8 @@ async def batch_insert(event_list: list[dict[str, Any]]) -> int:
                 event.get("data"),
             )
             inserted += len(rows)
+            if rows and stored is not None:
+                stored.append(event)
 
         # Derived from the rows actually stored, so replaying the batch is a no-op.
         await recount_pageviews(conn, event_list)

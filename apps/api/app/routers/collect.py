@@ -319,9 +319,27 @@ async def collect_batch(trackingId: str, request: Request):
                 }
             )
 
-        count = await retry_transient(
-            lambda: event_service.batch_insert(inserts), description="Event insert"
-        )
+        # A retried attempt re-collects from scratch, so only the final one counts.
+        stored: list[dict[str, Any]] = []
+
+        async def insert() -> int:
+            stored.clear()
+            return await event_service.batch_insert(inserts, stored)
+
+        count = await retry_transient(insert, description="Event insert")
+
+        # Only newly stored events: the tracker re-sends a batch until it is
+        # acknowledged, and a replay must not notify subscribers twice.
+        if stored:
+            # Subscribers get the event as the tracker sent it, as on the
+            # single-event route; `inserts[i]` was built from `events[i]`.
+            raw_event = {id(row): event for row, event in zip(inserts, events, strict=True)}
+            _fire_and_forget(
+                webhook_service.trigger_for_events(
+                    domain["id"],
+                    [(row["type"], raw_event[id(row)]) for row in stored],
+                )
+            )
         return jsjson({"success": True, "processed": count}, status_code=202)
     except (PayloadError, SimpleError):
         raise

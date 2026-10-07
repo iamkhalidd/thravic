@@ -175,7 +175,7 @@ async def current(user: AuthUser = Depends(require_auth)):
                 "subscription": {
                     "plan": subscription["plan"],
                     "status": subscription["status"],
-                    "eventsUsed": subscription["events_used"],
+                    "eventsUsed": await _events_this_month(user.user_id),
                     "eventsLimit": subscription["events_limit"],
                     "domainsLimit": subscription["domains_limit"],
                     "currentPeriodEnd": subscription["current_period_end"],
@@ -576,6 +576,27 @@ async def webhook(request: Request):
         raise SimpleError("Internal error", 500) from None
 
 
+async def _events_this_month(user_id: str) -> int:
+    """Events stored this calendar month (UTC) across the user's domains.
+
+    Counted from `events` itself: nothing writes `usage_logs` or
+    `subscriptions.events_used`, so both read as zero. Served by the
+    `(domain_id, created_at)` index.
+    """
+    now = datetime.now(UTC)
+    row = await query_one(
+        """
+        SELECT COUNT(*)::text AS total
+        FROM events e
+        JOIN domains d ON d.id = e.domain_id
+        WHERE d.user_id = $1 AND e.created_at >= $2
+        """,
+        user_id,
+        datetime(now.year, now.month, 1, tzinfo=UTC),
+    )
+    return int((row or {}).get("total") or 0)
+
+
 @router.get("/usage")
 async def usage(user: AuthUser = Depends(require_auth)):
     try:
@@ -591,37 +612,7 @@ async def usage(user: AuthUser = Depends(require_auth)):
                 }
             )
 
-        domains = await query(
-            "SELECT id FROM domains WHERE user_id = $1", user.user_id
-        )
-
-        if not domains:
-            return jsjson(
-                {
-                    "success": True,
-                    "usage": {
-                        "eventsThisMonth": 0,
-                        "eventsLimit": PLAN_LIMITS[FREE_PLAN]["eventsLimit"],
-                        "percentUsed": 0,
-                    },
-                }
-            )
-
-        domain_ids = [d["id"] for d in domains]
-        now = datetime.now(UTC)
-        month_start = datetime(now.year, now.month, 1, tzinfo=UTC)
-
-        usage_row = await query_one(
-            """
-            SELECT COALESCE(SUM(events_count), 0) as total
-            FROM usage_logs
-            WHERE domain_id = ANY($1) AND month >= $2
-            """,
-            domain_ids,
-            month_start,
-        )
-
-        events_used = int((usage_row or {}).get("total") or 0)
+        events_used = await _events_this_month(user.user_id)
         subscription = await query_one(
             "SELECT events_limit FROM subscriptions WHERE user_id = $1", user.user_id
         )

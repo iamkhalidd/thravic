@@ -320,3 +320,18 @@ async def test_the_payment_upsert_succeeds_and_updates_on_conflict(seeded_domain
     async with db_pool.acquire() as conn:
         rows = await conn.fetchval("SELECT count(*) FROM subscriptions WHERE user_id = $1", user_id)
     assert int(rows) == 1, "the upsert must update in place, not insert a second row"
+
+
+async def test_batch_insert_reports_only_newly_stored_events(seeded_domain, db_pool):
+    """Webhooks fire from this list, so a replayed event must not appear in it."""
+    payload = _tracker_payload(seeded_domain)
+    await session_service.upsert(payload)
+    second = {**payload, "eventId": str(uuid.uuid4()), "type": "click"}
+
+    first_stored: list[dict] = []
+    await event_service.batch_insert([payload], first_stored)
+    replay_stored: list[dict] = []
+    await event_service.batch_insert([payload, second], replay_stored)
+
+    assert first_stored == [payload]
+    assert replay_stored == [second]
