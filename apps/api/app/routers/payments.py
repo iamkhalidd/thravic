@@ -31,6 +31,7 @@ from ..errors import SimpleError
 from ..js_compat import js_round
 from ..json_response import jsjson
 from ..logging import create_logger
+from ..middleware.admin_auth import AdminUser, admin_auth
 from ..middleware.auth import AuthUser, require_auth
 from ..plans import PLAN_FEATURES, PLAN_LIMITS
 from ..services.email_service import send_payment_receipt_email
@@ -90,9 +91,19 @@ def _free_subscription_payload() -> dict[str, Any]:
     }
 
 
+def _paystack_mode(secret: str) -> str:
+    if not secret:
+        return "EMPTY"
+    if secret.startswith("sk_live_"):
+        return "live"
+    if secret.startswith("sk_test_"):
+        return "test"
+    return "unknown"
+
+
 @router.get("/status")
-async def status():
-    """Diagnostic endpoint. Deliberately does not require auth."""
+async def status(_admin: AdminUser = Depends(admin_auth)):
+    """Diagnostic endpoint for admins. Reports the key's mode, never any of the key."""
     secret = _paystack_secret()
     frontend_url = get_settings().FRONTEND_URL or "NOT SET"
     server_url = get_settings().SERVER_URL or "NOT SET"
@@ -100,8 +111,7 @@ async def status():
     return jsjson(
         {
             "paystackConfigured": bool(secret),
-            # NOTE: this exposes the first 8 characters of the live secret key.
-            "paystackKeyPrefix": f"{secret[:8]}..." if secret else "EMPTY",
+            "paystackMode": _paystack_mode(secret),
             "frontendUrl": frontend_url,
             "serverUrl": server_url,
             "callbackUrl": f"{frontend_url}/dashboard/settings?payment=success",

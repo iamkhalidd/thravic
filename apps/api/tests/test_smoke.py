@@ -57,6 +57,13 @@ def test_missing_token_has_no_code_field(client):
     assert response.json() == {"error": "No token provided"}
 
 
+def test_payment_status_requires_admin(client):
+    """It reports payment configuration, so it must not be public."""
+    response = client.get("/api/payments/status")
+
+    assert response.status_code == 401
+
+
 def test_malformed_bearer_is_rejected(client):
     response = client.get("/api/auth/me", headers={"Authorization": "Bearer not-a-jwt"})
 
