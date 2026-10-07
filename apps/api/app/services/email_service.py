@@ -9,6 +9,7 @@ so a delivery failure never changes an API response.
 
 from __future__ import annotations
 
+import html
 import smtplib
 from datetime import UTC, datetime, timedelta
 from email.message import EmailMessage
@@ -259,4 +260,52 @@ async def send_payment_receipt_email(
         f"{plan_label} plan.\n\nAmount: ${amount} USD\nPlan: {plan_label}\n"
         f"Reference: {reference}\nNext billing: {period_end_label}\n\n"
         f"Manage your subscription at {frontend_url}/dashboard/settings",
+    )
+
+
+async def send_usage_limit_email(
+    to: str, name: str, threshold: int, used: int, limit: int, plan: str
+) -> None:
+    """Monthly event allowance at 80% or used up. Raises if the provider rejects it,
+    so the caller can try again later instead of losing the notice."""
+    frontend_url = get_settings().FRONTEND_URL or "http://localhost:3000"
+    billing_url = f"{frontend_url}/dashboard/settings"
+    used_text, limit_text = f"{used:,}", f"{limit:,}"
+    safe_name, safe_plan = html.escape(name or "there"), html.escape(plan.capitalize())
+
+    if threshold >= 100:
+        subject = "Your Thravic event limit has been reached"
+        lead = (
+            f"Your sites have sent {used_text} events this month, the {limit_text} included in "
+            f"the {safe_plan} plan. <strong>New events and session recordings are not being "
+            "stored</strong> until the 1st of next month (UTC), or until you upgrade."
+        )
+        text_lead = (
+            f"Your sites have sent {used_text} events this month, the {limit_text} included in "
+            f"the {plan.capitalize()} plan. New events and session recordings are not being "
+            "stored until the 1st of next month (UTC), or until you upgrade."
+        )
+    else:
+        subject = f"You have used {threshold}% of your Thravic events this month"
+        lead = (
+            f"Your sites have sent {used_text} of the {limit_text} events included in the "
+            f"{safe_plan} plan this month. When the allowance runs out, new events stop being "
+            "stored until the 1st (UTC)."
+        )
+        text_lead = (
+            f"Your sites have sent {used_text} of the {limit_text} events included in the "
+            f"{plan.capitalize()} plan this month. When the allowance runs out, new events stop "
+            "being stored until the 1st (UTC)."
+        )
+
+    await send_email_or_raise(
+        to,
+        subject,
+        _layout(
+            f"<h2>{html.escape(subject)}</h2>"
+            f"<p>Hi {safe_name},</p>"
+            f"<p>{lead}</p>"
+            f'<p><a href="{billing_url}">See usage and plans</a></p>'
+        ),
+        f"Hi {name or 'there'},\n\n{text_lead}\n\nSee usage and plans: {billing_url}",
     )

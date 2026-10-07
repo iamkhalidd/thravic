@@ -50,6 +50,10 @@ router = APIRouter()
 
 # ── Constants (mirroring `routes/auth.ts`) ───────────────────────────────────
 BCRYPT_ROUNDS = 12
+
+# `POST /api/admin/users/{id}/suspend` sets this role; it blocks every sign-in.
+SUSPENDED_ROLE = "suspended"
+ACCOUNT_SUSPENDED = "This account is suspended. Contact support to restore access."
 # bcryptjs silently truncates at 72 bytes; truncating here keeps hashes
 # verifiable in both directions during the migration.
 BCRYPT_MAX_BYTES = 72
@@ -120,6 +124,13 @@ async def generate_tokens(user_id: str, email: str) -> dict[str, str]:
     settings = get_settings()
     issued_at = datetime.now(UTC)
     user_id = str(user_id)
+
+    # Every sign-in path (password, refresh, OAuth) issues tokens here, so this is
+    # where suspension is enforced. Access tokens are not re-checked, so a session
+    # that is already open ends when its access token expires (JWT_EXPIRES_IN).
+    account = await user_service.find_by_id(user_id)
+    if account and account.get("role") == SUSPENDED_ROLE:
+        raise SimpleError(ACCOUNT_SUSPENDED, 403)
 
     access_token = jwt.encode(
         {
@@ -629,6 +640,8 @@ async def github_callback(code: str | None = None):
         if not user:
             return _frontend_redirect("/login?error=account_creation_failed")
 
+        if user.get("role") == SUSPENDED_ROLE:
+            return _frontend_redirect("/login?error=account_suspended")
         return _callback_redirect(await generate_tokens(user["id"], user["email"]))
 
     except PayloadError:
@@ -710,6 +723,8 @@ async def google_callback(code: str | None = None):
         if not user:
             return _frontend_redirect("/login?error=account_creation_failed")
 
+        if user.get("role") == SUSPENDED_ROLE:
+            return _frontend_redirect("/login?error=account_suspended")
         return _callback_redirect(await generate_tokens(user["id"], user["email"]))
 
     except PayloadError:

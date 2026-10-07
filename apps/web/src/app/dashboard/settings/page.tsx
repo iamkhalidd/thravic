@@ -19,28 +19,31 @@ import {
     Lock,
     Mail,
 } from 'lucide-react';
-import { auth, domains, payments } from '@/lib/api';
+import { auth, exportData, formatPlanPrice, payments, type ExportType } from '@/lib/api';
+import { useDomain } from '@/contexts/DomainContext';
 
-const plans = [
+// Marketing copy for each plan. Names and prices are replaced by the API's
+// (the price checkout actually charges); these values are only the fallback.
+const fallbackPlans = [
     {
         id: 'free',
         name: 'Hobby',
         price: 0,
-        displayPrice: 'Free',
+        currency: 'NGN',
         features: ['1 domain', '5,000 events/mo', '30-day history', 'Core analytics & UTM'],
     },
     {
         id: 'pro',
         name: 'Pro',
         price: 45000,
-        displayPrice: '₦45,000',
+        currency: 'NGN',
         features: ['3 domains', '100,000 events/mo', '1-year history', 'Heatmaps & recordings', 'Funnels & AI insights', 'CSV export & team'],
     },
     {
         id: 'agency',
         name: 'Agency',
         price: 125000,
-        displayPrice: '₦125,000',
+        currency: 'NGN',
         features: ['20 domains', '500,000 events/mo', '2-year history', 'Everything in Pro', 'Unlimited team members', 'Priority support'],
     },
 ];
@@ -65,9 +68,12 @@ function SettingsPageInner() {
     const searchParams = useSearchParams();
 
     const [user, setUser] = useState<UserData | null>(null);
-    const [domainList, setDomainList] = useState<any[]>([]);
     const [activeTab, setActiveTab] = useState<'account' | 'subscription' | 'notifications' | 'export'>('account');
     const [loading, setLoading] = useState(true);
+    const [plans, setPlans] = useState(fallbackPlans);
+    const [usage, setUsage] = useState<{ eventsThisMonth: number; eventsLimit: number; percentUsed: number } | null>(null);
+    const { selectedDomainId } = useDomain();
+    const [exportError, setExportError] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
     const [avatarUploading, setAvatarUploading] = useState(false);
@@ -106,7 +112,7 @@ function SettingsPageInner() {
 
     // Load data
     const loadData = useCallback(async () => {
-        const [userRes, domainsRes] = await Promise.all([auth.getMe(), domains.list()]);
+        const userRes = await auth.getMe();
         if (userRes.data) {
             setUser(userRes.data as UserData);
             setName(userRes.data.name || '');
@@ -118,15 +124,30 @@ function SettingsPageInner() {
             setCountry(userRes.data.country || '');
             setTimezone(userRes.data.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || '');
         }
-        if (domainsRes.data) {
-            setDomainList(domainsRes.data.domains);
-        }
         setLoading(false);
     }, []);
 
     useEffect(() => {
         loadData();
     }, [loadData]);
+
+    useEffect(() => {
+        payments.getUsage().then(({ data }) => {
+            if (data?.usage) setUsage(data.usage);
+        });
+    }, []);
+
+    useEffect(() => {
+        payments.getPlans().then(({ data }) => {
+            if (!data?.plans) return;
+            setPlans(prev => prev.map(plan => {
+                const live = data.plans.find(p => p.id === plan.id);
+                return live
+                    ? { ...plan, name: live.name, price: live.price, currency: live.currency ?? plan.currency }
+                    : plan;
+            }));
+        });
+    }, []);
 
     useEffect(() => {
         const paymentStatus = searchParams.get('payment');
@@ -222,15 +243,11 @@ function SettingsPageInner() {
         setAvatarUploading(false);
     };
 
-    const handleExport = async (format: 'csv' | 'json') => {
-        const data = { exportDate: new Date().toISOString(), domains: domainList, format };
-        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `thravic-export-${format}.${format}`;
-        a.click();
-        URL.revokeObjectURL(url);
+    const handleExport = async (type: ExportType) => {
+        if (!selectedDomainId) return;
+        setExportError(null);
+        const result = await exportData.downloadCsv(selectedDomainId, type);
+        if (result.error) setExportError(result.error);
     };
 
     const tabs = [
@@ -505,8 +522,10 @@ function SettingsPageInner() {
                                         : `You have access to all ${currentPlan} features.`}
                                 </p>
                                 <p style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', marginTop: 'var(--space-xs)' }}>
-                                    Payments are securely processed by <strong>Paystack</strong> in USD.
+                                    Payments are securely processed by <strong>Paystack</strong> in NGN.
                                 </p>
+
+                                {usage && <UsageMeter {...usage} />}
                             </div>
 
                             {/* Promo code input */}
@@ -566,7 +585,7 @@ function SettingsPageInner() {
                                             <h4 style={{ marginBottom: 'var(--space-sm)' }}>{plan.name}</h4>
                                             <div style={{ marginBottom: 'var(--space-md)' }}>
                                                 <span style={{ fontSize: '2rem', fontWeight: 700 }}>
-                                                    {plan.displayPrice}
+                                                    {formatPlanPrice(plan.price, plan.currency)}
                                                 </span>
                                                 <span style={{ color: 'var(--color-text-muted)' }}>
                                                     {plan.price > 0 ? '/mo' : ''}
@@ -605,7 +624,7 @@ function SettingsPageInner() {
                                                 ) : isFree ? (
                                                     'Free Forever'
                                                 ) : (
-                                                    `Upgrade — ₦${plan.price.toLocaleString()}/mo`
+                                                    `Upgrade — ${formatPlanPrice(plan.price, plan.currency)}/mo`
                                                 )}
                                             </button>
                                         </div>
@@ -685,30 +704,38 @@ function SettingsPageInner() {
                         <div className="card">
                             <h3 style={{ marginBottom: 'var(--space-md)' }}>Export Your Data</h3>
                             <p style={{ marginBottom: 'var(--space-lg)', color: 'var(--color-text-secondary)' }}>
-                                Download all your analytics data in your preferred format.
+                                Download the selected domain&apos;s 10,000 most recent sessions or events as CSV.
                             </p>
 
                             <div className="grid grid-cols-2 gap-md" style={{ marginBottom: 'var(--space-xl)' }}>
                                 <button
-                                    onClick={() => handleExport('csv')}
+                                    onClick={() => handleExport('sessions')}
+                                    disabled={!selectedDomainId}
                                     className="btn btn-secondary"
                                     style={{ padding: 'var(--space-lg)', flexDirection: 'column', height: 'auto' }}
                                 >
                                     <Download size={24} style={{ marginBottom: 'var(--space-sm)' }} />
-                                    <span style={{ fontWeight: 600 }}>Export as CSV</span>
-                                    <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>Spreadsheet compatible</span>
+                                    <span style={{ fontWeight: 600 }}>Sessions CSV</span>
+                                    <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>One row per visit</span>
                                 </button>
 
                                 <button
-                                    onClick={() => handleExport('json')}
+                                    onClick={() => handleExport('events')}
+                                    disabled={!selectedDomainId}
                                     className="btn btn-secondary"
                                     style={{ padding: 'var(--space-lg)', flexDirection: 'column', height: 'auto' }}
                                 >
                                     <Download size={24} style={{ marginBottom: 'var(--space-sm)' }} />
-                                    <span style={{ fontWeight: 600 }}>Export as JSON</span>
-                                    <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>Developer friendly</span>
+                                    <span style={{ fontWeight: 600 }}>Events CSV</span>
+                                    <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>One row per tracked event</span>
                                 </button>
                             </div>
+
+                            {exportError && (
+                                <p style={{ marginTop: 'calc(-1 * var(--space-md))', marginBottom: 'var(--space-lg)', fontSize: '0.85rem', color: '#ff5555' }}>
+                                    {exportError}
+                                </p>
+                            )}
 
                             <div style={{
                                 padding: 'var(--space-md)',
@@ -718,7 +745,7 @@ function SettingsPageInner() {
                             }}>
                                 <Shield size={18} style={{ marginBottom: 'var(--space-sm)', color: 'var(--color-text-primary)' }} />
                                 <p style={{ fontSize: '0.875rem', margin: 0 }}>
-                                    Your data is exported securely and includes all events, funnels, and insights from the last 30 days.
+                                    Exports are available on the Pro plan and above. Only the domain owner can export its data.
                                 </p>
                             </div>
                         </div>
@@ -732,6 +759,38 @@ function SettingsPageInner() {
                     to { transform: rotate(360deg); }
                 }
             `}</style>
+        </div>
+    );
+}
+
+/** Events used this month against the plan's monthly allowance. */
+function UsageMeter({ eventsThisMonth, eventsLimit, percentUsed }: { eventsThisMonth: number; eventsLimit: number; percentUsed: number }) {
+    const color = percentUsed >= 100 ? '#ff5555' : percentUsed >= 85 ? '#ffaa00' : 'var(--color-text-primary)';
+    return (
+        <div style={{ marginTop: 'var(--space-lg)' }}>
+            <div className="flex items-center justify-between" style={{ fontSize: '0.875rem', marginBottom: 'var(--space-xs)' }}>
+                <span>Events this month</span>
+                <span style={{ color: 'var(--color-text-secondary)' }}>
+                    {eventsThisMonth.toLocaleString()} of {eventsLimit.toLocaleString()} ({percentUsed}%)
+                </span>
+            </div>
+            <div
+                role="progressbar"
+                aria-label="Events used this month"
+                aria-valuemin={0}
+                aria-valuemax={eventsLimit}
+                aria-valuenow={eventsThisMonth}
+                style={{ height: '8px', background: 'var(--color-bg-tertiary)', borderRadius: '4px', overflow: 'hidden' }}
+            >
+                <div style={{ width: `${Math.min(percentUsed, 100)}%`, height: '100%', background: color, borderRadius: '4px' }} />
+            </div>
+            {percentUsed >= 85 && (
+                <p style={{ fontSize: '0.8rem', color, marginTop: 'var(--space-xs)' }}>
+                    {percentUsed >= 100
+                        ? "You have used this plan's events for the month: new events and recordings are not being stored. Upgrade to resume now, or collection restarts on the 1st (UTC)."
+                        : "You are close to this plan's monthly allowance. When it runs out, new events stop being stored until the 1st (UTC)."}
+                </p>
+            )}
         </div>
     );
 }

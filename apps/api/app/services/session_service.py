@@ -48,6 +48,39 @@ SOCIAL_NETWORKS = (
 
 PAID_MEDIUMS = ("cpc", "ppc", "paid", "paidsearch", "paidsocial")
 
+# Device classes by `sessions.screen_width`: [lower, upper) in CSS pixels. The
+# analytics devices breakdown, the heatmap filter and the recordings filter all
+# bucket with these, so the same session lands in the same class everywhere.
+DEVICE_WIDTHS: dict[str, tuple[int, int | None]] = {
+    "mobile": (0, 768),
+    "tablet": (768, 1024),
+    "desktop": (1024, None),
+}
+
+
+def device_case_sql(width_column: str) -> str:
+    """SQL `CASE` naming the device class of `width_column` (`unknown` when NULL)."""
+    branches = " ".join(
+        f"WHEN {width_column} < {upper} THEN '{device}'"
+        for device, (_, upper) in DEVICE_WIDTHS.items()
+        if upper is not None
+    )
+    return f"CASE WHEN {width_column} IS NULL THEN 'unknown' {branches} ELSE 'desktop' END"
+
+
+def device_width_sql(width_column: str, device: str, first_param: int) -> tuple[str, list[int]]:
+    """A `WHERE` fragment restricting `width_column` to `device`'s range.
+
+    Returns the SQL and its parameters, numbered from `$first_param`.
+    """
+    lower, upper = DEVICE_WIDTHS[device]
+    if upper is None:
+        return f"{width_column} >= ${first_param}", [lower]
+    return (
+        f"{width_column} >= ${first_param} AND {width_column} < ${first_param + 1}",
+        [lower, upper],
+    )
+
 
 async def upsert(params: dict[str, Any]) -> dict[str, Any] | None:
     """Insert a session, or refresh `ended_at` when (session_id, domain_id) exists.

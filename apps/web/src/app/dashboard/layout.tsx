@@ -9,6 +9,8 @@ import {
     TrendingUp,
     Users,
     UsersRound,
+    Webhook,
+    SlidersHorizontal,
     Target,
     MousePointer2,
     Video,
@@ -62,6 +64,7 @@ const navStructure = [
             { href: '/dashboard/errors', label: 'Errors' },
             { href: '/dashboard/performance', label: 'Performance' },
             { href: '/dashboard/forms', label: 'Forms' },
+            { href: '/dashboard/rage-clicks', label: 'Rage Clicks' },
         ]
     },
     { href: '/dashboard/funnels', icon: Target, label: 'Funnels' },
@@ -412,6 +415,46 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                         {!(sidebarCollapsed && !isMobile) && <span>Team</span>}
                     </Link>
 
+                    {/* Webhooks link */}
+                    <Link
+                        href="/dashboard/webhooks"
+                        title={(sidebarCollapsed && !isMobile) ? 'Webhooks' : undefined}
+                        style={{
+                            display: 'flex', alignItems: 'center',
+                            gap: (sidebarCollapsed && !isMobile) ? '0' : '10px',
+                            padding: (sidebarCollapsed && !isMobile) ? '10px 0' : '8px 12px',
+                            justifyContent: (sidebarCollapsed && !isMobile) ? 'center' : 'flex-start',
+                            color: pathname.startsWith('/dashboard/webhooks') ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
+                            fontWeight: pathname.startsWith('/dashboard/webhooks') ? 500 : 400,
+                            textDecoration: 'none', fontSize: '0.8125rem',
+                            background: 'transparent',
+                            whiteSpace: 'nowrap', overflow: 'hidden',
+                        }}
+                    >
+                        <Webhook size={18} style={{ flexShrink: 0 }} />
+                        {!(sidebarCollapsed && !isMobile) && <span>Webhooks</span>}
+                    </Link>
+
+                    {/* Tracking link */}
+                    <Link
+                        href="/dashboard/tracking"
+                        title={(sidebarCollapsed && !isMobile) ? 'Tracking' : undefined}
+                        style={{
+                            display: 'flex', alignItems: 'center',
+                            gap: (sidebarCollapsed && !isMobile) ? '0' : '10px',
+                            padding: (sidebarCollapsed && !isMobile) ? '10px 0' : '8px 12px',
+                            justifyContent: (sidebarCollapsed && !isMobile) ? 'center' : 'flex-start',
+                            color: pathname.startsWith('/dashboard/tracking') ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
+                            fontWeight: pathname.startsWith('/dashboard/tracking') ? 500 : 400,
+                            textDecoration: 'none', fontSize: '0.8125rem',
+                            background: 'transparent',
+                            whiteSpace: 'nowrap', overflow: 'hidden',
+                        }}
+                    >
+                        <SlidersHorizontal size={18} style={{ flexShrink: 0 }} />
+                        {!(sidebarCollapsed && !isMobile) && <span>Tracking</span>}
+                    </Link>
+
                     {/* Settings link */}
                     <Link
                         href="/dashboard/settings"
@@ -592,8 +635,9 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                             <span>Live</span>
                         </button>
 
-                        {/* Export — desktop only */}
-                        <button
+                        {/* Export — desktop only; the downloads live on the Reports page */}
+                        <Link
+                            href="/dashboard/reports"
                             className="desktop-only"
                             style={{
                                 alignItems: 'center', gap: '6px',
@@ -602,11 +646,12 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                                 border: '1px solid var(--color-border)',
                                 borderRadius: '6px', cursor: 'pointer',
                                 fontSize: '0.8125rem', color: 'var(--color-text-secondary)',
+                                textDecoration: 'none',
                             }}
                         >
                             <Download size={13} />
                             <span>Export</span>
-                        </button>
+                        </Link>
                     </div>
                 </header>
 

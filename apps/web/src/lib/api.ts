@@ -204,6 +204,15 @@ export const auth = {
     }
 };
 
+// What the collector stores for a domain, and what the tracker is told to send
+// (GET /api/collect/{trackingId}/config). Session recording also needs Pro.
+export interface DomainSettings {
+    trackClicks: boolean;
+    trackScrolls: boolean;
+    trackForms: boolean;
+    sessionRecording: boolean;
+}
+
 // Domains API
 export const domains = {
     async list() {
@@ -238,7 +247,7 @@ export const domains = {
             name: string;
             trackingId: string;
             verified: boolean;
-            settings: Record<string, boolean>;
+            settings: DomainSettings;
         }>(`/api/domains/${id}`);
     },
 
@@ -259,6 +268,14 @@ export const domains = {
     async delete(id: string) {
         return apiRequest<{ message: string }>(`/api/domains/${id}`, {
             method: 'DELETE'
+        });
+    },
+
+    /** Merge tracking switches into the domain's settings; returns the full set. */
+    async updateSettings(id: string, changes: Partial<DomainSettings>) {
+        return apiRequest<{ settings: DomainSettings }>(`/api/domains/${id}/settings`, {
+            method: 'PATCH',
+            body: JSON.stringify(changes)
         });
     }
 };
@@ -543,12 +560,21 @@ export const funnels = {
 
 // Recordings API
 // The list endpoint is /api/recordings/{domainId} and returns url/duration/
-// eventsCount - there is no visitorId, device, geo or page count on it.
+// eventsCount plus the session's device class - there is no visitorId, geo or
+// page count on it. Filters: device by screen width (same breakpoints as the
+// devices breakdown), duration short < 30s <= medium < 3min <= long.
+export type RecordingDevice = 'desktop' | 'tablet' | 'mobile';
+export type RecordingDuration = 'short' | 'medium' | 'long';
+
 export const recordings = {
-    async list(domainId: string, filters?: { device?: string; duration?: string }) {
+    async list(
+        domainId: string,
+        filters?: { device?: RecordingDevice; duration?: RecordingDuration; page?: number }
+    ) {
         const params = new URLSearchParams();
         if (filters?.device) params.set('device', filters.device);
         if (filters?.duration) params.set('duration', filters.duration);
+        if (filters?.page) params.set('page', String(filters.page));
         const query = params.toString() ? `?${params}` : '';
 
         return apiRequest<{
@@ -559,6 +585,7 @@ export const recordings = {
                 eventsCount: number;
                 startedAt: string;
                 endedAt: string | null;
+                device: RecordingDevice | 'unknown';
             }>;
             pagination: { page: number; limit: number; total: number; totalPages: number };
         }>(`/api/recordings/${domainId}${query}`);
@@ -624,7 +651,27 @@ export const insights = {
 };
 
 // Payments API (Paystack)
+export interface Plan {
+    id: string;
+    name: string;
+    price: number; // whole currency units, e.g. 45000 = ₦45,000
+    currency?: string; // absent on the config fallback, which is NGN
+}
+
+const CURRENCY_SYMBOLS: Record<string, string> = { NGN: '₦', USD: '$', GBP: '£', EUR: '€' };
+
+/** 'Free' for a zero price, otherwise the amount with its currency symbol. */
+export function formatPlanPrice(price: number, currency = 'NGN'): string {
+    if (price <= 0) return 'Free';
+    return `${CURRENCY_SYMBOLS[currency] ?? `${currency} `}${price.toLocaleString()}`;
+}
+
 export const payments = {
+    /** Public. The admin-managed plans table, or the config plans if it is empty. */
+    async getPlans() {
+        return apiRequest<{ success: boolean; plans: Plan[] }>('/api/payments/plans');
+    },
+
     /** Initialise a Paystack checkout session. On success, redirect to checkoutUrl. */
     async checkout(plan: string, promoCode?: string): Promise<{ checkoutUrl?: string; reference?: string; error?: string } | null> {
         const result = await apiRequest<{ success: boolean; checkoutUrl: string; reference: string; error?: string }>(
@@ -659,6 +706,14 @@ export const payments = {
             return { plan: result.data.plan };
         }
         return null;
+    },
+
+    /** Events stored this calendar month (UTC) across all of the user's domains. */
+    async getUsage() {
+        return apiRequest<{
+            success: boolean;
+            usage: { eventsThisMonth: number; eventsLimit: number; percentUsed: number };
+        }>('/api/payments/usage');
     },
 
     /** Fetch the current subscription from the server. */
@@ -740,3 +795,80 @@ export const customEvents = {
     },
 };
 
+
+// Export API — GET /api/export/{domainId}?type=sessions|events returns a CSV file
+// (up to 10,000 most recent rows). Pro plan and above.
+export type ExportType = 'sessions' | 'events';
+
+export const exportData = {
+    /** Fetch the CSV and hand it to the browser as a download. */
+    async downloadCsv(domainId: string, type: ExportType, retried = false): Promise<{ error?: string; upgrade?: boolean }> {
+        const { accessToken } = getTokens();
+        let response: Response;
+        try {
+            response = await fetch(`${API_URL}/api/export/${domainId}?type=${type}`, {
+                headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+            });
+        } catch {
+            return { error: 'Network error' };
+        }
+
+        if (!response.ok) {
+            if (response.status === 401 && !retried && (await refreshToken())) {
+                return exportData.downloadCsv(domainId, type, true);
+            }
+            const body = await response.json().catch(() => ({}));
+            return { error: body.error || 'Export failed', upgrade: !!body.upgrade };
+        }
+
+        const url = URL.createObjectURL(await response.blob());
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `thravic-${type}-${new Date().toISOString().slice(0, 10)}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+        return {};
+    },
+};
+
+// Webhooks API — /api/webhooks/{domainId}. The owner or a domain admin can manage
+// them (Pro plan and above). Each subscribed event is POSTed as JSON, signed with
+// HMAC-SHA256 of the body in X-Thravic-Signature when a secret is set. The secret
+// is write-only: responses say only whether one is set.
+export const WEBHOOK_EVENTS = ['pageview', 'click', 'scroll', 'form', 'custom', 'session_end'] as const;
+export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number];
+
+export interface Webhook {
+    id: string;
+    url: string;
+    events: WebhookEvent[];
+    enabled: boolean;
+    hasSecret: boolean;
+    created_at: string;
+}
+
+/** The API answers a validation failure with an array of issues instead of a string. */
+function webhookError(error: unknown): string {
+    if (Array.isArray(error)) return error.map((issue: any) => issue?.message).filter(Boolean).join('; ') || 'Invalid webhook';
+    return typeof error === 'string' ? error : 'Request failed';
+}
+
+export const webhooks = {
+    async list(domainId: string) {
+        return apiRequest<Webhook[]>(`/api/webhooks/${domainId}`);
+    },
+
+    async create(domainId: string, data: { url: string; events: WebhookEvent[]; secret?: string }) {
+        const result = await apiRequest<Webhook>(`/api/webhooks/${domainId}`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+        return result.error !== undefined ? { error: webhookError(result.error) } : result;
+    },
+
+    async delete(domainId: string, webhookId: string) {
+        return apiRequest<{ message: string }>(`/api/webhooks/${domainId}/${webhookId}`, {
+            method: 'DELETE',
+        });
+    },
+};

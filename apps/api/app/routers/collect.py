@@ -27,7 +27,13 @@ from ..json_response import jsjson
 from ..logging import create_logger
 from ..middleware.blocklist_gate import blocklist_gate
 from ..middleware.settings_gate import tracking_gate
-from ..services import domain_service, event_service, recording_service, webhook_service
+from ..services import (
+    domain_service,
+    event_service,
+    plan_service,
+    recording_service,
+    webhook_service,
+)
 from ..services.geo_service import check_ip
 from ..services.session_service import classify_source
 from ..zod_lite import (
@@ -199,6 +205,10 @@ async def _body(request: Request) -> dict:
     return body if isinstance(body, dict) else {}
 
 
+# `dropped` value on a 202 when the owner's plan has no events left this month.
+EVENT_LIMIT_REACHED = "monthly_event_limit"
+
+
 @router.post("/{trackingId}")
 async def collect_event(trackingId: str, request: Request):
     try:
@@ -208,6 +218,15 @@ async def collect_event(trackingId: str, request: Request):
         issues = _event_issues(body)
         if issues:
             raise PayloadError({"error": "Invalid event data", "details": issues}, 400)
+
+        # Switched off for this domain: acknowledged, so the tracker drops it.
+        if not domain_service.collects(domain, body["type"]):
+            return jsjson({"success": True}, status_code=202)
+
+        # Over the plan's monthly events: acknowledged and dropped the same way,
+        # since a rejection would make the tracker retry the event forever.
+        if await plan_service.over_event_limit(str(domain["user_id"])):
+            return jsjson({"success": True, "dropped": EVENT_LIMIT_REACHED}, status_code=202)
 
         user_agent = request.headers.get("user-agent") or ""
         location = check_ip(_client_ip(request))
@@ -285,7 +304,14 @@ async def collect_batch(trackingId: str, request: Request):
         if issues:
             raise PayloadError({"error": "Invalid batch data", "details": issues}, 400)
 
-        events = body["events"]
+        if await plan_service.over_event_limit(str(domain["user_id"])):
+            return jsjson(
+                {"success": True, "processed": 0, "dropped": EVENT_LIMIT_REACHED},
+                status_code=202,
+            )
+
+        # Event types switched off for this domain are acknowledged but not stored.
+        events = [e for e in body["events"] if domain_service.collects(domain, e["type"])]
         user_agent = request.headers.get("user-agent") or ""
 
         inserts: list[dict[str, Any]] = []
@@ -319,9 +345,27 @@ async def collect_batch(trackingId: str, request: Request):
                 }
             )
 
-        count = await retry_transient(
-            lambda: event_service.batch_insert(inserts), description="Event insert"
-        )
+        # A retried attempt re-collects from scratch, so only the final one counts.
+        stored: list[dict[str, Any]] = []
+
+        async def insert() -> int:
+            stored.clear()
+            return await event_service.batch_insert(inserts, stored)
+
+        count = await retry_transient(insert, description="Event insert")
+
+        # Only newly stored events: the tracker re-sends a batch until it is
+        # acknowledged, and a replay must not notify subscribers twice.
+        if stored:
+            # Subscribers get the event as the tracker sent it, as on the
+            # single-event route; `inserts[i]` was built from `events[i]`.
+            raw_event = {id(row): event for row, event in zip(inserts, events, strict=True)}
+            _fire_and_forget(
+                webhook_service.trigger_for_events(
+                    domain["id"],
+                    [(row["type"], raw_event[id(row)]) for row in stored],
+                )
+            )
         return jsjson({"success": True, "processed": count}, status_code=202)
     except (PayloadError, SimpleError):
         raise
@@ -463,10 +507,51 @@ def _recording_events_issues(body: dict) -> list[dict]:
     return issues
 
 
+async def _records(domain: dict[str, Any]) -> bool:
+    """Recording needs the domain's setting on and the owner's plan to include it."""
+    if not domain_service.effective_settings(domain)["sessionRecording"]:
+        return False
+    plan = await plan_service.owner_plan(domain["id"])
+    return "recordings" in plan.features
+
+
+@router.get("/{trackingId}/config")
+async def tracker_config(trackingId: str):
+    """What the tracker should collect, from the domain's dashboard settings.
+
+    Public, like the rest of this router: it reveals only on/off switches. The
+    tracker applies it over its defaults; anything the site sets in
+    `window.__TF_CONFIG__` still wins, and the collector enforces the switches
+    whatever the client does.
+    """
+    try:
+        domain = await _domain_by_tracking_id(trackingId)
+        settings = domain_service.effective_settings(domain)
+        return jsjson(
+            {
+                "trackClicks": settings["trackClicks"],
+                "trackScrolls": settings["trackScrolls"],
+                "trackForms": settings["trackForms"],
+                "trackRecordings": await _records(domain),
+            },
+            # Short, so a dashboard change reaches visitors within a minute.
+            headers={"Cache-Control": "public, max-age=60"},
+        )
+    except SimpleError:
+        raise
+    except Exception as exc:
+        log.error(f"Tracker config error: {exc}")
+        raise SimpleError("Failed to load tracker config", 500) from None
+
+
 @router.post("/{trackingId}/recording/start")
 async def recording_start(trackingId: str, request: Request):
     try:
         domain = await _domain_by_tracking_id(trackingId)
+        if not await _records(domain):
+            raise SimpleError("Session recording is not enabled for this site", 403)
+        if await plan_service.over_event_limit(str(domain["user_id"])):
+            raise SimpleError("This site has reached its monthly event limit", 403)
 
         body = await _body(request)
         issues = _recording_start_issues(body)

@@ -26,91 +26,15 @@ to run them — including at production, which is why it takes a named variable.
 
 from __future__ import annotations
 
-import os
 import uuid
 from datetime import UTC, datetime, timedelta
 
-import asyncpg
-import pytest
-
-from app import db as db_module
-from app.db import _init_connection, _prepare_dsn, _ssl_setting, query_one
+from app.db import query_one
 from app.services import event_service, session_service
 from app.services.session_service import classify_source
+from tests.conftest import requires_test_db
 
-TEST_DSN = os.getenv("THRAVIC_TEST_DATABASE_URL")
-
-pytestmark = pytest.mark.skipif(
-    not TEST_DSN,
-    reason="set THRAVIC_TEST_DATABASE_URL to a disposable, migrated database",
-)
-
-# The schema the ingestion path needs; if these are missing the database was
-# never migrated and every failure below would be the wrong one.
-_REQUIRED_TABLES = ("users", "domains", "visitors", "sessions", "events")
-
-
-@pytest.fixture
-async def db_pool():
-    """Own asyncpg pool, wired into `app.db` for the duration of one test."""
-    dsn, ssl_required = _prepare_dsn(TEST_DSN)
-    pool = await asyncpg.create_pool(
-        dsn=dsn,
-        ssl=_ssl_setting(ssl_required),
-        min_size=1,
-        max_size=2,
-        init=_init_connection,
-    )
-    db_module.pool = pool
-    try:
-        async with pool.acquire() as conn:
-            missing = [
-                table
-                for table in _REQUIRED_TABLES
-                if await conn.fetchval("SELECT to_regclass($1)", f"public.{table}") is None
-            ]
-        if missing:
-            pytest.skip(
-                "disposable database is not migrated (missing: "
-                + ", ".join(missing)
-                + ") — run `alembic upgrade head` against it first"
-            )
-
-        yield pool
-    finally:
-        db_module.pool = None
-        await pool.close()
-
-
-@pytest.fixture
-async def seeded_domain(db_pool):
-    """A throwaway user + domain, removed (cascade) on teardown."""
-    user_id = uuid.uuid4()
-    domain_id = uuid.uuid4()
-
-    async with db_pool.acquire() as conn:
-        await conn.execute(
-            "INSERT INTO users (id, email, name) VALUES ($1, $2, $3)",
-            user_id,
-            f"ingest-{uuid.uuid4().hex}@example.invalid",
-            "Ingestion Test",
-        )
-        await conn.execute(
-            "INSERT INTO domains (id, user_id, domain, name, tracking_id) "
-            "VALUES ($1, $2, $3, $4, $5)",
-            domain_id,
-            user_id,
-            "ingest.example.invalid",
-            "Ingestion",
-            f"trk_{uuid.uuid4().hex[:16]}",
-        )
-
-    try:
-        yield str(domain_id)
-    finally:
-        async with db_pool.acquire() as conn:
-            # Cascades to domains -> visitors/sessions/events.
-            await conn.execute("DELETE FROM users WHERE id = $1", user_id)
+pytestmark = requires_test_db
 
 
 def _tracker_payload(domain_id: str) -> dict:
@@ -138,9 +62,7 @@ def _tracker_payload(domain_id: str) -> dict:
     }
 
 
-async def test_session_upsert_creates_visitor_and_persists_session(
-    seeded_domain, db_pool
-):
+async def test_session_upsert_creates_visitor_and_persists_session(seeded_domain, db_pool):
     payload = _tracker_payload(seeded_domain)
 
     session = await session_service.upsert(payload)
@@ -161,9 +83,7 @@ async def test_session_upsert_creates_visitor_and_persists_session(
     assert str(session["visitor_id"]) != payload["visitorId"]
 
 
-async def test_event_batch_insert_persists_and_links_to_the_surrogates(
-    seeded_domain, db_pool
-):
+async def test_event_batch_insert_persists_and_links_to_the_surrogates(seeded_domain, db_pool):
     payload = _tracker_payload(seeded_domain)
 
     session = await session_service.upsert(payload)
@@ -172,9 +92,7 @@ async def test_event_batch_insert_persists_and_links_to_the_surrogates(
     assert inserted == 1
 
     async with db_pool.acquire() as conn:
-        event = await conn.fetchrow(
-            "SELECT * FROM events WHERE domain_id = $1", seeded_domain
-        )
+        event = await conn.fetchrow("SELECT * FROM events WHERE domain_id = $1", seeded_domain)
 
     assert event is not None
     assert event["type"] == "pageview"
@@ -184,9 +102,7 @@ async def test_event_batch_insert_persists_and_links_to_the_surrogates(
     assert event["visitor_id"] == session["visitor_id"]
 
 
-async def test_repeat_session_upsert_does_not_inflate_pageviews(
-    seeded_domain, db_pool
-):
+async def test_repeat_session_upsert_does_not_inflate_pageviews(seeded_domain, db_pool):
     payload = _tracker_payload(seeded_domain)
 
     first = await session_service.upsert(payload)
@@ -358,9 +274,7 @@ async def test_every_plan_the_app_sells_is_storable(seeded_domain, db_pool):
 
     for plan in PLAN_LIMITS:
         async with db_pool.acquire() as conn:
-            await conn.execute(
-                "DELETE FROM subscriptions WHERE user_id = $1", user_id
-            )
+            await conn.execute("DELETE FROM subscriptions WHERE user_id = $1", user_id)
             stored = await conn.fetchval(
                 """
                 INSERT INTO subscriptions (user_id, plan, events_limit, domains_limit)
@@ -373,9 +287,7 @@ async def test_every_plan_the_app_sells_is_storable(seeded_domain, db_pool):
         assert stored == plan, f"plan {plan!r} was rejected by the schema"
 
 
-async def test_the_payment_upsert_succeeds_and_updates_on_conflict(
-    seeded_domain, db_pool
-):
+async def test_the_payment_upsert_succeeds_and_updates_on_conflict(seeded_domain, db_pool):
     """`_upgrade_subscription` upserts `ON CONFLICT (user_id)`.
 
     That needs a unique constraint on `subscriptions.user_id`. Production had one
@@ -406,7 +318,20 @@ async def test_the_payment_upsert_succeeds_and_updates_on_conflict(
     assert await _upsert("agency") == "agency"
 
     async with db_pool.acquire() as conn:
-        rows = await conn.fetchval(
-            "SELECT count(*) FROM subscriptions WHERE user_id = $1", user_id
-        )
+        rows = await conn.fetchval("SELECT count(*) FROM subscriptions WHERE user_id = $1", user_id)
     assert int(rows) == 1, "the upsert must update in place, not insert a second row"
+
+
+async def test_batch_insert_reports_only_newly_stored_events(seeded_domain, db_pool):
+    """Webhooks fire from this list, so a replayed event must not appear in it."""
+    payload = _tracker_payload(seeded_domain)
+    await session_service.upsert(payload)
+    second = {**payload, "eventId": str(uuid.uuid4()), "type": "click"}
+
+    first_stored: list[dict] = []
+    await event_service.batch_insert([payload], first_stored)
+    replay_stored: list[dict] = []
+    await event_service.batch_insert([payload, second], replay_stored)
+
+    assert first_stored == [payload]
+    assert replay_stored == [second]

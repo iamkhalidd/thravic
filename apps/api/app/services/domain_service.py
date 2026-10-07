@@ -18,6 +18,30 @@ log = create_logger("DomainService")
 
 TRACKING_CACHE_TTL_SECONDS = 300  # 5 minutes
 
+# Tracking settings a domain has when it has not overridden them. Recording is off
+# by default, as in the tracker; `domains.settings` stores only overrides.
+DEFAULT_SETTINGS: dict[str, bool] = {
+    "trackClicks": True,
+    "trackScrolls": True,
+    "trackForms": True,
+    "sessionRecording": False,
+}
+
+# Event types each setting switches off at collection.
+EVENT_TYPE_SETTINGS = {"click": "trackClicks", "scroll": "trackScrolls", "form": "trackForms"}
+
+
+def effective_settings(domain: dict[str, Any]) -> dict[str, bool]:
+    """The domain's stored overrides on top of the defaults."""
+    stored = domain.get("settings") or {}
+    return {key: bool(stored.get(key, default)) for key, default in DEFAULT_SETTINGS.items()}
+
+
+def collects(domain: dict[str, Any], event_type: str) -> bool:
+    """Whether events of `event_type` are stored for this domain."""
+    setting = EVENT_TYPE_SETTINGS.get(event_type)
+    return setting is None or effective_settings(domain)[setting]
+
 
 async def create(
     user_id: str, domain: str, name: str, tracking_id: str
@@ -114,6 +138,29 @@ async def get_by_tracking_id(tracking_id: str) -> dict[str, Any] | None:
             pass  # ignore cache write errors
 
     return domain
+
+
+async def update_settings(domain_id: str, changes: dict[str, bool]) -> dict[str, Any] | None:
+    """Merge `changes` into the stored settings and drop the cached tracking lookup,
+    so the collector applies them on the next request rather than in 5 minutes."""
+    domain = await query_one(
+        "UPDATE domains SET settings = settings || $2::jsonb WHERE id = $1 RETURNING *",
+        domain_id,
+        changes,  # the connection's jsonb codec encodes it
+    )
+    if domain:
+        await _forget_tracking_lookup(domain["tracking_id"])
+    return domain
+
+
+async def _forget_tracking_lookup(tracking_id: str) -> None:
+    client = get_client()
+    if client is None:
+        return
+    try:
+        await client.delete(f"domain:tracking:{tracking_id}")
+    except Exception:
+        pass  # the entry expires on its own within TRACKING_CACHE_TTL_SECONDS
 
 
 async def verify(domain_id: str) -> dict[str, Any] | None:

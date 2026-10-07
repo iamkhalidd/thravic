@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { formatPlanPrice, payments } from '@/lib/api';
 
 // Dynamically import Recharts-based views to prevent SSR hydration mismatches
 const OverviewView = dynamic(() => import('./demo/DemoViews').then(mod => mod.OverviewView), { ssr: false });
@@ -21,17 +22,17 @@ const HeatmapsView = dynamic(() => import('./demo/DemoViews').then(mod => mod.He
 
 const pricingTiers = [
     {
-        name: 'Hobby', price: 'Free', description: 'For personal projects',
+        id: 'free', name: 'Hobby', price: 'Free', description: 'For personal projects',
         features: ['1 website', '5k events/month', 'Core analytics & UTM', '30-day retention'],
         cta: 'Get Started Fixed', highlighted: false
     },
     {
-        name: 'Pro', price: '$29', period: '/mo', description: 'For startups & businesses',
+        id: 'pro', name: 'Pro', price: '₦45,000', period: '/mo', description: 'For startups & businesses',
         features: ['3 websites', '100k events/month', 'Heatmaps & recordings', 'Funnels & AI insights', 'CSV export & team', '1-year retention'],
         cta: 'Upgrade to Pro', highlighted: true
     },
     {
-        name: 'Agency', price: '$79', period: '/mo', description: 'For agencies & scale',
+        id: 'agency', name: 'Agency', price: '₦125,000', period: '/mo', description: 'For agencies & scale',
         features: ['20 websites', '500k events/month', 'Everything in Pro', 'Unlimited team members', '2-year retention', 'Priority support'],
         cta: 'Upgrade to Agency', highlighted: false
     }
@@ -118,32 +119,14 @@ export default function HomePage() {
     const [tiers, setTiers] = useState(pricingTiers);
 
     React.useEffect(() => {
-        const fetchPlans = async () => {
-            try {
-                const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
-                const res = await fetch(`${API_BASE}/api/payments/plans`);
-                const data = await res.json();
-                
-                if (data.success && data.plans) {
-                    const currencyMap: Record<string, string> = { NGN: '₦', USD: '$', GBP: '£', EUR: '€' };
-                    
-                    setTiers(prev => prev.map(tier => {
-                        const dbPlan = data.plans.find((p: any) => p.name.toLowerCase() === tier.name.toLowerCase());
-                        if (dbPlan) {
-                            const symbol = currencyMap[dbPlan.currency] || dbPlan.currency;
-                            return {
-                                ...tier,
-                                price: dbPlan.price > 0 ? `${symbol}${dbPlan.price.toLocaleString()}` : 'Free'
-                            };
-                        }
-                        return tier;
-                    }));
-                }
-            } catch (err) {
-                console.error('Failed to load dynamic pricing', err);
-            }
-        };
-        fetchPlans();
+        // The hardcoded tiers stay as the fallback; only the prices come from the API.
+        payments.getPlans().then(({ data }) => {
+            if (!data?.plans) return;
+            setTiers(prev => prev.map(tier => {
+                const plan = data.plans.find(p => p.id === tier.id);
+                return plan ? { ...tier, price: formatPlanPrice(plan.price, plan.currency) } : tier;
+            }));
+        });
     }, []);
 
     return (

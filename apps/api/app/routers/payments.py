@@ -31,8 +31,10 @@ from ..errors import SimpleError
 from ..js_compat import js_round
 from ..json_response import jsjson
 from ..logging import create_logger
+from ..middleware.admin_auth import AdminUser, admin_auth
 from ..middleware.auth import AuthUser, require_auth
 from ..plans import PLAN_FEATURES, PLAN_LIMITS
+from ..services import plan_service
 from ..services.email_service import send_payment_receipt_email
 
 log = create_logger("Payments")
@@ -90,9 +92,19 @@ def _free_subscription_payload() -> dict[str, Any]:
     }
 
 
+def _paystack_mode(secret: str) -> str:
+    if not secret:
+        return "EMPTY"
+    if secret.startswith("sk_live_"):
+        return "live"
+    if secret.startswith("sk_test_"):
+        return "test"
+    return "unknown"
+
+
 @router.get("/status")
-async def status():
-    """Diagnostic endpoint. Deliberately does not require auth."""
+async def status(_admin: AdminUser = Depends(admin_auth)):
+    """Diagnostic endpoint for admins. Reports the key's mode, never any of the key."""
     secret = _paystack_secret()
     frontend_url = get_settings().FRONTEND_URL or "NOT SET"
     server_url = get_settings().SERVER_URL or "NOT SET"
@@ -100,8 +112,7 @@ async def status():
     return jsjson(
         {
             "paystackConfigured": bool(secret),
-            # NOTE: this exposes the first 8 characters of the live secret key.
-            "paystackKeyPrefix": f"{secret[:8]}..." if secret else "EMPTY",
+            "paystackMode": _paystack_mode(secret),
             "frontendUrl": frontend_url,
             "serverUrl": server_url,
             "callbackUrl": f"{frontend_url}/dashboard/settings?payment=success",
@@ -165,7 +176,7 @@ async def current(user: AuthUser = Depends(require_auth)):
                 "subscription": {
                     "plan": subscription["plan"],
                     "status": subscription["status"],
-                    "eventsUsed": subscription["events_used"],
+                    "eventsUsed": await plan_service.events_this_month(user.user_id),
                     "eventsLimit": subscription["events_limit"],
                     "domainsLimit": subscription["domains_limit"],
                     "currentPeriodEnd": subscription["current_period_end"],
@@ -581,46 +592,9 @@ async def usage(user: AuthUser = Depends(require_auth)):
                 }
             )
 
-        domains = await query(
-            "SELECT id FROM domains WHERE user_id = $1", user.user_id
-        )
-
-        if not domains:
-            return jsjson(
-                {
-                    "success": True,
-                    "usage": {
-                        "eventsThisMonth": 0,
-                        "eventsLimit": PLAN_LIMITS[FREE_PLAN]["eventsLimit"],
-                        "percentUsed": 0,
-                    },
-                }
-            )
-
-        domain_ids = [d["id"] for d in domains]
-        now = datetime.now(UTC)
-        month_start = datetime(now.year, now.month, 1, tzinfo=UTC)
-
-        usage_row = await query_one(
-            """
-            SELECT COALESCE(SUM(events_count), 0) as total
-            FROM usage_logs
-            WHERE domain_id = ANY($1) AND month >= $2
-            """,
-            domain_ids,
-            month_start,
-        )
-
-        events_used = int((usage_row or {}).get("total") or 0)
-        subscription = await query_one(
-            "SELECT events_limit FROM subscriptions WHERE user_id = $1", user.user_id
-        )
-
-        events_limit = (
-            subscription["events_limit"]
-            if subscription
-            else PLAN_LIMITS[FREE_PLAN]["eventsLimit"]
-        )
+        events_used = await plan_service.events_this_month(user.user_id)
+        # The limit the collector enforces (an inactive subscription is free).
+        events_limit = (await plan_service.for_user(user.user_id)).events_limit
         percent_used = (
             js_round((events_used / events_limit) * 100) if events_limit > 0 else 0
         )

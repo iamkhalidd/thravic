@@ -3,9 +3,10 @@
 Both handlers stamp the payload with `exportDate: new Date().toISOString()`, which
 is volatile, so the parity specs normalise it rather than comparing it.
 
-`POST /domain/:id?format=csv` answers with a CSV body whose `created_at` cells go
-through `Date.prototype.toString()`, and it quotes only `url` — matching the
-hand-rolled template literal in the source.
+`POST /domain/:id?format=csv` answers with a CSV body whose `created_at` cells are
+ISO 8601 UTC (Express wrote `Date.prototype.toString()`, which spreadsheets do not
+parse as a date), and it quotes only `url` — matching the hand-rolled template
+literal in the source.
 """
 
 from __future__ import annotations
@@ -18,8 +19,7 @@ from starlette.responses import Response
 
 from ...db import query, query_one
 from ...errors import SimpleError
-from ...js_compat import js_date_to_string
-from ...json_response import jsjson
+from ...json_response import js_iso_datetime, jsjson
 from ...logging import create_logger
 from ...middleware.admin_auth import AdminUser, admin_auth
 from ...services.audit_service import log_action
@@ -195,7 +195,7 @@ async def export_domain(
         if fmt == "csv":
             rows = "\n".join(
                 f"{_js_str(event.get('id'))},{_js_str(event.get('type'))},"
-                f'"{_js_str(event.get("url"))}",{js_date_to_string(event["created_at"])}'
+                f'"{_js_str(event.get("url"))}",{js_iso_datetime(event["created_at"])}'
                 for event in events
             )
 

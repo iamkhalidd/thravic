@@ -57,6 +57,13 @@ def test_missing_token_has_no_code_field(client):
     assert response.json() == {"error": "No token provided"}
 
 
+def test_payment_status_requires_admin(client):
+    """It reports payment configuration, so it must not be public."""
+    response = client.get("/api/payments/status")
+
+    assert response.status_code == 401
+
+
 def test_malformed_bearer_is_rejected(client):
     response = client.get("/api/auth/me", headers={"Authorization": "Bearer not-a-jwt"})
 
@@ -172,6 +179,21 @@ def test_helmet_equivalent_headers_are_present(client):
     assert response.headers["referrer-policy"] == "no-referrer"
     assert response.headers["x-xss-protection"] == "0"
     assert response.headers["cross-origin-opener-policy"] == "same-origin"
+
+
+def test_api_responses_are_same_origin_resources(client):
+    response = client.get("/health")
+
+    assert response.headers["cross-origin-resource-policy"] == "same-origin"
+
+
+@pytest.mark.parametrize("path", ["/tf.js", "/v.js"])
+def test_tracking_script_can_be_embedded_cross_origin(client, path):
+    """Customer sites load the script from another origin; `same-origin` blocks it."""
+    response = client.get(path)
+
+    assert response.status_code == 200
+    assert response.headers["cross-origin-resource-policy"] == "cross-origin"
 
 
 def test_csp_connect_src_derives_from_cors_origin(client):

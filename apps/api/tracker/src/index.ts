@@ -123,6 +123,11 @@ const defaultConfig: TFConfig = {
     recordingMaxDuration: 600_000,
 };
 
+const SCROLL_MILESTONES = [25, 50, 75, 100];
+
+// Settings the dashboard controls (GET {endpoint}/{trackingId}/config).
+const REMOTE_CONFIG_KEYS = ['trackClicks', 'trackScrolls', 'trackForms', 'trackRecordings'] as const;
+
 // ── Rage-click constants ──
 const RAGE_CLICK_THRESHOLD = 3;      // clicks needed
 const RAGE_CLICK_WINDOW   = 800;     // ms
@@ -135,6 +140,8 @@ const REC_FLUSH_SIZE          = 100;  // max events before auto-flush
 class ThravicAnalytics {
     private trackingId: string = '';
     private config: TFConfig = defaultConfig;
+    /** What the page set itself (__TF_CONFIG__ / init config); wins over the dashboard. */
+    private pageConfig: Partial<TFConfig> = {};
     private eventQueue: TFEvent[] = [];
     private batchTimer: number | null = null;
     /** A send is in flight — never start a second one. */
@@ -442,6 +449,12 @@ class ThravicAnalytics {
     private trackPageView(): void {
         this.pageStart = Date.now();
         this.queueEvent(this.createEvent('pageview'));
+
+        // A page that fits in the viewport never fires `scroll`; check it once the
+        // content (or a SPA route's content) has had a moment to render.
+        if (this.config.trackScrolls) {
+            window.setTimeout(() => this.trackScroll(), 1000);
+        }
     }
 
     // ────────────────────────────────────
@@ -458,6 +471,7 @@ class ThravicAnalytics {
     }
 
     private trackClick(e: MouseEvent): void {
+        if (!this.config.trackClicks) return;
         const target = e.target as HTMLElement;
         if (!target) return;
 
@@ -465,8 +479,13 @@ class ThravicAnalytics {
         this.detectRageClick(e);
 
         const data: Record<string, unknown> = {
+            // x/y are viewport pixels; the heatmap needs them relative to the page,
+            // so the viewport width and the page-space y and height go with them.
             x: e.clientX,
             y: e.clientY,
+            pageY: e.pageY,
+            viewportWidth: window.innerWidth,
+            docHeight: document.documentElement.scrollHeight,
             tag: target.tagName.toLowerCase(),
             id: target.id || undefined,
             // Limit className to avoid leaking long dynamic class strings
@@ -497,14 +516,19 @@ class ThravicAnalytics {
     // ────────────────────────────────────
 
     private trackScroll(): void {
+        if (!this.config.trackScrolls) return;
         const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-        const docHeight = document.documentElement.scrollHeight - window.innerHeight;
-        const scrollPercent = Math.round((scrollTop / docHeight) * 100);
+        const scrollable = document.documentElement.scrollHeight - window.innerHeight;
+        // A page that fits in the viewport is fully seen without scrolling.
+        const scrollPercent = scrollable > 0 ? Math.round((scrollTop / scrollable) * 100) : 100;
 
-        // Only track at 25% increments
-        if (scrollPercent > this.scrollDepth && scrollPercent % 25 === 0) {
-            this.scrollDepth = scrollPercent;
-            this.queueEvent(this.createEvent('scroll', { depth: scrollPercent }));
+        // Report each 25% milestone once, including any skipped by a fast scroll
+        // (scroll events are sampled, so the exact value 25 is rarely observed).
+        for (const milestone of SCROLL_MILESTONES) {
+            if (milestone > this.scrollDepth && scrollPercent >= milestone) {
+                this.scrollDepth = milestone;
+                this.queueEvent(this.createEvent('scroll', { depth: milestone }));
+            }
         }
     }
 
@@ -513,6 +537,7 @@ class ThravicAnalytics {
     // ────────────────────────────────────
 
     private trackFormSubmit(e: Event): void {
+        if (!this.config.trackForms) return;
         const form = e.target as HTMLFormElement;
         if (!form || form.tagName !== 'FORM') return;
 
@@ -915,27 +940,21 @@ class ThravicAnalytics {
     // ────────────────────────────────────
 
     private setupListeners(): void {
-        // Click tracking
-        if (this.config.trackClicks) {
-            document.addEventListener('click', (e) => this.trackClick(e), { passive: true });
-        }
+        // Click tracking (checked per click, so the dashboard can switch it off)
+        document.addEventListener('click', (e) => this.trackClick(e), { passive: true });
 
         // Scroll tracking (throttled)
-        if (this.config.trackScrolls) {
-            let scrollTimeout: number;
-            window.addEventListener('scroll', () => {
-                if (scrollTimeout) return;
-                scrollTimeout = window.setTimeout(() => {
-                    this.trackScroll();
-                    scrollTimeout = 0;
-                }, 100);
-            }, { passive: true });
-        }
+        let scrollTimeout: number;
+        window.addEventListener('scroll', () => {
+            if (scrollTimeout) return;
+            scrollTimeout = window.setTimeout(() => {
+                this.trackScroll();
+                scrollTimeout = 0;
+            }, 100);
+        }, { passive: true });
 
         // Form tracking
-        if (this.config.trackForms) {
-            document.addEventListener('submit', (e) => this.trackFormSubmit(e), { passive: true });
-        }
+        document.addEventListener('submit', (e) => this.trackFormSubmit(e), { passive: true });
 
         // Error tracking
         if (this.config.trackErrors) {
@@ -1003,6 +1022,7 @@ class ThravicAnalytics {
         if (this.initialized) {
             // Late init (e.g. TF('init', {...}) after auto-init): merge the new
             // config and start recording if it was just switched on.
+            this.pageConfig = { ...this.pageConfig, ...(config || {}) };
             this.config = { ...this.config, ...(config || {}) };
             if (this.config.trackRecordings && !this.recordingId && this.shouldTrack()) {
                 this.startRecording();
@@ -1022,12 +1042,13 @@ class ThravicAnalytics {
             return;
         }
 
-        // Defaults <- window.__TF_CONFIG__ <- explicit config (last wins).
-        this.config = {
-            ...defaultConfig,
+        // Defaults <- window.__TF_CONFIG__ <- explicit config (last wins). The
+        // dashboard settings fetched below slot in between the defaults and these.
+        this.pageConfig = {
             ...(((window as any).__TF_CONFIG__ as Partial<TFConfig>) || {}),
             ...(config || {}),
         };
+        this.config = { ...defaultConfig, ...this.pageConfig };
 
         // If consent mode is on and consent has not yet been granted,
         // we still set up listeners but will not send anything until grantConsent() is called.
@@ -1061,6 +1082,27 @@ class ThravicAnalytics {
         if (this.config.trackRecordings && this.shouldTrack()) {
             this.startRecording();
         }
+
+        this.loadRemoteConfig();
+    }
+
+    // Apply the domain's dashboard settings. Anything the page set itself wins;
+    // the server enforces the same switches whatever the client does, so a failed
+    // fetch only means the defaults stay in effect.
+    private async loadRemoteConfig(): Promise<void> {
+        try {
+            const res = await fetch(`${this.config.endpoint}/${this.trackingId}/config`);
+            if (!res.ok) return;
+            const remote = await res.json() as Partial<TFConfig>;
+            for (const key of REMOTE_CONFIG_KEYS) {
+                if (typeof remote[key] === 'boolean' && !(key in this.pageConfig)) {
+                    this.config[key] = remote[key] as boolean;
+                }
+            }
+            if (this.config.trackRecordings && !this.recordingId && this.shouldTrack()) {
+                this.startRecording();
+            }
+        } catch { /* offline or blocked: keep the defaults */ }
     }
 
     // Manual event tracking

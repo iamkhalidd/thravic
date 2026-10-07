@@ -394,14 +394,9 @@ async def devices(domainId: str, request: Request, user: AuthUser = Depends(requ
         )
 
         device_rows = await query(
-            """
+            f"""
             SELECT
-                CASE
-                    WHEN s.screen_width IS NULL THEN 'unknown'
-                    WHEN s.screen_width < 768 THEN 'mobile'
-                    WHEN s.screen_width < 1024 THEN 'tablet'
-                    ELSE 'desktop'
-                END AS device,
+                {session_service.device_case_sql("s.screen_width")} AS device,
                 COUNT(DISTINCT s.session_id)::int AS count
             FROM sessions s
             WHERE s.domain_id = $1 AND s.started_at >= $2 AND s.started_at <= $3

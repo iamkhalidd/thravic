@@ -96,6 +96,21 @@ export default function UsersPage() {
         }
     };
 
+    // Suspension blocks every sign-in (password, refresh, OAuth); a session that is
+    // already open ends when its 15-minute access token expires. Admins must be
+    // demoted first, so the button is only offered for user and suspended accounts.
+    const handleToggleSuspend = async (user: User) => {
+        const suspending = user.role !== 'suspended';
+        const prompt = suspending
+            ? `Suspend ${user.email}? They will be signed out within 15 minutes and cannot sign in until reactivated. They will be emailed.`
+            : `Reactivate ${user.email}? They will be able to sign in again and will be emailed.`;
+        if (!confirm(prompt)) return;
+        try {
+            await api.post(`/api/admin/users/${user.id}/suspend`, {});
+            loadUsers();
+        } catch (err: any) { alert(err.message); }
+    };
+
     const handleDelete = async (user: User) => {
         if (!confirm(`Delete user ${user.email} and all their data? This is irreversible.`)) return;
         try {
@@ -242,6 +257,17 @@ export default function UsersPage() {
                                             <button className="btn btn-ghost btn-sm" onClick={() => handleExport(user)} title="Export GDPR Data">
                                                 <Download size={14} />
                                             </button>
+                                            {(user.role || 'user') === 'user' || user.role === 'suspended' ? (
+                                                <button
+                                                    className="btn btn-ghost btn-sm"
+                                                    onClick={() => handleToggleSuspend(user)}
+                                                    title={user.role === 'suspended' ? 'Reactivate' : 'Suspend'}
+                                                    aria-label={`${user.role === 'suspended' ? 'Reactivate' : 'Suspend'} ${user.email}`}
+                                                    style={user.role === 'suspended' ? { color: 'var(--color-success)' } : undefined}
+                                                >
+                                                    <Ban size={14} />
+                                                </button>
+                                            ) : null}
                                             <button className="btn btn-danger btn-sm" onClick={() => handleDelete(user)} title="Delete">
                                                 <Trash2 size={14} />
                                             </button>

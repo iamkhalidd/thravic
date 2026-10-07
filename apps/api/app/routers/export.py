@@ -4,6 +4,10 @@ Returns a CSV download rather than JSON, so the parity harness compares raw byte
 An unrecognised `type` writes only the header block (Express falls through both
 branches and calls `res.end()`), and only `sessions` escapes quotes in `user_agent`
 — `events` escapes `url` and `referrer` but leaves nothing else quoted.
+
+Timestamps are ISO 8601 UTC (`2026-10-07T16:05:25.123Z`), the same format as the
+JSON API, so spreadsheets parse them as dates. Express wrote `Date.toString()`
+(`Wed Oct 07 2026 16:05:25 GMT+0000 (Coordinated Universal Time)`).
 """
 
 from __future__ import annotations
@@ -16,7 +20,7 @@ from starlette.responses import Response
 
 from ..db import query
 from ..errors import SimpleError
-from ..js_compat import js_date_to_string
+from ..json_response import js_iso_datetime
 from ..logging import create_logger
 from ..middleware.auth import AuthUser, require_auth
 from ..middleware.feature_gate import require_feature
@@ -48,7 +52,7 @@ class _CsvResponse(Response):
 def _js_str(value: Any) -> str:
     """`String(value)` for the value types these rows contain."""
     if isinstance(value, datetime):
-        return js_date_to_string(value)
+        return js_iso_datetime(value)
     if isinstance(value, bool):
         return "true" if value else "false"
     return str(value)

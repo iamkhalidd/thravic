@@ -67,6 +67,11 @@ class Settings(BaseSettings):
     API_URL: str | None = None
     RENDER_EXTERNAL_URL: str | None = None
 
+    # ── Data retention job ────────────────────
+    # dry_run (default): report daily what is past each plan's retention, delete
+    # nothing. delete: remove it. off: do not run. See jobs/retention.py.
+    RETENTION_MODE: str = "dry_run"
+
     # ── Rate limiting ─────────────────────────
     RATE_LIMIT_WINDOW_MS: int = 900_000
     RATE_LIMIT_MAX: int = 300

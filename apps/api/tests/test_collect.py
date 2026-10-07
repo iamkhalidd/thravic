@@ -22,7 +22,13 @@ from app.main import app
 from app.middleware.blocklist_gate import blocklist_gate
 from app.middleware.settings_gate import tracking_gate
 from app.routers import collect as collect_routes
-from app.services import domain_service, event_service, session_service, webhook_service
+from app.services import (
+    domain_service,
+    event_service,
+    plan_service,
+    session_service,
+    webhook_service,
+)
 
 TRACKING_ID = "trk_demo"
 GEO = {"country": "NG", "region": "Lagos", "city": "Lagos"}
@@ -34,6 +40,8 @@ class _Writes:
     def __init__(self) -> None:
         self.sessions: list[dict] = []
         self.events: list[list[dict]] = []
+        # Batches the stub reports as already stored (a replay): none are new.
+        self.replay = False
 
 
 @pytest.fixture
@@ -44,8 +52,12 @@ def writes(monkeypatch):
         recorded.sessions.append(params)
         return {"id": uuid.uuid4()}
 
-    async def _batch_insert(events):
+    async def _batch_insert(events, stored=None):
         recorded.events.append(events)
+        if recorded.replay:
+            return 0
+        if stored is not None:
+            stored.extend(events)
         return len(events)
 
     monkeypatch.setattr(session_service, "upsert", _upsert)
@@ -56,7 +68,12 @@ def writes(monkeypatch):
 
 @pytest.fixture
 def domain(monkeypatch):
-    record = {"id": uuid.uuid4(), "tracking_id": TRACKING_ID, "domain": "example.com"}
+    record = {
+        "id": uuid.uuid4(),
+        "user_id": uuid.uuid4(),
+        "tracking_id": TRACKING_ID,
+        "domain": "example.com",
+    }
 
     async def _get_by_tracking_id(tracking_id: str):
         return record if tracking_id == TRACKING_ID else None
@@ -64,8 +81,17 @@ def domain(monkeypatch):
     async def _no_webhooks(*_args, **_kwargs):
         return None
 
+    async def _record_webhooks(domain_id, events):
+        record["webhooks"].append(events)
+
+    async def _within_limit(_owner_id):
+        return record.get("over_limit", False)
+
+    record["webhooks"] = []
+    monkeypatch.setattr(plan_service, "over_event_limit", _within_limit)
     monkeypatch.setattr(domain_service, "get_by_tracking_id", _get_by_tracking_id)
     monkeypatch.setattr(webhook_service, "trigger_webhooks", _no_webhooks)
+    monkeypatch.setattr(webhook_service, "trigger_for_events", _record_webhooks)
     return record
 
 
@@ -144,6 +170,42 @@ def test_the_batch_route_persists_every_event(client, domain, writes):
     assert response.json() == {"success": True, "processed": 2}
     assert len(writes.sessions) == 2
     assert len(writes.events[0]) == 2
+
+
+def test_the_batch_route_notifies_webhooks_with_the_tracker_events(client, domain, writes):
+    """The tracker only uses /batch, so this is the path webhooks must fire on."""
+    pageview, click = _pageview(), _pageview(type="click")
+    del click["eventId"]  # older snippets; must not be confused with another event
+
+    client.post(f"/api/collect/{TRACKING_ID}/batch", json={"events": [pageview, click]})
+
+    assert domain["webhooks"] == [[("pageview", pageview), ("click", click)]]
+
+
+def test_a_replayed_batch_does_not_notify_webhooks_again(client, domain, writes):
+    """The tracker re-sends until acknowledged; nothing new was stored."""
+    writes.replay = True
+
+    response = client.post(
+        f"/api/collect/{TRACKING_ID}/batch", json={"events": [_pageview()]}
+    )
+
+    assert response.json() == {"success": True, "processed": 0}
+    assert domain["webhooks"] == []
+
+
+def test_over_the_monthly_limit_events_are_acknowledged_and_dropped(client, domain, writes):
+    """A rejection would make the tracker retry forever, so the answer is a 202."""
+    domain["over_limit"] = True
+
+    single = client.post(f"/api/collect/{TRACKING_ID}", json=_pageview())
+    batch = client.post(f"/api/collect/{TRACKING_ID}/batch", json={"events": [_pageview()]})
+
+    assert single.status_code == 202
+    assert single.json() == {"success": True, "dropped": "monthly_event_limit"}
+    assert batch.json() == {"success": True, "processed": 0, "dropped": "monthly_event_limit"}
+    assert writes.sessions == [] and writes.events == []
+    assert domain["webhooks"] == []
 
 
 # ── Rejections ───────────────────────────────────────────────────────────────
