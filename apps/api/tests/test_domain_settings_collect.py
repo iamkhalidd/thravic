@@ -18,6 +18,7 @@ from app.middleware.blocklist_gate import blocklist_gate
 from app.middleware.settings_gate import tracking_gate
 from app.plans import PLAN_FEATURES
 from app.routers import collect as collect_routes
+from app.routers import domains as domains_routes
 from app.services import domain_service, event_service, plan_service, session_service
 from app.services.plan_service import Plan
 
@@ -129,6 +130,8 @@ def test_config_reports_the_dashboard_settings(client, site, stored):
         "trackScrolls": False,
         "trackForms": True,
         "trackRecordings": True,
+        "recordingConsentPrompt": True,
+        "recordingSampleRate": 100,
     }
     assert "max-age=60" in response.headers["cache-control"]
 
@@ -168,3 +171,93 @@ def test_recording_is_refused_over_the_monthly_limit(client, site, stored):
 
     assert response.status_code == 403
     assert response.json() == {"error": "This site has reached its monthly event limit"}
+
+
+def test_config_reports_the_sample_rate(client, site, stored):
+    site["settings"] = {"sessionRecording": True, "recordingSampleRate": 25}
+
+    config = client.get(f"/api/collect/{TRACKING_ID}/config").json()
+
+    assert config["recordingSampleRate"] == 25
+
+
+def test_a_stored_value_outside_the_choices_falls_back_to_the_default():
+    domain = {"settings": {"recordingSampleRate": 7, "recordingDailyLimit": "lots"}}
+
+    settings = domain_service.effective_settings(domain)
+
+    assert settings["recordingSampleRate"] == 100
+    assert settings["recordingDailyLimit"] == 50
+
+
+def _start(client):
+    return client.post(
+        f"/api/collect/{TRACKING_ID}/recording/start",
+        json={"url": "https://example.com/", "sessionId": str(uuid.uuid4())},
+    )
+
+
+def test_recording_is_refused_once_the_daily_limit_is_reached(
+    client, site, stored, monkeypatch
+):
+    site["settings"] = {"sessionRecording": True, "recordingDailyLimit": 25}
+    created: list[str] = []
+
+    async def _started_today(_domain_id):
+        return 25
+
+    async def _create(*_args):
+        created.append("recording")
+        return {"id": uuid.uuid4(), "started_at": None}
+
+    monkeypatch.setattr(collect_routes.recording_service, "count_started_today", _started_today)
+    monkeypatch.setattr(collect_routes.recording_service, "create", _create)
+
+    response = _start(client)
+
+    assert response.status_code == 429
+    assert response.json() == {"error": "This site has reached its daily recording limit"}
+    assert created == []
+
+
+def test_recording_starts_below_the_daily_limit(client, site, stored, monkeypatch):
+    site["settings"] = {"sessionRecording": True, "recordingDailyLimit": 25}
+
+    async def _started_today(_domain_id):
+        return 24
+
+    async def _create(*_args):
+        return {"id": uuid.uuid4(), "started_at": None}
+
+    monkeypatch.setattr(collect_routes.recording_service, "count_started_today", _started_today)
+    monkeypatch.setattr(collect_routes.recording_service, "create", _create)
+
+    assert _start(client).status_code == 201
+
+
+@pytest.mark.parametrize(
+    ("body", "expected"),
+    [
+        ({"recordingSampleRate": 25}, {"recordingSampleRate": 25}),
+        ({"recordingDailyLimit": 1000}, {"recordingDailyLimit": 1000}),
+        ({"sessionRecording": False}, {"sessionRecording": False}),
+    ],
+)
+def test_settings_accept_the_listed_values(body, expected):
+    assert domains_routes._validate_settings(body) == (expected, None)
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"recordingSampleRate": 33},
+        {"recordingSampleRate": True},
+        {"recordingDailyLimit": "100"},
+        {"recordingDailyLimit": 100000},
+    ],
+)
+def test_settings_refuse_other_limit_values(body):
+    settings, message = domains_routes._validate_settings(body)
+
+    assert settings is None
+    assert "must be one of" in message

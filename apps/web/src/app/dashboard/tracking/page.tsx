@@ -5,9 +5,9 @@ import Link from 'next/link';
 import { useDomain } from '@/contexts/DomainContext';
 import { useSubscription, type PlanFeature } from '@/hooks/useSubscription';
 import { SlidersHorizontal } from 'lucide-react';
-import { domains, type DomainSettings } from '@/lib/api';
+import { domains, type DomainSettings, type DomainSwitch } from '@/lib/api';
 
-const SWITCHES: Array<{ key: keyof DomainSettings; label: string; description: string; feature?: PlanFeature }> = [
+const SWITCHES: Array<{ key: DomainSwitch; label: string; description: string; feature?: PlanFeature }> = [
     {
         key: 'trackClicks',
         label: 'Clicks',
@@ -23,12 +23,6 @@ const SWITCHES: Array<{ key: keyof DomainSettings; label: string; description: s
         label: 'Form submissions',
         description: 'That a form was submitted, with its name and field count. Field values are never sent.',
     },
-    {
-        key: 'sessionRecording',
-        label: 'Session recording',
-        description: 'A replay of each visit as the visitor saw it — page content, mouse, clicks and scrolling — on the Sessions page. Typed values are always hidden. Add class tf-block to an element to leave it out, or tf-mask to hide its text.',
-        feature: 'recordings',
-    },
 ];
 
 export default function TrackingPage() {
@@ -36,7 +30,7 @@ export default function TrackingPage() {
     const { hasFeature } = useSubscription();
 
     const [settings, setSettings] = useState<DomainSettings | null>(null);
-    const [saving, setSaving] = useState<keyof DomainSettings | null>(null);
+    const [saving, setSaving] = useState<DomainSwitch | null>(null);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
@@ -49,7 +43,7 @@ export default function TrackingPage() {
         });
     }, [selectedDomainId]);
 
-    const toggle = async (key: keyof DomainSettings) => {
+    const toggle = async (key: DomainSwitch) => {
         if (!selectedDomainId || !settings) return;
         const previous = settings;
         setSettings({ ...settings, [key]: !settings[key] }); // optimistic
@@ -139,6 +133,20 @@ export default function TrackingPage() {
                         </div>
                     );
                 })}
+                <div style={{
+                    display: 'flex', alignItems: 'center', gap: 'var(--space-md)',
+                    padding: 'var(--space-md) var(--space-lg)',
+                }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>
+                            Session recording {settings && (settings.sessionRecording ? '· On' : '· Off')}
+                        </div>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', marginTop: '2px' }}>
+                            Replays of visits, with visitor consent, a share of visits and a daily limit. Typed values are never recorded.
+                        </div>
+                    </div>
+                    <Link href="/dashboard/sessions" className="btn btn-secondary">Manage on Sessions</Link>
+                </div>
             </div>
 
             <p style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', marginTop: 'var(--space-md)' }}>

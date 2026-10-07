@@ -541,6 +541,8 @@ async def tracker_config(trackingId: str):
                 "trackScrolls": settings["trackScrolls"],
                 "trackForms": settings["trackForms"],
                 "trackRecordings": await _records(domain),
+                "recordingConsentPrompt": settings["recordingConsentPrompt"],
+                "recordingSampleRate": settings["recordingSampleRate"],
             },
             # Short, so a dashboard change reaches visitors within a minute.
             headers={"Cache-Control": "public, max-age=60"},
@@ -560,6 +562,9 @@ async def recording_start(trackingId: str, request: Request):
             raise SimpleError("Session recording is not enabled for this site", 403)
         if await plan_service.over_event_limit(str(domain["user_id"])):
             raise SimpleError("This site has reached its monthly event limit", 403)
+        limit = domain_service.effective_settings(domain)["recordingDailyLimit"]
+        if await recording_service.count_started_today(domain["id"]) >= limit:
+            raise SimpleError("This site has reached its daily recording limit", 429)
 
         body = await _body(request)
         issues = _recording_start_issues(body)

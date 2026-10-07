@@ -16,6 +16,7 @@ from typing import Any
 
 from ..db import query, query_one
 from . import session_service
+from .recording_scrub import scrub_events
 
 
 async def create(
@@ -57,7 +58,10 @@ async def append_rrweb_events(recording_id: str, events: list[dict[str, Any]]) -
     rrweb timestamps are the visitor's clock in epoch ms, so the duration is the
     span between the earliest and latest event seen — right even when the page
     never says the recording ended. `ended_at` follows the latest upload.
+
+    Typed values are masked first (see `recording_scrub`), whatever the tracker sent.
     """
+    events = scrub_events(events)
     data = gzip.compress(json.dumps(events, separators=(",", ":")).encode("utf-8"))
     timestamps = [event["timestamp"] for event in events]
     row = await query_one(
@@ -105,6 +109,19 @@ async def rrweb_events_json(recording_id: str) -> str:
     )
     parts = [gzip.decompress(row["data"]).decode("utf-8")[1:-1] for row in rows]
     return "[" + ",".join(part for part in parts if part) + "]"
+
+
+async def count_started_today(domain_id: str) -> int:
+    """Recordings this domain started since midnight UTC (the daily limit's day)."""
+    row = await query_one(
+        """
+        SELECT COUNT(*)::int AS count FROM session_recordings
+        WHERE domain_id = $1
+          AND started_at >= date_trunc('day', NOW() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'
+        """,
+        domain_id,
+    )
+    return int((row or {}).get("count") or 0)
 
 
 async def append_events(

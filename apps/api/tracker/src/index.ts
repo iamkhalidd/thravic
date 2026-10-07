@@ -62,6 +62,12 @@ interface TFConfig {
     trackRecordings: boolean;
     /** Maximum recording duration in ms. Default: 600 000 (10 min) */
     recordingMaxDuration: number;
+    /** Percent of visits recorded (the dashboard's choice). Default: 100 */
+    recordingSampleRate: number;
+    /** Ask the visitor before recording, with the tracker's own prompt. Default: true.
+     *  When off, recording needs the site's own consent: requireConsent plus
+     *  TF('consent', 'granted'). Nothing is recorded without one or the other. */
+    recordingConsentPrompt: boolean;
 }
 
 interface TFEvent {
@@ -131,6 +137,8 @@ const defaultConfig: TFConfig = {
     trackPerformance: true,
     trackRecordings: false,
     recordingMaxDuration: 600_000,
+    recordingSampleRate: 100,
+    recordingConsentPrompt: true,
 };
 
 const SCROLL_MILESTONES = [25, 50, 75, 100];
@@ -154,7 +162,10 @@ function beacon(url: string, payload: unknown): void {
 }
 
 // Settings the dashboard controls (GET {endpoint}/{trackingId}/config).
-const REMOTE_CONFIG_KEYS = ['trackClicks', 'trackScrolls', 'trackForms', 'trackRecordings'] as const;
+const REMOTE_CONFIG_KEYS = [
+    'trackClicks', 'trackScrolls', 'trackForms', 'trackRecordings', 'recordingConsentPrompt',
+] as const;
+const REMOTE_CONFIG_NUMBERS = ['recordingSampleRate'] as const;
 
 // ── Rage-click constants ──
 const RAGE_CLICK_THRESHOLD = 3;      // clicks needed
@@ -162,6 +173,9 @@ const RAGE_CLICK_WINDOW   = 800;     // ms
 
 // ── Recording constants ──
 const REC_STORAGE_KEY = '_tf_rec';
+const REC_SAMPLE_KEY = '_tf_rec_sample';   // this visit's in/out of the sample
+const REC_CONSENT_KEY = '_tf_rec_consent'; // the visitor's answer to the prompt
+const REC_CONSENT_DAYS = 180;              // how long that answer is kept
 const REC_FLUSH_INTERVAL = 5000;         // ms between recording uploads
 const REC_FLUSH_BYTES = 512 * 1024;      // upload early once this much is buffered
 const BEACON_MAX_BYTES = 60 * 1024;      // under the browsers' 64 KB beacon cap
@@ -329,6 +343,15 @@ class ThravicAnalytics {
         if (this.config.trackRecordings && this.initialized) {
             this.startRecording();
         }
+    }
+
+    // The visitor withdraws their yes to recording: stop now and don't ask again
+    // for REC_CONSENT_DAYS. Analytics without recording carry on.
+    public revokeRecordingConsent(): void {
+        try {
+            localStorage.setItem(REC_CONSENT_KEY, JSON.stringify({ answer: 'denied', at: Date.now() }));
+        } catch { /* blocked */ }
+        this.endRecording();
     }
 
     // Revoke consent (e.g. user withdraws permission)
@@ -832,15 +855,125 @@ class ThravicAnalytics {
         return null;
     }
 
+    // Whether this visit is recorded. Decided once per session, so a visit is
+    // recorded in full or not at all, at recordingSampleRate percent of visits.
+    // A visit left out never loads the recorder or contacts the server.
+    private inRecordingSample(): boolean {
+        const sessionId = this.getSessionId();
+        try {
+            const stored = JSON.parse(sessionStorage.getItem(REC_SAMPLE_KEY) || 'null');
+            if (stored && stored.sessionId === sessionId) return stored.record === true;
+        } catch { /* storage blocked or corrupt */ }
+
+        const record = Math.random() * 100 < this.config.recordingSampleRate;
+        this.setRecordingSample(record);
+        return record;
+    }
+
+    private setRecordingSample(record: boolean): void {
+        try {
+            sessionStorage.setItem(REC_SAMPLE_KEY, JSON.stringify({ sessionId: this.getSessionId(), record }));
+        } catch { /* blocked: decided again on the next page */ }
+    }
+
+    // ── Visitor consent ──
+    // Recording waits for the visitor's yes. The prompt says plainly what is and
+    // isn't recorded; the answer is kept for REC_CONSENT_DAYS so it is asked once.
+    // A site that collects consent itself turns the prompt off and calls
+    // TF('consent', 'granted') (requireConsent mode); recording then follows that.
+
+    private storedRecordingConsent(): 'granted' | 'denied' | null {
+        try {
+            const stored = JSON.parse(localStorage.getItem(REC_CONSENT_KEY) || 'null');
+            if (stored && Date.now() - stored.at < REC_CONSENT_DAYS * 86_400_000) {
+                return stored.answer === 'granted' ? 'granted' : 'denied';
+            }
+        } catch { /* storage blocked or corrupt */ }
+        return null;
+    }
+
+    private askRecordingConsent(): Promise<boolean> {
+        const stored = this.storedRecordingConsent();
+        if (stored) return Promise.resolve(stored === 'granted');
+
+        return new Promise((resolve) => {
+            const host = document.createElement('div');
+            const root = host.attachShadow ? host.attachShadow({ mode: 'open' }) : host;
+            const site = window.location.hostname.replace(/^www\./, '');
+            root.innerHTML = `
+<style>
+  .box { position: fixed; z-index: 2147483647; left: 16px; bottom: 16px; max-width: 360px;
+    box-sizing: border-box; padding: 16px; border-radius: 10px; background: #111827; color: #f9fafb;
+    font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    box-shadow: 0 8px 30px rgba(0,0,0,.3); }
+  @media (max-width: 420px) { .box { left: 8px; right: 8px; bottom: 8px; max-width: none; } }
+  h2 { margin: 0 0 6px; font-size: 15px; }
+  p { margin: 0 0 8px; }
+  ul { margin: 0 0 10px; padding-left: 18px; }
+  details { margin-bottom: 12px; color: #d1d5db; }
+  summary { cursor: pointer; color: #f9fafb; }
+  .row { display: flex; gap: 8px; }
+  button { flex: 1; padding: 8px 12px; border-radius: 6px; font: inherit; cursor: pointer; }
+  .yes { background: #f9fafb; color: #111827; border: 0; font-weight: 600; }
+  .no { background: transparent; color: #f9fafb; border: 1px solid #4b5563; }
+  button:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
+</style>
+<div class="box" role="dialog" aria-labelledby="tf-title" aria-describedby="tf-body">
+  <h2 id="tf-title">Help improve ${site}</h2>
+  <p id="tf-body">May we record how you use this visit — the pages you see, clicks and scrolling — to find what's confusing or broken?</p>
+  <details>
+    <summary>What's recorded?</summary>
+    <ul>
+      <li>Recorded: pages you view, mouse movement, clicks and scrolling.</li>
+      <li>Never recorded: anything you type — including passwords, card numbers and messages.</li>
+      <li>Used only by this site's owner to analyse and improve the site.</li>
+      <li>Deleted automatically after the site's retention period.</li>
+      <li>Saying no changes nothing; the site works the same.</li>
+    </ul>
+  </details>
+  <div class="row">
+    <button type="button" class="no">No thanks</button>
+    <button type="button" class="yes">Allow</button>
+  </div>
+</div>`;
+            const answer = (granted: boolean) => {
+                try {
+                    localStorage.setItem(REC_CONSENT_KEY, JSON.stringify({
+                        answer: granted ? 'granted' : 'denied', at: Date.now(),
+                    }));
+                } catch { /* blocked: asked again next visit */ }
+                host.remove();
+                resolve(granted);
+            };
+            root.querySelector('.yes')!.addEventListener('click', () => answer(true));
+            root.querySelector('.no')!.addEventListener('click', () => answer(false));
+            document.body.appendChild(host);
+        });
+    }
+
     private async startRecording(): Promise<void> {
         if (this.recordingId || this.recordingStarting) return;
+        // Global Privacy Control: the visitor has asked sites not to track them.
+        if ((navigator as any).globalPrivacyControl === true) return;
+
+        let current = this.resumableRecording();
+        if (!current && !this.inRecordingSample()) return;
         this.recordingStarting = true;
 
         try {
+            // The site's own consent (requireConsent + TF('consent', 'granted')) stands
+            // in for the prompt. With the prompt off it is required: no visit is
+            // recorded without one or the other.
+            const siteConsented = this.config.requireConsent && this.consentGranted;
+            if (!current && !siteConsented) {
+                if (!this.config.recordingConsentPrompt) return;
+                if (!(await this.askRecordingConsent())) return;
+                if (!this.shouldTrack()) return;
+            }
+
             const record = await this.loadRecorder();
             if (!record) return;
 
-            let current = this.resumableRecording();
             if (!current) {
                 const res = await fetch(`${this.config.endpoint}/${this.trackingId}/recording/start`, {
                     method: 'POST',
@@ -850,7 +983,12 @@ class ThravicAnalytics {
                         url: window.location.href,
                     }),
                 });
-                if (!res.ok) return;
+                if (!res.ok) {
+                    // Refused (switched off, plan, or the site's daily limit):
+                    // don't ask again on every page of this visit.
+                    this.setRecordingSample(false);
+                    return;
+                }
                 const data = await res.json();
                 current = { id: data.id, sessionId: this.getSessionId(), startedAt: Date.now() };
                 try {
@@ -1129,6 +1267,11 @@ class ThravicAnalytics {
                     this.config[key] = remote[key] as boolean;
                 }
             }
+            for (const key of REMOTE_CONFIG_NUMBERS) {
+                if (typeof remote[key] === 'number' && !(key in this.pageConfig)) {
+                    this.config[key] = remote[key] as number;
+                }
+            }
             if (this.config.trackRecordings && !this.recordingId && this.shouldTrack()) {
                 this.startRecording();
             }
@@ -1211,6 +1354,9 @@ if (!navigator.webdriver && !(window as any).__TF_LOADED__) {
                 try { localStorage.removeItem('_tf_consent'); } catch { /* blocked */ }
                 tf.revokeConsent();
             }
+        } else if (method === 'revokeRecordingConsent') {
+            // For a "stop recording me" link on the site's privacy page.
+            tf.revokeRecordingConsent();
         }
     }
 

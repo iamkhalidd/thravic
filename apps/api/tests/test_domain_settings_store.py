@@ -21,6 +21,9 @@ async def test_updates_merge_into_the_stored_overrides(seeded_domain, db_pool):
         "trackScrolls": True,
         "trackForms": True,
         "sessionRecording": True,
+        "recordingConsentPrompt": True,
+        "recordingSampleRate": 100,
+        "recordingDailyLimit": 50,
     }
 
 

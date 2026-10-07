@@ -215,6 +215,7 @@ async def list_recordings(
             domain["id"], limit, offset, device, duration
         )
         total = await recording_service.count_by_domain(domain["id"], device, duration)
+        started_today = await recording_service.count_started_today(domain["id"])
 
         return jsjson(
             {
@@ -231,6 +232,8 @@ async def list_recordings(
                     }
                     for r in recordings
                 ],
+                # Against the domain's daily limit (settings.recordingDailyLimit).
+                "startedToday": started_today,
                 "pagination": {
                     "page": page,
                     "limit": limit,

@@ -13,6 +13,8 @@ import {
 } from 'lucide-react';
 import { recordings, type RecordingDevice, type RecordingDuration } from '@/lib/api';
 import { useDomain } from '@/contexts/DomainContext';
+import { useSubscription } from '@/hooks/useSubscription';
+import RecordingControls from '@/components/RecordingControls';
 import type { ReplayEvent } from '@/components/ScreenReplay';
 
 // rrweb needs the browser; load the player only when a recording is opened.
@@ -80,7 +82,9 @@ function formatDuration(seconds: number): string {
 }
 
 export default function SessionsPage() {
-    const { selectedDomainId, loading: domainLoading } = useDomain();
+    const { selectedDomainId, selectedDomain, loading: domainLoading } = useDomain();
+    const { hasFeature } = useSubscription();
+    const [startedToday, setStartedToday] = useState<number | null>(null);
     const [recordingsList, setRecordingsList] = useState<Recording[]>([]);
     const [total, setTotal] = useState<number | null>(null);
     const [page, setPage] = useState(1);
@@ -104,6 +108,7 @@ export default function SessionsPage() {
         }).then(({ data }) => {
             setRecordingsList(data?.recordings || []);
             setTotal(data?.pagination.total ?? 0);
+            setStartedToday(data?.startedToday ?? null);
             setPage(1);
             setLoading(false);
         });
@@ -204,6 +209,14 @@ export default function SessionsPage() {
                     </span>
                 </div>
             </div>
+
+            {selectedDomainId && (
+                <RecordingControls
+                    domainId={selectedDomainId}
+                    startedToday={startedToday}
+                    locked={!hasFeature('recordings', selectedDomain?.features || undefined)}
+                />
+            )}
 
             {recordingsList.length === 0 ? (
                 <div className="card" style={{ textAlign: 'center', padding: 'var(--space-2xl)', opacity: loading ? 0.6 : 1 }}>

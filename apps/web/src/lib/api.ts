@@ -211,7 +211,18 @@ export interface DomainSettings {
     trackScrolls: boolean;
     trackForms: boolean;
     sessionRecording: boolean;
+    /** Ask each visitor before recording (the tracker's prompt). */
+    recordingConsentPrompt: boolean;
+    /** Percent of visits recorded: 100, 50, 25 or 10. */
+    recordingSampleRate: number;
+    /** Recordings started per UTC day; the server refuses more. */
+    recordingDailyLimit: number;
 }
+
+export type DomainSwitch = 'trackClicks' | 'trackScrolls' | 'trackForms' | 'sessionRecording';
+
+export const RECORDING_SAMPLE_RATES = [100, 50, 25, 10] as const;
+export const RECORDING_DAILY_LIMITS = [25, 50, 100, 250, 500, 1000] as const;
 
 // Domains API
 export const domains = {
@@ -585,6 +596,8 @@ export const recordings = {
                 endedAt: string | null;
                 device: RecordingDevice | 'unknown';
             }>;
+            /** Recordings started today (UTC), against settings.recordingDailyLimit. */
+            startedToday: number;
             pagination: { page: number; limit: number; total: number; totalPages: number };
         }>(`/api/recordings/${domainId}${query}`);
     },

@@ -52,6 +52,9 @@ SETTINGS_KEYS = (
     "trackForms",
     "sessionRecording",
     "heatmaps",
+    "recordingConsentPrompt",
+    "recordingSampleRate",
+    "recordingDailyLimit",
 )
 STORED_SETTINGS = frozenset(domain_service.DEFAULT_SETTINGS)
 
@@ -90,13 +93,19 @@ def _validate_create(body: dict[str, Any]) -> tuple[dict[str, Any] | None, str |
 
 
 def _validate_settings(body: dict[str, Any]) -> tuple[dict[str, Any] | None, str | None]:
-    """`updateSettingsSchema.parse` — all optional booleans."""
+    """`updateSettingsSchema.parse` — all optional: switches are booleans, the
+    recording limits one of their listed values."""
     settings: dict[str, Any] = {}
     for key in SETTINGS_KEYS:
         raw = body.get(key)
         if raw is None:
             continue
-        if not isinstance(raw, bool):
+        choices = domain_service.SETTING_CHOICES.get(key)
+        if choices is not None:
+            if isinstance(raw, bool) or raw not in choices:
+                allowed = ", ".join(str(choice) for choice in choices)
+                return None, f"{key} must be one of: {allowed}"
+        elif not isinstance(raw, bool):
             issue = issue_invalid_type(key, "boolean", js_type_of(raw))
             return None, first_message([issue])
         settings[key] = raw

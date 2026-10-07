@@ -188,3 +188,17 @@ def test_the_recorder_script_is_served(upload):
     assert client.get(
         "/recorder.js", headers={"if-none-match": response.headers["etag"]}
     ).status_code == 304
+
+
+@requires_test_db
+async def test_the_daily_count_covers_only_recordings_started_today(seeded_domain, db_pool):
+    today = await recording_service.create(seeded_domain, None, URL)
+    yesterday = await recording_service.create(seeded_domain, None, URL)
+    async with db_pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE session_recordings SET started_at = NOW() - INTERVAL '1 day' WHERE id = $1",
+            yesterday["id"],
+        )
+
+    assert today is not None
+    assert await recording_service.count_started_today(seeded_domain) == 1

@@ -20,21 +20,46 @@ TRACKING_CACHE_TTL_SECONDS = 300  # 5 minutes
 
 # Tracking settings a domain has when it has not overridden them. Recording is off
 # by default, as in the tracker; `domains.settings` stores only overrides.
-DEFAULT_SETTINGS: dict[str, bool] = {
+DEFAULT_SETTINGS: dict[str, bool | int] = {
     "trackClicks": True,
     "trackScrolls": True,
     "trackForms": True,
     "sessionRecording": False,
+    # Ask each visitor before recording (the tracker's own prompt). Off only when
+    # the site collects consent itself and calls TF('grantConsent').
+    "recordingConsentPrompt": True,
+    # Share of visits recorded, in percent; the tracker decides once per visit.
+    "recordingSampleRate": 100,
+    # Recordings started per UTC day, enforced at /recording/start. Each one is
+    # stored for the plan's retention, so this is what bounds recording storage.
+    "recordingDailyLimit": 50,
+}
+
+# Values the numeric settings may take (the dashboard offers exactly these).
+SETTING_CHOICES: dict[str, tuple[int, ...]] = {
+    "recordingSampleRate": (100, 50, 25, 10),
+    "recordingDailyLimit": (25, 50, 100, 250, 500, 1000),
 }
 
 # Event types each setting switches off at collection.
 EVENT_TYPE_SETTINGS = {"click": "trackClicks", "scroll": "trackScrolls", "form": "trackForms"}
 
 
-def effective_settings(domain: dict[str, Any]) -> dict[str, bool]:
-    """The domain's stored overrides on top of the defaults."""
+def effective_settings(domain: dict[str, Any]) -> dict[str, bool | int]:
+    """The domain's stored overrides on top of the defaults.
+
+    A stored value that is no longer one of a numeric setting's choices falls
+    back to the default rather than reaching the collector.
+    """
     stored = domain.get("settings") or {}
-    return {key: bool(stored.get(key, default)) for key, default in DEFAULT_SETTINGS.items()}
+    settings: dict[str, bool | int] = {}
+    for key, default in DEFAULT_SETTINGS.items():
+        value = stored.get(key, default)
+        if key in SETTING_CHOICES:
+            settings[key] = value if value in SETTING_CHOICES[key] else default
+        else:
+            settings[key] = bool(value)
+    return settings
 
 
 def collects(domain: dict[str, Any], event_type: str) -> bool:
@@ -140,7 +165,9 @@ async def get_by_tracking_id(tracking_id: str) -> dict[str, Any] | None:
     return domain
 
 
-async def update_settings(domain_id: str, changes: dict[str, bool]) -> dict[str, Any] | None:
+async def update_settings(
+    domain_id: str, changes: dict[str, bool | int]
+) -> dict[str, Any] | None:
     """Merge `changes` into the stored settings and drop the cached tracking lookup,
     so the collector applies them on the next request rather than in 5 minutes."""
     domain = await query_one(
