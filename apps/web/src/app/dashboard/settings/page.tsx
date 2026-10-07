@@ -71,6 +71,7 @@ function SettingsPageInner() {
     const [activeTab, setActiveTab] = useState<'account' | 'subscription' | 'notifications' | 'export'>('account');
     const [loading, setLoading] = useState(true);
     const [plans, setPlans] = useState(fallbackPlans);
+    const [usage, setUsage] = useState<{ eventsThisMonth: number; eventsLimit: number; percentUsed: number } | null>(null);
     const { selectedDomainId } = useDomain();
     const [exportError, setExportError] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
@@ -129,6 +130,12 @@ function SettingsPageInner() {
     useEffect(() => {
         loadData();
     }, [loadData]);
+
+    useEffect(() => {
+        payments.getUsage().then(({ data }) => {
+            if (data?.usage) setUsage(data.usage);
+        });
+    }, []);
 
     useEffect(() => {
         payments.getPlans().then(({ data }) => {
@@ -517,6 +524,8 @@ function SettingsPageInner() {
                                 <p style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', marginTop: 'var(--space-xs)' }}>
                                     Payments are securely processed by <strong>Paystack</strong> in NGN.
                                 </p>
+
+                                {usage && <UsageMeter {...usage} />}
                             </div>
 
                             {/* Promo code input */}
@@ -750,6 +759,39 @@ function SettingsPageInner() {
                     to { transform: rotate(360deg); }
                 }
             `}</style>
+        </div>
+    );
+}
+
+/** Events used this month against the plan's monthly allowance. */
+function UsageMeter({ eventsThisMonth, eventsLimit, percentUsed }: { eventsThisMonth: number; eventsLimit: number; percentUsed: number }) {
+    const color = percentUsed >= 100 ? '#ff5555' : percentUsed >= 85 ? '#ffaa00' : 'var(--color-text-primary)';
+    return (
+        <div style={{ marginTop: 'var(--space-lg)' }}>
+            <div className="flex items-center justify-between" style={{ fontSize: '0.875rem', marginBottom: 'var(--space-xs)' }}>
+                <span>Events this month</span>
+                <span style={{ color: 'var(--color-text-secondary)' }}>
+                    {eventsThisMonth.toLocaleString()} of {eventsLimit.toLocaleString()} ({percentUsed}%)
+                </span>
+            </div>
+            <div
+                role="progressbar"
+                aria-label="Events used this month"
+                aria-valuemin={0}
+                aria-valuemax={eventsLimit}
+                aria-valuenow={eventsThisMonth}
+                style={{ height: '8px', background: 'var(--color-bg-tertiary)', borderRadius: '4px', overflow: 'hidden' }}
+            >
+                <div style={{ width: `${Math.min(percentUsed, 100)}%`, height: '100%', background: color, borderRadius: '4px' }} />
+            </div>
+            {percentUsed >= 85 && (
+                <p style={{ fontSize: '0.8rem', color, marginTop: 'var(--space-xs)' }}>
+                    {percentUsed >= 100
+                        ? "You are over this plan's monthly allowance."
+                        : "You are close to this plan's monthly allowance."}
+                    {' '}The count resets on the 1st (UTC).
+                </p>
+            )}
         </div>
     );
 }

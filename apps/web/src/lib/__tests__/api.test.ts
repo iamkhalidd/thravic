@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { exportData, formatPlanPrice, payments, recordings } from '../api';
+import { exportData, formatPlanPrice, payments, recordings, webhooks } from '../api';
 
 const fetchMock = vi.fn();
 
@@ -111,5 +111,45 @@ describe('recordings.list', () => {
 
         expect(fetchMock.mock.calls[0][0]).toMatch(/\/api\/recordings\/dom-1$/);
         expect(fetchMock.mock.calls[1][0]).toMatch(/\/api\/recordings\/dom-1\?device=mobile&duration=long&page=2$/);
+    });
+});
+
+describe('webhooks.create', () => {
+    it('posts the url, events and secret', async () => {
+        fetchMock.mockResolvedValueOnce(jsonResponse({ id: 'w1', url: 'https://example.com/h', events: ['click'], enabled: true, hasSecret: true, created_at: '' }, 201));
+
+        const result = await webhooks.create('dom-1', { url: 'https://example.com/h', events: ['click'], secret: 's3cret' });
+
+        const [url, init] = fetchMock.mock.calls[0];
+        expect(url).toMatch(/\/api\/webhooks\/dom-1$/);
+        expect(JSON.parse(init.body)).toEqual({ url: 'https://example.com/h', events: ['click'], secret: 's3cret' });
+        expect(result.data?.hasSecret).toBe(true);
+    });
+
+    it('flattens the validation issue array into a readable message', async () => {
+        fetchMock.mockResolvedValueOnce(jsonResponse({ error: [{ message: 'Invalid url' }, { message: 'Required' }] }, 400));
+
+        const result = await webhooks.create('dom-1', { url: 'nope', events: [] });
+
+        expect(result.error).toBe('Invalid url; Required');
+    });
+
+    it('passes a plain error message through', async () => {
+        fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'Webhook URL must point to a public internet address' }, 400));
+
+        const result = await webhooks.create('dom-1', { url: 'http://127.0.0.1/h', events: ['click'] });
+
+        expect(result.error).toBe('Webhook URL must point to a public internet address');
+    });
+});
+
+describe('payments.getUsage', () => {
+    it('reads the usage endpoint', async () => {
+        fetchMock.mockResolvedValueOnce(jsonResponse({ success: true, usage: { eventsThisMonth: 5, eventsLimit: 100, percentUsed: 5 } }));
+
+        const result = await payments.getUsage();
+
+        expect(fetchMock.mock.calls[0][0]).toMatch(/\/api\/payments\/usage$/);
+        expect(result.data?.usage.percentUsed).toBe(5);
     });
 });

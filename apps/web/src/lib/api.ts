@@ -691,6 +691,14 @@ export const payments = {
         return null;
     },
 
+    /** Events stored this calendar month (UTC) across all of the user's domains. */
+    async getUsage() {
+        return apiRequest<{
+            success: boolean;
+            usage: { eventsThisMonth: number; eventsLimit: number; percentUsed: number };
+        }>('/api/payments/usage');
+    },
+
     /** Fetch the current subscription from the server. */
     async getCurrent() {
         return apiRequest<{
@@ -803,5 +811,47 @@ export const exportData = {
         a.click();
         URL.revokeObjectURL(url);
         return {};
+    },
+};
+
+// Webhooks API — /api/webhooks/{domainId}. The owner or a domain admin can manage
+// them (Pro plan and above). Each subscribed event is POSTed as JSON, signed with
+// HMAC-SHA256 of the body in X-Thravic-Signature when a secret is set. The secret
+// is write-only: responses say only whether one is set.
+export const WEBHOOK_EVENTS = ['pageview', 'click', 'scroll', 'form', 'custom', 'session_end'] as const;
+export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number];
+
+export interface Webhook {
+    id: string;
+    url: string;
+    events: WebhookEvent[];
+    enabled: boolean;
+    hasSecret: boolean;
+    created_at: string;
+}
+
+/** The API answers a validation failure with an array of issues instead of a string. */
+function webhookError(error: unknown): string {
+    if (Array.isArray(error)) return error.map((issue: any) => issue?.message).filter(Boolean).join('; ') || 'Invalid webhook';
+    return typeof error === 'string' ? error : 'Request failed';
+}
+
+export const webhooks = {
+    async list(domainId: string) {
+        return apiRequest<Webhook[]>(`/api/webhooks/${domainId}`);
+    },
+
+    async create(domainId: string, data: { url: string; events: WebhookEvent[]; secret?: string }) {
+        const result = await apiRequest<Webhook>(`/api/webhooks/${domainId}`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+        return result.error !== undefined ? { error: webhookError(result.error) } : result;
+    },
+
+    async delete(domainId: string, webhookId: string) {
+        return apiRequest<{ message: string }>(`/api/webhooks/${domainId}/${webhookId}`, {
+            method: 'DELETE',
+        });
     },
 };

@@ -9,6 +9,7 @@ import {
     TrendingUp,
     Users,
     UsersRound,
+    Webhook,
     Target,
     MousePointer2,
     Video,
@@ -411,6 +412,26 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                     >
                         <UsersRound size={18} style={{ flexShrink: 0 }} />
                         {!(sidebarCollapsed && !isMobile) && <span>Team</span>}
+                    </Link>
+
+                    {/* Webhooks link */}
+                    <Link
+                        href="/dashboard/webhooks"
+                        title={(sidebarCollapsed && !isMobile) ? 'Webhooks' : undefined}
+                        style={{
+                            display: 'flex', alignItems: 'center',
+                            gap: (sidebarCollapsed && !isMobile) ? '0' : '10px',
+                            padding: (sidebarCollapsed && !isMobile) ? '10px 0' : '8px 12px',
+                            justifyContent: (sidebarCollapsed && !isMobile) ? 'center' : 'flex-start',
+                            color: pathname.startsWith('/dashboard/webhooks') ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
+                            fontWeight: pathname.startsWith('/dashboard/webhooks') ? 500 : 400,
+                            textDecoration: 'none', fontSize: '0.8125rem',
+                            background: 'transparent',
+                            whiteSpace: 'nowrap', overflow: 'hidden',
+                        }}
+                    >
+                        <Webhook size={18} style={{ flexShrink: 0 }} />
+                        {!(sidebarCollapsed && !isMobile) && <span>Webhooks</span>}
                     </Link>
 
                     {/* Settings link */}
