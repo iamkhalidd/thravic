@@ -22,7 +22,13 @@ from app.main import app
 from app.middleware.blocklist_gate import blocklist_gate
 from app.middleware.settings_gate import tracking_gate
 from app.routers import collect as collect_routes
-from app.services import domain_service, event_service, session_service, webhook_service
+from app.services import (
+    domain_service,
+    event_service,
+    plan_service,
+    session_service,
+    webhook_service,
+)
 
 TRACKING_ID = "trk_demo"
 GEO = {"country": "NG", "region": "Lagos", "city": "Lagos"}
@@ -62,7 +68,12 @@ def writes(monkeypatch):
 
 @pytest.fixture
 def domain(monkeypatch):
-    record = {"id": uuid.uuid4(), "tracking_id": TRACKING_ID, "domain": "example.com"}
+    record = {
+        "id": uuid.uuid4(),
+        "user_id": uuid.uuid4(),
+        "tracking_id": TRACKING_ID,
+        "domain": "example.com",
+    }
 
     async def _get_by_tracking_id(tracking_id: str):
         return record if tracking_id == TRACKING_ID else None
@@ -73,7 +84,11 @@ def domain(monkeypatch):
     async def _record_webhooks(domain_id, events):
         record["webhooks"].append(events)
 
+    async def _within_limit(_owner_id):
+        return record.get("over_limit", False)
+
     record["webhooks"] = []
+    monkeypatch.setattr(plan_service, "over_event_limit", _within_limit)
     monkeypatch.setattr(domain_service, "get_by_tracking_id", _get_by_tracking_id)
     monkeypatch.setattr(webhook_service, "trigger_webhooks", _no_webhooks)
     monkeypatch.setattr(webhook_service, "trigger_for_events", _record_webhooks)
@@ -176,6 +191,20 @@ def test_a_replayed_batch_does_not_notify_webhooks_again(client, domain, writes)
     )
 
     assert response.json() == {"success": True, "processed": 0}
+    assert domain["webhooks"] == []
+
+
+def test_over_the_monthly_limit_events_are_acknowledged_and_dropped(client, domain, writes):
+    """A rejection would make the tracker retry forever, so the answer is a 202."""
+    domain["over_limit"] = True
+
+    single = client.post(f"/api/collect/{TRACKING_ID}", json=_pageview())
+    batch = client.post(f"/api/collect/{TRACKING_ID}/batch", json={"events": [_pageview()]})
+
+    assert single.status_code == 202
+    assert single.json() == {"success": True, "dropped": "monthly_event_limit"}
+    assert batch.json() == {"success": True, "processed": 0, "dropped": "monthly_event_limit"}
+    assert writes.sessions == [] and writes.events == []
     assert domain["webhooks"] == []
 
 

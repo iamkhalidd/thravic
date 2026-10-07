@@ -34,6 +34,7 @@ from ..logging import create_logger
 from ..middleware.admin_auth import AdminUser, admin_auth
 from ..middleware.auth import AuthUser, require_auth
 from ..plans import PLAN_FEATURES, PLAN_LIMITS
+from ..services import plan_service
 from ..services.email_service import send_payment_receipt_email
 
 log = create_logger("Payments")
@@ -175,7 +176,7 @@ async def current(user: AuthUser = Depends(require_auth)):
                 "subscription": {
                     "plan": subscription["plan"],
                     "status": subscription["status"],
-                    "eventsUsed": await _events_this_month(user.user_id),
+                    "eventsUsed": await plan_service.events_this_month(user.user_id),
                     "eventsLimit": subscription["events_limit"],
                     "domainsLimit": subscription["domains_limit"],
                     "currentPeriodEnd": subscription["current_period_end"],
@@ -576,27 +577,6 @@ async def webhook(request: Request):
         raise SimpleError("Internal error", 500) from None
 
 
-async def _events_this_month(user_id: str) -> int:
-    """Events stored this calendar month (UTC) across the user's domains.
-
-    Counted from `events` itself: nothing writes `usage_logs` or
-    `subscriptions.events_used`, so both read as zero. Served by the
-    `(domain_id, created_at)` index.
-    """
-    now = datetime.now(UTC)
-    row = await query_one(
-        """
-        SELECT COUNT(*)::text AS total
-        FROM events e
-        JOIN domains d ON d.id = e.domain_id
-        WHERE d.user_id = $1 AND e.created_at >= $2
-        """,
-        user_id,
-        datetime(now.year, now.month, 1, tzinfo=UTC),
-    )
-    return int((row or {}).get("total") or 0)
-
-
 @router.get("/usage")
 async def usage(user: AuthUser = Depends(require_auth)):
     try:
@@ -612,16 +592,9 @@ async def usage(user: AuthUser = Depends(require_auth)):
                 }
             )
 
-        events_used = await _events_this_month(user.user_id)
-        subscription = await query_one(
-            "SELECT events_limit FROM subscriptions WHERE user_id = $1", user.user_id
-        )
-
-        events_limit = (
-            subscription["events_limit"]
-            if subscription
-            else PLAN_LIMITS[FREE_PLAN]["eventsLimit"]
-        )
+        events_used = await plan_service.events_this_month(user.user_id)
+        # The limit the collector enforces (an inactive subscription is free).
+        events_limit = (await plan_service.for_user(user.user_id)).events_limit
         percent_used = (
             js_round((events_used / events_limit) * 100) if events_limit > 0 else 0
         )

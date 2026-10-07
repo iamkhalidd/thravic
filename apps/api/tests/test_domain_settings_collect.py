@@ -51,7 +51,14 @@ def stored(monkeypatch):
 @pytest.fixture
 def site(monkeypatch):
     """A domain whose stored settings and owner plan a test can set."""
-    record = {"id": uuid.uuid4(), "tracking_id": TRACKING_ID, "settings": {}, "plan": "pro"}
+    record = {
+        "id": uuid.uuid4(),
+        "user_id": uuid.uuid4(),
+        "tracking_id": TRACKING_ID,
+        "settings": {},
+        "plan": "pro",
+        "over_limit": False,
+    }
 
     async def _get_by_tracking_id(tracking_id):
         return record if tracking_id == TRACKING_ID else None
@@ -61,7 +68,11 @@ def site(monkeypatch):
         return Plan("owner", name, PLAN_FEATURES[name], 100_000, 3)
 
     monkeypatch.setattr(domain_service, "get_by_tracking_id", _get_by_tracking_id)
+    async def _over_event_limit(_owner_id):
+        return record["over_limit"]
+
     monkeypatch.setattr(plan_service, "owner_plan", _owner_plan)
+    monkeypatch.setattr(plan_service, "over_event_limit", _over_event_limit)
     return record
 
 
@@ -144,3 +155,16 @@ def test_recording_is_refused_when_switched_off(client, site, stored):
 
     assert response.status_code == 403
     assert response.json() == {"error": "Session recording is not enabled for this site"}
+
+
+def test_recording_is_refused_over_the_monthly_limit(client, site, stored):
+    site["settings"] = {"sessionRecording": True}
+    site["over_limit"] = True
+
+    response = client.post(
+        f"/api/collect/{TRACKING_ID}/recording/start",
+        json={"url": "https://example.com/", "sessionId": str(uuid.uuid4())},
+    )
+
+    assert response.status_code == 403
+    assert response.json() == {"error": "This site has reached its monthly event limit"}

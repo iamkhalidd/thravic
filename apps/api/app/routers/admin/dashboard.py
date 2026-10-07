@@ -145,24 +145,29 @@ async def charts(request: Request):
 @router.get("/actions/")
 async def actions():
     try:
-        at_limit = await query_one(
+        # Usage is counted from this month's events: `subscriptions.events_used` is
+        # never written, so it read 0 and no one ever appeared near or over a limit.
+        limits = await query_one(
             """
-            SELECT COUNT(*) as count FROM subscriptions s
-            WHERE s.status = 'active'
-              AND s.events_limit > 0
-              AND (s.events_used::float / s.events_limit::float) >= 0.85
-              AND s.events_used < s.events_limit
+            WITH usage AS (
+                SELECT s.events_limit,
+                       (SELECT COUNT(*) FROM events e
+                        JOIN domains d ON d.id = e.domain_id
+                        WHERE d.user_id = s.user_id
+                          AND e.created_at >= date_trunc('month', NOW() AT TIME ZONE 'UTC')
+                                               AT TIME ZONE 'UTC') AS used
+                FROM subscriptions s
+                WHERE s.status = 'active' AND s.events_limit > 0
+            )
+            SELECT
+                COUNT(*) FILTER (WHERE used >= 0.85 * events_limit AND used < events_limit)
+                    AS at_limit,
+                COUNT(*) FILTER (WHERE used >= events_limit) AS over_limit
+            FROM usage
             """
-        )
-
-        over_limit = await query_one(
-            """
-            SELECT COUNT(*) as count FROM subscriptions s
-            WHERE s.status = 'active'
-              AND s.events_limit > 0
-              AND s.events_used >= s.events_limit
-            """
-        )
+        ) or {}
+        at_limit = {"count": limits.get("at_limit") or 0}
+        over_limit = {"count": limits.get("over_limit") or 0}
 
         inactive_users = await query_one(
             """
@@ -217,8 +222,8 @@ async def actions():
                         "exceeded their event limit"
                     ),
                     "detail": (
-                        "They are likely seeing errors. Consider reaching out or "
-                        "upgrading their plan."
+                        "Their new events and recordings are not being stored until "
+                        "the 1st (UTC). Consider reaching out or upgrading their plan."
                     ),
                     "count": over_count,
                     "link": "/subscriptions?status=active",

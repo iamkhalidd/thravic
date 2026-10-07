@@ -161,6 +161,20 @@ async def create_domain(request: Request, user: AuthUser = Depends(require_auth)
             # Zod path: body is just `{ error: <first message> }`, no `code`
             raise SimpleError(message, 400)
 
+        # Domains already over the limit (e.g. after a downgrade) are kept; only
+        # adding another is refused.
+        plan = await plan_service.for_user(user.user_id)
+        if await domain_service.count_by_user(user.user_id) >= plan.domains_limit:
+            raise PayloadError(
+                {
+                    "error": f"Your {plan.name} plan allows {plan.domains_limit} "
+                    f"domain{'' if plan.domains_limit == 1 else 's'}. "
+                    "Upgrade to add more.",
+                    "upgrade": True,
+                },
+                403,
+            )
+
         domain = await domain_service.create(
             user.user_id,
             values["domain"],
@@ -180,7 +194,7 @@ async def create_domain(request: Request, user: AuthUser = Depends(require_auth)
             },
             status_code=201,
         )
-    except SimpleError:
+    except (PayloadError, SimpleError):
         raise
     except Exception as exc:
         # PostgreSQL unique violation on tracking_id/domain

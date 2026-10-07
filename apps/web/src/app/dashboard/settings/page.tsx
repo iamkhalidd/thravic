@@ -787,9 +787,8 @@ function UsageMeter({ eventsThisMonth, eventsLimit, percentUsed }: { eventsThisM
             {percentUsed >= 85 && (
                 <p style={{ fontSize: '0.8rem', color, marginTop: 'var(--space-xs)' }}>
                     {percentUsed >= 100
-                        ? "You are over this plan's monthly allowance."
-                        : "You are close to this plan's monthly allowance."}
-                    {' '}The count resets on the 1st (UTC).
+                        ? "You have used this plan's events for the month: new events and recordings are not being stored. Upgrade to resume now, or collection restarts on the 1st (UTC)."
+                        : "You are close to this plan's monthly allowance. When it runs out, new events stop being stored until the 1st (UTC)."}
                 </p>
             )}
         </div>

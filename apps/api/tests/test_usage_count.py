@@ -9,8 +9,7 @@ from __future__ import annotations
 
 import uuid
 
-from app.routers.payments import _events_this_month
-from app.services import event_service, session_service
+from app.services import event_service, plan_service, session_service
 from tests.conftest import requires_test_db
 from tests.test_event_ingestion import _tracker_payload
 
@@ -32,4 +31,4 @@ async def test_counts_this_months_events_across_the_users_domains(seeded_domain,
             events[0]["eventId"],
         )
 
-    assert await _events_this_month(str(user_id)) == 2
+    assert await plan_service.events_this_month(str(user_id)) == 2

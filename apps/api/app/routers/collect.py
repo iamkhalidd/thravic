@@ -205,6 +205,10 @@ async def _body(request: Request) -> dict:
     return body if isinstance(body, dict) else {}
 
 
+# `dropped` value on a 202 when the owner's plan has no events left this month.
+EVENT_LIMIT_REACHED = "monthly_event_limit"
+
+
 @router.post("/{trackingId}")
 async def collect_event(trackingId: str, request: Request):
     try:
@@ -218,6 +222,11 @@ async def collect_event(trackingId: str, request: Request):
         # Switched off for this domain: acknowledged, so the tracker drops it.
         if not domain_service.collects(domain, body["type"]):
             return jsjson({"success": True}, status_code=202)
+
+        # Over the plan's monthly events: acknowledged and dropped the same way,
+        # since a rejection would make the tracker retry the event forever.
+        if await plan_service.over_event_limit(str(domain["user_id"])):
+            return jsjson({"success": True, "dropped": EVENT_LIMIT_REACHED}, status_code=202)
 
         user_agent = request.headers.get("user-agent") or ""
         location = check_ip(_client_ip(request))
@@ -294,6 +303,12 @@ async def collect_batch(trackingId: str, request: Request):
         issues = _batch_issues(body)
         if issues:
             raise PayloadError({"error": "Invalid batch data", "details": issues}, 400)
+
+        if await plan_service.over_event_limit(str(domain["user_id"])):
+            return jsjson(
+                {"success": True, "processed": 0, "dropped": EVENT_LIMIT_REACHED},
+                status_code=202,
+            )
 
         # Event types switched off for this domain are acknowledged but not stored.
         events = [e for e in body["events"] if domain_service.collects(domain, e["type"])]
@@ -535,6 +550,8 @@ async def recording_start(trackingId: str, request: Request):
         domain = await _domain_by_tracking_id(trackingId)
         if not await _records(domain):
             raise SimpleError("Session recording is not enabled for this site", 403)
+        if await plan_service.over_event_limit(str(domain["user_id"])):
+            raise SimpleError("This site has reached its monthly event limit", 403)
 
         body = await _body(request)
         issues = _recording_start_issues(body)
