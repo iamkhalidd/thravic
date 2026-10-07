@@ -181,6 +181,21 @@ def test_helmet_equivalent_headers_are_present(client):
     assert response.headers["cross-origin-opener-policy"] == "same-origin"
 
 
+def test_api_responses_are_same_origin_resources(client):
+    response = client.get("/health")
+
+    assert response.headers["cross-origin-resource-policy"] == "same-origin"
+
+
+@pytest.mark.parametrize("path", ["/tf.js", "/v.js"])
+def test_tracking_script_can_be_embedded_cross_origin(client, path):
+    """Customer sites load the script from another origin; `same-origin` blocks it."""
+    response = client.get(path)
+
+    assert response.status_code == 200
+    assert response.headers["cross-origin-resource-policy"] == "cross-origin"
+
+
 def test_csp_connect_src_derives_from_cors_origin(client):
     """If CSP and CORS drift apart, the frontends break with no server-side error."""
     response = client.get("/health")

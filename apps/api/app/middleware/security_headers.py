@@ -27,6 +27,11 @@ SWAGGER_CDN = "https://cdn.jsdelivr.net"
 # the strict policy.
 DOCS_PATHS = frozenset({"/docs", "/docs/", "/redoc", "/redoc/", "/openapi.json"})
 
+# The tracking script is embedded by customer sites, i.e. loaded cross-origin.
+# With `Cross-Origin-Resource-Policy: same-origin` browsers refuse to run it
+# (ERR_BLOCKED_BY_RESPONSE.NotSameOrigin), so these paths opt out of that header.
+CROSS_ORIGIN_SCRIPT_PATHS = frozenset({"/tf.js", "/v.js"})
+
 CallNext = Callable[[Request], Awaitable[Response]]
 
 
@@ -82,7 +87,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-XSS-Protection"] = "0"
         response.headers["Origin-Agent-Cluster"] = "?1"
         response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
-        response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
+        response.headers["Cross-Origin-Resource-Policy"] = (
+            "cross-origin" if request.url.path in CROSS_ORIGIN_SCRIPT_PATHS else "same-origin"
+        )
 
         # crossOriginEmbedderPolicy is disabled in Express (needed for the
         # tracking script), so it is deliberately not set here either.
