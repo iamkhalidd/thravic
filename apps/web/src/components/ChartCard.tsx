@@ -2,33 +2,30 @@
 
 import type { ReactNode } from 'react';
 
-interface ChartCardProps {
-    title: string;
+/** A card with a title row (and optional action) around a chart or list. */
+export function ChartCard({ title, subtitle, action, children, loading, height = 240, flush }: {
+    title: ReactNode;
+    subtitle?: ReactNode;
     action?: ReactNode;
     children: ReactNode;
     loading?: boolean;
-    minHeight?: string;
-}
-
-export function ChartCard({ title, action, children, loading, minHeight = '300px' }: ChartCardProps) {
+    /** Skeleton height while loading. */
+    height?: number;
+    /** Content runs edge to edge (tables). */
+    flush?: boolean;
+}) {
     return (
-        <div className="card" style={{ minHeight }}>
+        <section className={`card${flush ? ' card-flush' : ''}`} style={{ minWidth: 0 }}>
             <div className="card-header">
-                <h4 className="card-title">{title}</h4>
+                <div style={{ minWidth: 0 }}>
+                    <h2 className="card-title">{title}</h2>
+                    {subtitle && <p className="card-subtitle">{subtitle}</p>}
+                </div>
                 {action}
             </div>
-            {loading ? (
-                <div style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 'var(--space-sm)',
-                    padding: 'var(--space-md) 0'
-                }}>
-                    <div className="skeleton" style={{ width: '100%', height: '200px' }} />
-                </div>
-            ) : (
-                children
-            )}
-        </div>
+            {loading
+                ? <div className="skeleton" style={{ height, margin: flush ? '0 20px 20px' : 0 }} />
+                : children}
+        </section>
     );
 }

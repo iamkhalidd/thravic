@@ -322,6 +322,15 @@ export const domains = {
     }
 };
 
+/** "?start=…&end=…" for the date range, or "" without one. */
+function rangeQuery(start?: string, end?: string): string {
+    const params = new URLSearchParams();
+    if (start) params.set('start', start);
+    if (end) params.set('end', end);
+    const query = params.toString();
+    return query ? `?${query}` : '';
+}
+
 // Analytics API
 export const analytics = {
     async getOverview(domainId: string, start?: string, end?: string) {
@@ -806,7 +815,7 @@ export const payments = {
 
 // Custom Events API (Errors, Performance, Forms, Rage Clicks)
 export const customEvents = {
-    async getErrors(domainId: string) {
+    async getErrors(domainId: string, start?: string, end?: string) {
         return apiRequest<{
             totalErrors: number;
             errors: Array<{
@@ -817,10 +826,10 @@ export const customEvents = {
                 last_seen: string;
             }>;
             trend: Array<{ day: string; count: number }>;
-        }>(`/api/custom-events/${domainId}/errors`);
+        }>(`/api/custom-events/${domainId}/errors${rangeQuery(start, end)}`);
     },
 
-    async getPerformance(domainId: string) {
+    async getPerformance(domainId: string, start?: string, end?: string) {
         return apiRequest<{
             metrics: {
                 avg_lcp: number;
@@ -833,10 +842,10 @@ export const customEvents = {
             };
             trend: Array<{ day: string; avg_lcp: number; avg_fcp: number }>;
             byPage: Array<{ url: string; avg_lcp: number; avg_fcp: number; count: number }>;
-        }>(`/api/custom-events/${domainId}/performance`);
+        }>(`/api/custom-events/${domainId}/performance${rangeQuery(start, end)}`);
     },
 
-    async getForms(domainId: string) {
+    async getForms(domainId: string, start?: string, end?: string) {
         return apiRequest<{
             totalSubmissions: number;
             forms: Array<{
@@ -849,10 +858,10 @@ export const customEvents = {
                 pages: number;
             }>;
             trend: Array<{ day: string; count: number }>;
-        }>(`/api/custom-events/${domainId}/forms`);
+        }>(`/api/custom-events/${domainId}/forms${rangeQuery(start, end)}`);
     },
 
-    async getRageClicks(domainId: string) {
+    async getRageClicks(domainId: string, start?: string, end?: string) {
         return apiRequest<{
             totalRageClicks: number;
             rageClicks: Array<{
@@ -863,7 +872,7 @@ export const customEvents = {
                 count: number;
                 avg_click_count: number;
             }>;
-        }>(`/api/custom-events/${domainId}/rage-clicks`);
+        }>(`/api/custom-events/${domainId}/rage-clicks${rangeQuery(start, end)}`);
     },
 };
 

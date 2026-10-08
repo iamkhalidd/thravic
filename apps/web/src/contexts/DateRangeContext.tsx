@@ -135,3 +135,24 @@ export function useDateRange() {
     }
     return context;
 }
+
+/**
+ * The header's date range as the API's `start` / `end` (ISO timestamps). Pages
+ * pass these to every analytics call and list `key` in their effect deps, so
+ * the range picker in the header drives every page.
+ */
+export function useApiRange() {
+    const { startDate, endDate, comparisonStartDate, comparisonEndDate } = useDateRange();
+    return useMemo(() => {
+        const start = startDate.toISOString();
+        const end = endDate.toISOString();
+        return {
+            start,
+            end,
+            key: `${start}|${end}`,
+            compare: comparisonStartDate && comparisonEndDate
+                ? { start: comparisonStartDate.toISOString(), end: comparisonEndDate.toISOString() }
+                : null,
+        };
+    }, [startDate, endDate, comparisonStartDate, comparisonEndDate]);
+}
