@@ -19,6 +19,7 @@ from ..db import query
 from ..logging import create_logger
 from ..services import plan_catalog
 from ..services.email_service import send_usage_limit_email
+from ..services.plan_service import entitled
 from .runner import run_if_due
 
 log = create_logger("Job")
@@ -29,7 +30,7 @@ THRESHOLDS = (80, 100)
 
 # Every owner's usage this month and plan (latest active subscription, else
 # free). The limit is the plan's current definition, applied in Python.
-USAGE_QUERY = """
+USAGE_QUERY = f"""
 WITH usage AS (
     SELECT d.user_id, COUNT(*)::int AS used
     FROM events e
@@ -43,7 +44,7 @@ FROM usage
 JOIN users u ON u.id = usage.user_id
 LEFT JOIN LATERAL (
     SELECT plan FROM subscriptions
-    WHERE user_id = u.id AND status = 'active'
+    WHERE user_id = u.id AND {entitled()}
     ORDER BY created_at DESC LIMIT 1
 ) s ON TRUE
 WHERE COALESCE(u.role, 'user') <> 'suspended'

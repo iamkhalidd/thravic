@@ -4,10 +4,11 @@ Each domain's retention comes from its owner's *effective* plan — the latest a
 subscription, else free — the same rule that decides features and limits. The old
 cleanup read `users.subscription`, which can disagree with billing.
 
-That rule has a sharp edge: when a paid subscription lapses, the owner drops to the
-free policy (30 days) and everything older is due at once. `expired_counts()`
-reports those rows separately as `fromInactivePaidOwners` so a dry run shows the
-size of that cliff before anything is deleted.
+One difference: a paid period that lapsed keeps its plan's retention for
+`LAPSED_RETENTION_HOLD_DAYS` after grace, so an owner who renews late finds their
+history intact. After that hold the owner drops to the free policy and everything
+older is due at once; `expired_counts()` reports those rows separately as
+`fromInactivePaidOwners` so a dry run shows the size of that cliff first.
 """
 
 from __future__ import annotations
@@ -15,6 +16,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..db import query
+from .plan_service import LAPSED_RETENTION_HOLD_DAYS, entitled
 
 # (table, timestamp column, policy column) — sessions last: deleting a session
 # cascades to its events and recordings, which are counted under their own tables.
@@ -47,7 +49,8 @@ def _domain_policy(policy_column: str) -> str:
         CROSS JOIN LATERAL (
             SELECT LOWER(COALESCE(
                 (SELECT s.plan FROM subscriptions s
-                 WHERE s.user_id = d.user_id AND s.status = 'active'
+                 WHERE s.user_id = d.user_id
+                   AND {entitled("s", LAPSED_RETENTION_HOLD_DAYS)}
                  ORDER BY s.created_at DESC LIMIT 1),
                 'free')) AS plan
         ) ep

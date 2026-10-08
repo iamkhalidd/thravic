@@ -21,6 +21,7 @@ from ...logging import create_logger
 from ...middleware.admin_auth import AdminUser, admin_auth
 from ...services import plan_catalog
 from ...services.audit_service import log_action
+from ...services.plan_service import entitled
 from ...validators.admin import update_subscription_schema
 from ._util import client_ip
 
@@ -79,13 +80,13 @@ async def list_subscriptions(request: Request):
         )
 
         revenue = await query(
-            """
+            f"""
             SELECT s.plan, COUNT(*) as count,
                    SUM(COALESCE(p.price, 0)) as revenue,
                    COALESCE(p.currency, 'NGN') as currency
             FROM subscriptions s
             LEFT JOIN plans p ON s.plan = p.id
-            WHERE s.status = 'active'
+            WHERE {entitled("s")}
             GROUP BY s.plan, p.price, p.currency
             ORDER BY revenue DESC
             """

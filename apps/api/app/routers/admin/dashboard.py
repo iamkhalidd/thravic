@@ -11,6 +11,7 @@ from ...errors import SimpleError
 from ...js_compat import js_parse_int_or_nan, js_to_locale_string
 from ...json_response import jsjson
 from ...logging import create_logger
+from ...services.plan_service import entitled
 
 log = create_logger("Admin:Dashboard")
 
@@ -32,9 +33,9 @@ async def stats():
             "SELECT COUNT(*) as count FROM events WHERE created_at >= CURRENT_DATE"
         )
         active_subscriptions = await query_one(
-            """
+            f"""
             SELECT COUNT(*) as count FROM subscriptions
-            WHERE status = 'active' AND plan != 'free'
+            WHERE {entitled()} AND plan != 'free'
             """
         )
         recent_signups = await query(
@@ -46,11 +47,11 @@ async def stats():
 
         # MRR is read from the plans table so pricing changes apply immediately.
         mrr_row = await query_one(
-            """
+            f"""
             SELECT COALESCE(SUM(p.price), 0) as total
             FROM subscriptions s
             JOIN plans p ON p.id = s.plan
-            WHERE s.status = 'active' AND s.plan != 'free'
+            WHERE {entitled('s')} AND s.plan != 'free'
             """
         )
 
@@ -191,11 +192,11 @@ async def actions():
         )
 
         recent_upgrades = await query_one(
-            """
+            f"""
             SELECT COUNT(*) as count, COALESCE(SUM(p.price), 0) as mrr
             FROM subscriptions s
             JOIN plans p ON p.id = s.plan
-            WHERE s.status = 'active'
+            WHERE {entitled('s')}
               AND s.plan != 'free'
               AND s.created_at >= NOW() - INTERVAL '7 days'
             """

@@ -19,14 +19,15 @@ from ..errors import PayloadError, SimpleError
 from ..logging import create_logger
 from ..plans import PLAN_FEATURES, get_plan_for_feature
 from ..services import plan_catalog
+from ..services.plan_service import entitled
 from .auth import AuthUser, require_auth
 
 log = create_logger("FeatureGate")
 
-_PLAN_QUERY = """
+_PLAN_QUERY = f"""
 SELECT COALESCE(
     (SELECT plan FROM subscriptions
-     WHERE user_id = $1 AND status = 'active'
+     WHERE user_id = $1 AND {entitled()}
      ORDER BY created_at DESC LIMIT 1),
     'free'
 ) AS plan

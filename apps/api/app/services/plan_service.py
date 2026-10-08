@@ -1,9 +1,9 @@
 """What a user's plan allows — the one place limits are read for enforcement.
 
-The plan comes from the user's latest *active* subscription, as in the feature
-gate; anything else (no row, canceled, expired) is the free plan. Limits and
-features come from the plan's current definition (`plan_catalog`), so an admin
-change applies to everyone on that plan, not only to new purchases.
+The plan comes from the user's latest *entitled* subscription (see `entitled`);
+anything else (no row, canceled, lapsed) is the free plan. Limits and features
+come from the plan's current definition (`plan_catalog`), so an admin change
+applies to everyone on that plan, not only to new purchases.
 """
 
 from __future__ import annotations
@@ -20,6 +20,29 @@ from . import plan_catalog
 log = create_logger("PlanService")
 
 FREE_PLAN = "free"
+
+# A paid period buys this many days; payments are one-off, not auto-renewing.
+PERIOD_DAYS = {"monthly": 30, "yearly": 365}
+# Access continues this long after the period ends, so a late renewal loses nothing.
+GRACE_DAYS = 3
+# After grace a lapsed account keeps its paid plan's data retention this long.
+LAPSED_RETENTION_HOLD_DAYS = 90
+
+
+def entitled(alias: str = "", extra_days: int = 0) -> str:
+    """SQL: the subscription row grants its plan now.
+
+    Access is decided from the dates on every check rather than by a job flipping
+    `status`, so it ends on time even if no job runs. A NULL period end is an admin
+    grant with no end date. `extra_days` widens the window (retention's data hold).
+    """
+    col = f"{alias}." if alias else ""
+    days = GRACE_DAYS + extra_days
+    return (
+        f"{col}status = 'active' AND ({col}current_period_end IS NULL "
+        f"OR {col}current_period_end > NOW() - INTERVAL '{days} days')"
+    )
+
 
 # How long a "this owner is over their event limit" answer is reused. Collection
 # runs per tracker batch, so without this every batch would count the month's
@@ -44,9 +67,9 @@ class Plan:
 
 async def for_user(user_id: str) -> Plan:
     row = user_id and await query_one(
-        """
+        f"""
         SELECT plan FROM subscriptions
-        WHERE user_id = $1 AND status = 'active'
+        WHERE user_id = $1 AND {entitled()}
         ORDER BY created_at DESC LIMIT 1
         """,
         user_id,

@@ -26,7 +26,7 @@ import httpx
 from fastapi import APIRouter, Depends, Request
 
 from ..config import get_settings
-from ..db import query, query_one
+from ..db import query, query_one, transaction
 from ..errors import SimpleError
 from ..js_compat import js_round
 from ..json_response import jsjson
@@ -44,9 +44,6 @@ PAYSTACK_BASE = "https://api.paystack.co"
 PAYSTACK_TIMEOUT_SECONDS = 30.0
 
 FREE_PLAN = "free"
-
-# Display prices used by the receipt email, in USD
-RECEIPT_PLAN_PRICES: dict[str, float] = {"pro": 29, "agency": 79}
 
 FAKE_SUBSCRIPTION_FALLBACK = {"price": 0}
 
@@ -158,16 +155,21 @@ async def current(user: AuthUser = Depends(require_auth)):
                 {"success": True, "subscription": await _free_subscription_payload()}
             )
 
-        # Limits and features are the plan's current definition, not the values
-        # copied onto the subscription at purchase.
-        plan = await plan_catalog.get(subscription.get("plan"))
+        # The plan in force (a lapsed paid plan is free), with limits and features
+        # from its current definition rather than values copied at purchase.
+        plan = await plan_catalog.get((await plan_service.for_user(user.user_id)).name)
+        period_end = subscription["current_period_end"]
+        grace_ends = period_end + timedelta(days=plan_service.GRACE_DAYS) if period_end else None
 
         return jsjson(
             {
                 "success": True,
                 "subscription": {
-                    "plan": subscription["plan"],
+                    "plan": plan.id,
+                    "paidPlan": subscription["plan"],
                     "status": subscription["status"],
+                    "state": _billing_state(subscription["plan"], plan.id, period_end),
+                    "graceEndsAt": grace_ends,
                     "eventsUsed": await plan_service.events_this_month(user.user_id),
                     "eventsLimit": plan.events_limit,
                     "domainsLimit": plan.domains_limit,
@@ -181,6 +183,17 @@ async def current(user: AuthUser = Depends(require_auth)):
     except Exception as exc:
         log.error(f"Error getting subscription: {exc}")
         raise SimpleError("Failed to get subscription", 500) from None
+
+
+def _billing_state(paid_plan: str, plan: str, period_end: datetime | None) -> str:
+    """free | active | grace (period over, access kept) | expired (back on free)."""
+    if (paid_plan or FREE_PLAN) == FREE_PLAN:
+        return "free"
+    if plan == FREE_PLAN:
+        return "expired"
+    if period_end and period_end <= datetime.now(UTC):
+        return "grace"
+    return "active"
 
 
 async def _validate_promo_code(code: str, plan: str, user_id: str) -> dict[str, Any]:
@@ -476,7 +489,9 @@ async def verify(request: Request, user: AuthUser = Depends(require_auth)):
         plan = metadata.get("plan")
 
         if user_id and plan and get_settings().DATABASE_URL:
-            await _upgrade_subscription(user_id, plan, reference)
+            await _upgrade_subscription(
+                user_id, plan, reference, tx_data.get("amount"), tx_data.get("currency")
+            )
 
         return jsjson({"success": True, "plan": plan})
     except Exception as exc:
@@ -521,7 +536,9 @@ async def webhook(request: Request):
             reference = event_data.get("reference")
 
             if user_id and plan and settings.DATABASE_URL:
-                await _upgrade_subscription(user_id, plan, reference)
+                await _upgrade_subscription(
+                    user_id, plan, reference, event_data.get("amount"), event_data.get("currency")
+                )
                 log.info(
                     f"User {user_id} upgraded to {plan} via webhook (ref: {reference})"
                 )
@@ -599,19 +616,26 @@ async def usage(user: AuthUser = Depends(require_auth)):
         raise SimpleError("Failed to get usage", 500) from None
 
 
-async def _upgrade_subscription(user_id: str, plan: str, reference: str) -> None:
-    """Upsert the subscription and email a receipt.
+async def _upgrade_subscription(
+    user_id: str,
+    plan: str,
+    reference: str,
+    amount: int | None = None,
+    currency: str | None = None,
+) -> None:
+    """Apply a successful payment: start or extend the plan's period, email a receipt.
 
-    `ON CONFLICT (user_id)` REQUIRES a unique constraint on
-    `subscriptions.user_id`. Production happens to have
-    `subscriptions_user_id_unique`, but no migration used to create it, so a
-    database built from migrations raised "there is no unique or exclusion
-    constraint matching the ON CONFLICT specification" — the caller answered 500,
-    the receipt was never sent and the row was never upgraded, i.e. a paying
-    customer got no features. `0006_subscriptions_constraints` now guarantees it.
+    Both `/verify` and the webhook report every payment, so the payment is first
+    claimed in `payment_history` (unique on `paystack_ref`); a reference already
+    applied changes nothing. `amount` is in kobo, as Paystack reports it.
 
-    `plan` is written straight through. 0014 dropped the CHECK that listed plan
-    ids, so plans an admin creates can be bought and stored.
+    Paying again for the same plan while it still grants access (in its period
+    or its grace days) extends it from the current end: renewing early loses no
+    days, and renewing during grace does not get the grace days for free. Any
+    other payment starts a fresh period now.
+
+    `ON CONFLICT (user_id)` relies on `subscriptions_user_id_unique` (0006).
+    `plan` is written straight through: 0014 dropped the CHECK listing plan ids.
     """
     tier = await plan_catalog.find(plan)
     if not tier:
@@ -619,41 +643,71 @@ async def _upgrade_subscription(user_id: str, plan: str, reference: str) -> None
         log.error(f"Payment for unknown plan {plan!r} by user {user_id} (ref {reference})")
         return
 
-    period_end = datetime.now(UTC) + timedelta(days=30)
+    renewing = (
+        "subscriptions.plan = EXCLUDED.plan AND subscriptions.current_period_end IS NOT NULL "
+        f"AND {plan_service.entitled('subscriptions')}"
+    )
+    days = plan_service.PERIOD_DAYS.get(tier.interval, plan_service.PERIOD_DAYS["monthly"])
 
-    try:
-        await query(
+    # One transaction: a payment is marked applied only if the plan was granted.
+    async with transaction() as conn:
+        claimed = await conn.fetchrow(
+            """
+            INSERT INTO payment_history (user_id, plan, amount, currency, paystack_ref, status)
+            VALUES ($1, $2, $3, $4, $5, 'success')
+            ON CONFLICT (paystack_ref) DO UPDATE SET status = 'success'
+                WHERE payment_history.status IS DISTINCT FROM 'success'
+            RETURNING amount, currency
+            """,
+            user_id,
+            tier.id,
+            amount or 0,
+            currency or tier.currency,
+            reference,
+        )
+        if not claimed:
+            log.info(f"Payment {reference} was already applied")
+            return
+
+        await conn.execute(
             "UPDATE users SET subscription = $1, paystack_subscription_code = $2 "
             "WHERE id = $3",
-            plan,
+            tier.id,
             reference,
             user_id,
         )
-    except Exception:
-        pass  # ignore if the column is missing
-
-    await query(
-        """
-        INSERT INTO subscriptions
-            (user_id, paystack_subscription_code, plan, status, events_limit, domains_limit,
-             current_period_end)
-        VALUES ($1, $2, $3, 'active', $4, $5, $6)
-        ON CONFLICT (user_id) DO UPDATE SET
-            paystack_subscription_code = $2,
-            plan                       = $3,
-            status                     = 'active',
-            events_limit               = $4,
-            domains_limit              = $5,
-            current_period_end         = $6,
-            updated_at                 = NOW()
-        """,
-        user_id,
-        reference,
-        tier.id,
-        tier.events_limit,
-        tier.domains_limit,
-        period_end,
-    )
+        period_end = await conn.fetchval(
+            f"""
+            INSERT INTO subscriptions
+                (user_id, paystack_subscription_code, plan, status, events_limit,
+                 domains_limit, current_period_start, current_period_end)
+            VALUES ($1, $2, $3, 'active', $4, $5, NOW(), NOW() + make_interval(days => $6))
+            ON CONFLICT (user_id) DO UPDATE SET
+                paystack_subscription_code = $2,
+                plan                       = $3,
+                status                     = 'active',
+                events_limit               = $4,
+                domains_limit              = $5,
+                current_period_start       = CASE
+                    WHEN NOT ({renewing}) THEN NOW()
+                    WHEN subscriptions.current_period_end > NOW()
+                        THEN COALESCE(subscriptions.current_period_start, NOW())
+                    ELSE subscriptions.current_period_end
+                END,
+                current_period_end         = CASE
+                    WHEN {renewing} THEN subscriptions.current_period_end
+                    ELSE NOW()
+                END + make_interval(days => $6),
+                updated_at                 = NOW()
+            RETURNING current_period_end
+            """,
+            user_id,
+            reference,
+            tier.id,
+            tier.events_limit,
+            tier.domains_limit,
+            days,
+        )
 
     try:
         account = await query_one(
@@ -667,9 +721,11 @@ async def _upgrade_subscription(user_id: str, plan: str, reference: str) -> None
             send_payment_receipt_email(
                 account["email"],
                 account["name"],
-                plan,
-                RECEIPT_PLAN_PRICES.get(plan, 0),
+                tier.name,
+                (claimed["amount"] or 0) / 100,
+                claimed["currency"] or tier.currency,
                 reference,
+                period_end,
             )
         )
 

@@ -13,6 +13,7 @@ from typing import Any
 from ..db import query, query_one
 from ..logging import create_logger
 from ..redis_client import get_client
+from .plan_service import entitled
 
 log = create_logger("DomainService")
 
@@ -88,7 +89,7 @@ async def create(
 async def list_by_user(user_id: str) -> list[dict[str, Any]]:
     """Domains the user owns or was invited to, with the owner's plan attached."""
     return await query(
-        """
+        f"""
         WITH user_domains AS (
             SELECT * FROM domains WHERE user_id = $1
             UNION
@@ -99,8 +100,8 @@ async def list_by_user(user_id: str) -> list[dict[str, Any]]:
         SELECT ud.*,
            COALESCE(
                (SELECT plan FROM subscriptions s
-                WHERE s.user_id = ud.user_id AND status = 'active'
-                ORDER BY created_at DESC LIMIT 1),
+                WHERE s.user_id = ud.user_id AND {entitled("s")}
+                ORDER BY s.created_at DESC LIMIT 1),
                'free'
            ) as owner_plan
         FROM user_domains ud

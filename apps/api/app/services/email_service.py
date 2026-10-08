@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import html
 import smtplib
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from email.message import EmailMessage
 from typing import Any
 
@@ -238,28 +238,64 @@ async def send_account_reactivated_email(to: str, name: str) -> None:
 
 
 async def send_payment_receipt_email(
-    to: str, name: str, plan: str, amount: Any, reference: str
+    to: str,
+    name: str,
+    plan_name: str,
+    amount: float,
+    currency: str,
+    reference: str,
+    period_end: datetime,
 ) -> None:
+    """Receipt for a one-off payment. `amount` is in currency units (naira, not
+    kobo); `period_end` is when the paid period ends — renewals extend it."""
     frontend_url = get_settings().FRONTEND_URL or "http://localhost:3000"
-    plan_label = plan[:1].upper() + plan[1:]
-
-    period_end = datetime.now(UTC) + timedelta(days=30)
-    period_end_label = _js_date_string(period_end)
+    paid = f"{currency} {amount:,.2f}"
+    ends = _js_date_string(period_end)
+    safe_name, safe_plan = html.escape(name or "there"), html.escape(plan_name)
 
     await send_email(
         to,
-        f"🎉 Thravic — Payment confirmed ({plan_label} plan)",
+        f"🎉 Thravic — Payment confirmed ({plan_name} plan)",
         _layout(
             "<h2>Payment confirmed</h2>"
-            f"<p>Hi {name}, your payment was successful and your account has been "
-            "upgraded!</p>"
-            f"<p>Plan: {plan_label}<br/>Amount: ${amount} USD<br/>"
-            f"Reference: {reference}<br/>Next billing: {period_end_label}</p>"
+            f"<p>Hi {safe_name}, your payment was successful.</p>"
+            f"<p>Plan: {safe_plan}<br/>Amount: {paid}<br/>"
+            f"Reference: {html.escape(reference)}<br/>Active until: {ends}</p>"
+            "<p>Plans don't renew automatically — we'll email you a week before "
+            "this date so you can renew.</p>"
         ),
-        f"Hi {name},\n\nPayment confirmed! You've been upgraded to the "
-        f"{plan_label} plan.\n\nAmount: ${amount} USD\nPlan: {plan_label}\n"
-        f"Reference: {reference}\nNext billing: {period_end_label}\n\n"
+        f"Hi {name or 'there'},\n\nPayment confirmed for the {plan_name} plan.\n\n"
+        f"Amount: {paid}\nReference: {reference}\nActive until: {ends}\n\n"
+        "Plans don't renew automatically; we'll email you a week before this date.\n\n"
         f"Manage your subscription at {frontend_url}/dashboard/settings",
+    )
+
+
+async def send_renewal_reminder_email(
+    to: str, name: str, plan_name: str, period_end: datetime, grace_days: int
+) -> None:
+    """The paid period ends soon. Raises if the provider rejects it, so the job
+    can try again on its next run."""
+    renew_url = f"{get_settings().FRONTEND_URL or 'http://localhost:3000'}/dashboard/settings"
+    ends = _js_date_string(period_end)
+    safe_name, safe_plan = html.escape(name or "there"), html.escape(plan_name)
+
+    await send_email_or_raise(
+        to,
+        f"Your Thravic {plan_name} plan ends on {ends}",
+        _layout(
+            f"<h2>Your {safe_plan} plan ends on {ends}</h2>"
+            f"<p>Hi {safe_name}, plans don't renew automatically. Renew before {ends} "
+            f"to keep your {safe_plan} features without a break.</p>"
+            f"<p>If you don't, you'll keep access for {grace_days} more days, then the "
+            "account moves to the free Hobby plan. <strong>Your data is kept</strong> "
+            "and everything comes back when you renew.</p>"
+            f'<p><a href="{renew_url}">Renew now</a></p>'
+        ),
+        f"Hi {name or 'there'},\n\nYour {plan_name} plan ends on {ends}. Plans don't renew "
+        f"automatically.\n\nIf you don't renew, you keep access for {grace_days} more days, "
+        "then the account moves to the free Hobby plan. Your data is kept and everything "
+        f"comes back when you renew.\n\nRenew: {renew_url}",
     )
 
 
