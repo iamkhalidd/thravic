@@ -24,16 +24,23 @@ def _fresh_quota_cache():
     plan_service.clear_local_quota_cache()
 
 
-async def _owner_with_limit(domain_id: str, db_pool, limit: int) -> str:
-    async with db_pool.acquire() as conn:
-        user_id = await conn.fetchval("SELECT user_id FROM domains WHERE id = $1", domain_id)
-        await conn.execute(
-            "INSERT INTO subscriptions (user_id, plan, status, events_limit, domains_limit) "
-            "VALUES ($1, 'pro', 'active', $2, 3)",
-            user_id,
-            limit,
-        )
-    return str(user_id)
+@pytest.fixture
+def owner_with_limit(db_pool, make_plan):
+    """The domain's owner, subscribed to a plan with an `limit`-event allowance."""
+
+    async def _owner(domain_id: str, limit: int) -> str:
+        plan = await make_plan(events_limit=limit)
+        async with db_pool.acquire() as conn:
+            user_id = await conn.fetchval("SELECT user_id FROM domains WHERE id = $1", domain_id)
+            await conn.execute(
+                "INSERT INTO subscriptions (user_id, plan, status, events_limit, domains_limit) "
+                "VALUES ($1, $2, 'active', 0, 0)",
+                user_id,
+                plan,
+            )
+        return str(user_id)
+
+    return _owner
 
 
 async def _store_events(domain_id: str, count: int) -> None:
@@ -44,22 +51,22 @@ async def _store_events(domain_id: str, count: int) -> None:
     )
 
 
-async def test_under_the_limit_is_accepted(seeded_domain, db_pool):
-    owner = await _owner_with_limit(seeded_domain, db_pool, 3)
+async def test_under_the_limit_is_accepted(seeded_domain, db_pool, owner_with_limit):
+    owner = await owner_with_limit(seeded_domain, 3)
     await _store_events(seeded_domain, 2)
 
     assert await plan_service.over_event_limit(owner) is False
 
 
-async def test_reaching_the_limit_stops_collection(seeded_domain, db_pool):
-    owner = await _owner_with_limit(seeded_domain, db_pool, 3)
+async def test_reaching_the_limit_stops_collection(seeded_domain, db_pool, owner_with_limit):
+    owner = await owner_with_limit(seeded_domain, 3)
     await _store_events(seeded_domain, 3)
 
     assert await plan_service.over_event_limit(owner) is True
 
 
-async def test_the_answer_is_cached_between_batches(seeded_domain, db_pool):
-    owner = await _owner_with_limit(seeded_domain, db_pool, 3)
+async def test_the_answer_is_cached_between_batches(seeded_domain, db_pool, owner_with_limit):
+    owner = await owner_with_limit(seeded_domain, 3)
     assert await plan_service.over_event_limit(owner) is False
 
     await _store_events(seeded_domain, 3)
@@ -70,8 +77,10 @@ async def test_the_answer_is_cached_between_batches(seeded_domain, db_pool):
     assert await plan_service.over_event_limit(owner) is True
 
 
-async def test_an_inactive_subscription_falls_back_to_the_free_limit(seeded_domain, db_pool):
-    owner = await _owner_with_limit(seeded_domain, db_pool, 1_000_000)
+async def test_an_inactive_subscription_falls_back_to_the_free_limit(
+    seeded_domain, db_pool, owner_with_limit
+):
+    owner = await owner_with_limit(seeded_domain, 1_000_000)
     async with db_pool.acquire() as conn:
         await conn.execute("UPDATE subscriptions SET status = 'canceled' WHERE user_id = $1", owner)
 

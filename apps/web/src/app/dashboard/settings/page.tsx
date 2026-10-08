@@ -19,17 +19,18 @@ import {
     Lock,
     Mail,
 } from 'lucide-react';
-import { auth, exportData, formatPlanPrice, payments, type ExportType } from '@/lib/api';
+import { auth, exportData, formatPlanPrice, payments, planPeriod, type ExportType } from '@/lib/api';
 import { useDomain } from '@/contexts/DomainContext';
 
 // Marketing copy for each plan. Names and prices are replaced by the API's
 // (the price checkout actually charges); these values are only the fallback.
-const fallbackPlans = [
+const fallbackPlans: Array<{ id: string; name: string; price: number; currency: string; interval: string; features: string[] }> = [
     {
         id: 'free',
         name: 'Hobby',
         price: 0,
         currency: 'NGN',
+        interval: 'monthly',
         features: ['1 domain', '5,000 events/mo', '30-day history', 'Core analytics & UTM'],
     },
     {
@@ -37,6 +38,7 @@ const fallbackPlans = [
         name: 'Pro',
         price: 45000,
         currency: 'NGN',
+        interval: 'monthly',
         features: ['3 domains', '100,000 events/mo', '1-year history', 'Heatmaps & recordings', 'Funnels & AI insights', 'CSV export & team'],
     },
     {
@@ -44,6 +46,7 @@ const fallbackPlans = [
         name: 'Agency',
         price: 125000,
         currency: 'NGN',
+        interval: 'monthly',
         features: ['20 domains', '500,000 events/mo', '2-year history', 'Everything in Pro', 'Unlimited team members', 'Priority support'],
     },
 ];
@@ -138,14 +141,18 @@ function SettingsPageInner() {
     }, []);
 
     useEffect(() => {
+        // Every plan for sale, as the admin defined it; the built-in list is only
+        // the fallback if the API can't be reached.
         payments.getPlans().then(({ data }) => {
-            if (!data?.plans) return;
-            setPlans(prev => prev.map(plan => {
-                const live = data.plans.find(p => p.id === plan.id);
-                return live
-                    ? { ...plan, name: live.name, price: live.price, currency: live.currency ?? plan.currency }
-                    : plan;
-            }));
+            if (!data?.plans?.length) return;
+            setPlans(data.plans.map(live => ({
+                id: live.id,
+                name: live.name,
+                price: live.price,
+                currency: live.currency ?? 'NGN',
+                interval: live.interval ?? 'monthly',
+                features: live.bullets ?? [],
+            })));
         });
     }, []);
 
@@ -565,10 +572,10 @@ function SettingsPageInner() {
                             </div>
 
                             {/* Plan Cards */}
-                            <div className="grid grid-cols-3 gap-md">
+                            <div className="gap-md" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
                                 {plans.map(plan => {
                                     const isCurrent = plan.id === currentPlan;
-                                    const isFree = plan.id === 'free';
+                                    const isFree = plan.price <= 0;
                                     const isLoading = upgradingPlan === plan.id;
 
                                     return (
@@ -588,7 +595,7 @@ function SettingsPageInner() {
                                                     {formatPlanPrice(plan.price, plan.currency)}
                                                 </span>
                                                 <span style={{ color: 'var(--color-text-muted)' }}>
-                                                    {plan.price > 0 ? '/mo' : ''}
+                                                    {planPeriod({ price: plan.price, interval: plan.interval as 'monthly' | 'yearly' })}
                                                 </span>
                                             </div>
 
@@ -624,7 +631,7 @@ function SettingsPageInner() {
                                                 ) : isFree ? (
                                                     'Free Forever'
                                                 ) : (
-                                                    `Upgrade — ${formatPlanPrice(plan.price, plan.currency)}/mo`
+                                                    `Upgrade — ${formatPlanPrice(plan.price, plan.currency)}${planPeriod({ price: plan.price, interval: plan.interval as 'monthly' | 'yearly' })}`
                                                 )}
                                             </button>
                                         </div>

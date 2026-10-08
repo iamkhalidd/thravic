@@ -7,6 +7,9 @@ Split permissions, preserved from Express:
 * `POST /invite` and `DELETE /members/:memberId` need *admin* rights (owner, or a
   member whose role is exactly `admin`) and return 403 `Requires admin permissions`.
 
+Invites past the owner's plan `team_limit` (people across all their sites) are
+refused with 403 and `upgrade: true`.
+
 Invites require the target user to already exist — there is no pending-invite
 table, so an unknown email is a 404 rather than a queued invitation.
 """
@@ -21,6 +24,7 @@ from ..json_response import jsjson
 from ..logging import create_logger
 from ..middleware.auth import AuthUser, require_auth
 from ..middleware.feature_gate import require_feature
+from ..services import plan_service
 from ..zod_lite import (
     enum_field,
     string_field,
@@ -95,6 +99,42 @@ async def list_members(
     return jsjson(members)
 
 
+async def _check_team_limit(domain_id: str, target_id: str) -> None:
+    """Refuse a new person past the owner's plan `team_limit`.
+
+    Seats are people, counted across all of the owner's sites; someone already on
+    any of them (or a role change) takes no new seat.
+    """
+    owner = await query_one("SELECT user_id FROM domains WHERE id = $1", domain_id)
+    if not owner:
+        return
+    plan = await plan_service.for_user(str(owner["user_id"]))
+    if plan.team_limit is None:
+        return
+    members = await query(
+        """
+        SELECT DISTINCT dm.user_id FROM domain_members dm
+        JOIN domains d ON d.id = dm.domain_id
+        WHERE d.user_id = $1 AND dm.user_id <> $1
+        """,
+        owner["user_id"],
+    )
+    ids = {str(row["user_id"]) for row in members}
+    if target_id in ids or target_id == str(owner["user_id"]):
+        return
+    if len(ids) >= plan.team_limit:
+        raise PayloadError(
+            {
+                "error": (
+                    f"Your plan allows {plan.team_limit} team member"
+                    f"{'' if plan.team_limit == 1 else 's'}. Upgrade to invite more."
+                ),
+                "upgrade": True,
+            },
+            403,
+        )
+
+
 @router.post("/{domainId}/invite")
 async def invite_member(
     domainId: str,
@@ -128,6 +168,8 @@ async def invite_member(
         target = await query_one("SELECT id FROM users WHERE email = $1", email)
         if target is None:
             raise SimpleError("User not found. They must register first.", 404)
+
+        await _check_team_limit(domainId, str(target["id"]))
 
         await query(
             """

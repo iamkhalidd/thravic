@@ -664,11 +664,25 @@ export const insights = {
 };
 
 // Payments API (Paystack)
+// GET /api/payments/plans: the admin-managed plans, active ones only.
+// `bullets` are generated from the plan's real limits and features plus the
+// admin's extra lines, so pricing cards can't contradict what customers get.
 export interface Plan {
     id: string;
     name: string;
     price: number; // whole currency units, e.g. 45000 = ₦45,000
-    currency?: string; // absent on the config fallback, which is NGN
+    currency?: string;
+    interval?: 'monthly' | 'yearly';
+    tagline?: string;
+    badge?: string;
+    show_on_landing?: boolean;
+    bullets?: string[];
+}
+
+/** "/mo" or "/yr" after a price; nothing for a free plan. */
+export function planPeriod(plan: Pick<Plan, 'price' | 'interval'>): string {
+    if (plan.price <= 0) return '';
+    return plan.interval === 'yearly' ? '/yr' : '/mo';
 }
 
 const CURRENCY_SYMBOLS: Record<string, string> = { NGN: '₦', USD: '$', GBP: '£', EUR: '€' };
@@ -680,7 +694,7 @@ export function formatPlanPrice(price: number, currency = 'NGN'): string {
 }
 
 export const payments = {
-    /** Public. The admin-managed plans table, or the config plans if it is empty. */
+    /** Public. Active plans from the admin-managed plans table, with pricing bullets. */
     async getPlans() {
         return apiRequest<{ success: boolean; plans: Plan[] }>('/api/payments/plans');
     },

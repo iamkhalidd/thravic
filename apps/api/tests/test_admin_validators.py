@@ -52,6 +52,8 @@ def test_update_user_name_too_long():
 
 
 def test_update_user_email_is_reported_before_the_enum_fields():
+    # `subscription` is no longer an enum: plans are admin-defined, so any plan id
+    # passes here and the handler answers 400 for one that doesn't exist.
     body = {"name": "a", "email": "x", "subscription": "gold", "role": "root"}
     assert issues_of(v.update_user_schema(body)) == [
         {
@@ -68,16 +70,6 @@ def test_update_user_email_is_reported_before_the_enum_fields():
             "code": "invalid_string",
             "message": "Invalid email",
             "path": ["email"],
-        },
-        {
-            "received": "gold",
-            "code": "invalid_enum_value",
-            "options": ["free", "pro", "agency"],
-            "path": ["subscription"],
-            "message": (
-                "Invalid enum value. Expected 'free' | 'pro' | 'agency', "
-                "received 'gold'"
-            ),
         },
         {
             "received": "root",
@@ -328,6 +320,13 @@ def test_create_plan_applies_defaults_and_reports_every_missing_required_field()
         "features": [],
         "active": True,
         "sort_order": 0,
+        # Plan-catalog fields: unlimited by default, empty pricing-card copy.
+        "team_limit": None,
+        "recordings_per_day": None,
+        "tagline": "",
+        "badge": "",
+        "show_on_landing": True,
+        "extra_features": [],
     }
 
     assert issues_of(v.create_plan_schema({})) == [

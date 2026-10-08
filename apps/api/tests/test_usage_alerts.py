@@ -29,18 +29,19 @@ def outbox(monkeypatch):
 
 
 @pytest.fixture
-async def owner(seeded_domain, db_pool):
+async def owner(seeded_domain, db_pool, make_plan):
     """The seeded domain's owner on an active plan with a 10-event limit."""
+    plan = await make_plan(events_limit=10)
     async with db_pool.acquire() as conn:
         user_id, email = await conn.fetchrow(
-            "SELECT u.id, u.email FROM domains d JOIN users u ON u.id = d.user_id "
-            "WHERE d.id = $1",
+            "SELECT u.id, u.email FROM domains d JOIN users u ON u.id = d.user_id WHERE d.id = $1",
             seeded_domain,
         )
         await conn.execute(
             "INSERT INTO subscriptions (user_id, plan, status, events_limit, domains_limit) "
-            "VALUES ($1, 'pro', 'active', 10, 3)",
+            "VALUES ($1, $2, 'active', 0, 0)",
             user_id,
+            plan,
         )
 
     async def add_events(count: int) -> None:

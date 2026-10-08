@@ -19,6 +19,7 @@ from ...js_compat import js_parse_int_or_nan
 from ...json_response import jsjson
 from ...logging import create_logger
 from ...middleware.admin_auth import AdminUser, admin_auth
+from ...services import plan_catalog
 from ...services.audit_service import log_action
 from ...validators.admin import update_subscription_schema
 from ._util import client_ip
@@ -113,6 +114,8 @@ async def update_subscription(
         data, issues = update_subscription_schema(body)
         if issues:
             raise SimpleError(issues[0]["message"], 400)
+        if "plan" in data and not await plan_catalog.find(data["plan"]):
+            raise SimpleError(f'Unknown plan "{data["plan"]}"', 400)
 
         updates: list[str] = []
         args: list[Any] = []

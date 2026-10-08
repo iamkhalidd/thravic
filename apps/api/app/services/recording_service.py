@@ -124,6 +124,21 @@ async def count_started_today(domain_id: str) -> int:
     return int((row or {}).get("count") or 0)
 
 
+async def count_started_today_for_owner(owner_id: str) -> int:
+    """Recordings started since midnight UTC across all of an owner's sites (the
+    plan's `recordings_per_day` counts per account, not per site)."""
+    row = await query_one(
+        """
+        SELECT COUNT(*)::int AS count FROM session_recordings r
+        JOIN domains d ON d.id = r.domain_id
+        WHERE d.user_id = $1
+          AND r.started_at >= date_trunc('day', NOW() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'
+        """,
+        owner_id,
+    )
+    return int((row or {}).get("count") or 0)
+
+
 async def append_events(
     recording_id: str, new_events: list[Any]
 ) -> dict[str, Any] | None:

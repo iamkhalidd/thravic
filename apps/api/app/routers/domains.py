@@ -13,8 +13,7 @@ from ..errors import PayloadError, SimpleError
 from ..json_response import jsjson
 from ..logging import create_logger
 from ..middleware.auth import AuthUser, require_auth
-from ..plans import PLAN_FEATURES
-from ..services import domain_service, plan_service
+from ..services import domain_service, plan_catalog, plan_service
 from ..zod_lite import (
     first_message,
     issue_invalid_type,
@@ -135,7 +134,7 @@ async def list_domains(user: AuthUser = Depends(require_auth)):
 
         payload = []
         for domain in domains:
-            plan_key = str(domain.get("owner_plan") or "free").lower()
+            owner_plan = await plan_catalog.get(domain.get("owner_plan"))
             payload.append(
                 {
                     "id": domain["id"],
@@ -145,7 +144,7 @@ async def list_domains(user: AuthUser = Depends(require_auth)):
                     "verified": domain["verified"],
                     "createdAt": domain["created_at"],
                     # Unknown plans fall back to the free feature set
-                    "features": PLAN_FEATURES.get(plan_key) or PLAN_FEATURES["free"],
+                    "features": list(owner_plan.features),
                 }
             )
         return jsjson({"domains": payload})

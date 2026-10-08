@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { ThemeToggle } from '@/components/ThemeToggle';
-import { formatPlanPrice, payments } from '@/lib/api';
+import { formatPlanPrice, payments, planPeriod } from '@/lib/api';
 
 // Dynamically import Recharts-based views to prevent SSR hydration mismatches
 const OverviewView = dynamic(() => import('./demo/DemoViews').then(mod => mod.OverviewView), { ssr: false });
@@ -20,11 +20,15 @@ const HeatmapsView = dynamic(() => import('./demo/DemoViews').then(mod => mod.He
 
 /* ─── DATA ─── */
 
-const pricingTiers = [
+// Shown only if the plans API can't be reached; normally every card comes from
+// the admin-managed plans (GET /api/payments/plans).
+type Tier = { id: string; name: string; price: string; period?: string; description: string; features: string[]; cta: string; highlighted: boolean; badge?: string };
+
+const pricingTiers: Tier[] = [
     {
         id: 'free', name: 'Hobby', price: 'Free', description: 'For personal projects',
         features: ['1 website', '5k events/month', 'Core analytics & UTM', '30-day retention'],
-        cta: 'Get Started Fixed', highlighted: false
+        cta: 'Get Started Free', highlighted: false
     },
     {
         id: 'pro', name: 'Pro', price: '₦45,000', period: '/mo', description: 'For startups & businesses',
@@ -116,16 +120,25 @@ const s = {
 /* ─── COMPONENT ─── */
 export default function HomePage() {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-    const [tiers, setTiers] = useState(pricingTiers);
+    const [tiers, setTiers] = useState<Tier[]>(pricingTiers);
 
     React.useEffect(() => {
-        // The hardcoded tiers stay as the fallback; only the prices come from the API.
+        // Every card comes from the admin-managed plans; the built-in tiers above
+        // are only the fallback if the API can't be reached.
         payments.getPlans().then(({ data }) => {
-            if (!data?.plans) return;
-            setTiers(prev => prev.map(tier => {
-                const plan = data.plans.find(p => p.id === tier.id);
-                return plan ? { ...tier, price: formatPlanPrice(plan.price, plan.currency) } : tier;
-            }));
+            const shown = data?.plans?.filter(plan => plan.show_on_landing !== false) ?? [];
+            if (!shown.length) return;
+            setTiers(shown.map(plan => ({
+                id: plan.id,
+                name: plan.name,
+                price: formatPlanPrice(plan.price, plan.currency),
+                period: planPeriod(plan),
+                description: plan.tagline ?? '',
+                features: plan.bullets ?? [],
+                cta: plan.price <= 0 ? 'Get Started Free' : `Get ${plan.name}`,
+                highlighted: !!plan.badge,
+                badge: plan.badge || undefined,
+            })));
         });
     }, []);
 
@@ -354,7 +367,14 @@ export default function HomePage() {
                                 paddingTop: '32px',
                                 position: 'relative',
                             }}>
-                                <h4 style={{ fontSize: '1.125rem', fontWeight: 500, marginBottom: '8px', color: 'var(--color-text-primary)' }}>{tier.name}</h4>
+                                <h4 style={{ fontSize: '1.125rem', fontWeight: 500, marginBottom: '8px', color: 'var(--color-text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    {tier.name}
+                                    {tier.badge && (
+                                        <span style={{ fontSize: '0.6875rem', fontWeight: 500, padding: '2px 8px', borderRadius: '999px', border: '1px solid var(--color-border)', color: 'var(--color-text-secondary)' }}>
+                                            {tier.badge}
+                                        </span>
+                                    )}
+                                </h4>
                                 <p style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', marginBottom: '32px', minHeight: '40px' }}>
                                     {tier.description}
                                 </p>

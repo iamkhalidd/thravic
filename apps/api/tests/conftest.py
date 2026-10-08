@@ -89,3 +89,44 @@ async def seeded_domain(db_pool):
         async with db_pool.acquire() as conn:
             # Cascades to domains -> visitors/sessions/events.
             await conn.execute("DELETE FROM users WHERE id = $1", user_id)
+
+
+@pytest.fixture
+async def make_plan(db_pool):
+    """Create throwaway plans with chosen limits; removed on teardown.
+
+    Limits come from the plan's definition (`plan_catalog`), not from the
+    subscription row, so a test wanting a 10-event limit needs a plan with one.
+    """
+    from app.services import plan_catalog
+
+    created: list[str] = []
+
+    async def _make(**fields) -> str:
+        plan_id = f"test_{uuid.uuid4().hex[:10]}"
+        values = {
+            "name": "Test plan",
+            "price": 1000,
+            "events_limit": 1000,
+            "domains_limit": 3,
+            "features": [],
+            **fields,
+        }
+        columns = ", ".join(["id", *values])
+        params = ", ".join(f"${i}" for i in range(1, len(values) + 2))
+        async with db_pool.acquire() as conn:
+            await conn.execute(
+                f"INSERT INTO plans ({columns}) VALUES ({params})", plan_id, *values.values()
+            )
+        created.append(plan_id)
+        plan_catalog.invalidate()
+        return plan_id
+
+    yield _make
+
+    async with db_pool.acquire() as conn:
+        await conn.execute("DELETE FROM plans WHERE id = ANY($1::text[])", created)
+        await conn.execute(
+            "DELETE FROM data_retention_policies WHERE plan = ANY($1::text[])", created
+        )
+    plan_catalog.invalidate()

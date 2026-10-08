@@ -565,6 +565,12 @@ async def recording_start(trackingId: str, request: Request):
         limit = domain_service.effective_settings(domain)["recordingDailyLimit"]
         if await recording_service.count_started_today(domain["id"]) >= limit:
             raise SimpleError("This site has reached its daily recording limit", 429)
+        plan = await plan_service.owner_plan(domain["id"])
+        if plan.recordings_per_day is not None and (
+            await recording_service.count_started_today_for_owner(str(domain["user_id"]))
+            >= plan.recordings_per_day
+        ):
+            raise SimpleError("This account has reached its plan's daily recording limit", 429)
 
         body = await _body(request)
         issues = _recording_start_issues(body)

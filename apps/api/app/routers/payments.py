@@ -33,8 +33,7 @@ from ..json_response import jsjson
 from ..logging import create_logger
 from ..middleware.admin_auth import AdminUser, admin_auth
 from ..middleware.auth import AuthUser, require_auth
-from ..plans import PLAN_FEATURES, PLAN_LIMITS
-from ..services import plan_service
+from ..services import plan_catalog, plan_service
 from ..services.email_service import send_payment_receipt_email
 
 log = create_logger("Payments")
@@ -45,12 +44,6 @@ PAYSTACK_BASE = "https://api.paystack.co"
 PAYSTACK_TIMEOUT_SECONDS = 30.0
 
 FREE_PLAN = "free"
-
-# Used only if the `plans` table has no row for the requested plan
-FALLBACK_PRICES: dict[str, dict[str, Any]] = {
-    "pro": {"price": 45_000_00, "currency": "NGN"},
-    "agency": {"price": 125_000_00, "currency": "NGN"},
-}
 
 # Display prices used by the receipt email, in USD
 RECEIPT_PLAN_PRICES: dict[str, float] = {"pro": 29, "agency": 79}
@@ -72,23 +65,26 @@ def _paystack_secret() -> str:
 
 
 async def _plan_from_db(plan_id: str) -> dict[str, Any] | None:
-    try:
-        return await query_one(
-            "SELECT * FROM plans WHERE id = $1 AND active = true", plan_id
-        )
-    except Exception:
-        return None  # the plans table may not exist yet
+    """The plan's price, if it can be bought: it exists and is active.
+
+    A deactivated plan used to fall back to a hard-coded price and stay
+    purchasable; now it can't be bought (its subscribers keep it).
+    """
+    plan = await plan_catalog.find(plan_id)
+    if not plan or not plan.active:
+        return None
+    return {"id": plan.id, "price": plan.price, "currency": plan.currency}
 
 
-def _free_subscription_payload() -> dict[str, Any]:
-    tier = PLAN_LIMITS[FREE_PLAN]
+async def _free_subscription_payload() -> dict[str, Any]:
+    free = await plan_catalog.get(FREE_PLAN)
     return {
         "plan": "free",
         "status": "active",
         "eventsUsed": 0,
-        "eventsLimit": tier["eventsLimit"],
-        "domainsLimit": tier["domainsLimit"],
-        "features": PLAN_FEATURES[FREE_PLAN],
+        "eventsLimit": free.events_limit,
+        "domainsLimit": free.domains_limit,
+        "features": list(free.features),
     }
 
 
@@ -123,20 +119,14 @@ async def status(_admin: AdminUser = Depends(admin_auth)):
 
 @router.get("/plans")
 async def plans():
-    try:
-        db_plans = await query(
-            "SELECT * FROM plans WHERE active = true ORDER BY sort_order ASC"
-        )
-        if db_plans:
-            return jsjson({"success": True, "plans": db_plans})
-    except Exception:
-        pass  # fall through to the config-based plans
-
-    fallback = [
-        {"id": key, **tier, "features": PLAN_FEATURES.get(key, [])}
-        for key, tier in PLAN_LIMITS.items()
-    ]
-    return jsjson({"success": True, "plans": fallback})
+    """Active plans as the pricing pages show them, bullets included."""
+    everything = list((await plan_catalog.all_plans()).values())
+    return jsjson(
+        {
+            "success": True,
+            "plans": [plan_catalog.public(p, everything) for p in everything if p.active],
+        }
+    )
 
 
 @router.get("/current")
@@ -144,7 +134,7 @@ async def current(user: AuthUser = Depends(require_auth)):
     try:
         if not get_settings().DATABASE_URL:
             return jsjson(
-                {"success": True, "subscription": _free_subscription_payload()}
+                {"success": True, "subscription": await _free_subscription_payload()}
             )
 
         subscription = await query_one(
@@ -154,21 +144,23 @@ async def current(user: AuthUser = Depends(require_auth)):
         )
 
         if not subscription:
-            tier = PLAN_LIMITS[FREE_PLAN]
+            free = await plan_catalog.get(FREE_PLAN)
             await query(
                 """
                 INSERT INTO subscriptions (user_id, plan, events_limit, domains_limit)
                 VALUES ($1, 'free', $2, $3)
                 """,
                 user.user_id,
-                tier["eventsLimit"],
-                tier["domainsLimit"],
+                free.events_limit,
+                free.domains_limit,
             )
             return jsjson(
-                {"success": True, "subscription": _free_subscription_payload()}
+                {"success": True, "subscription": await _free_subscription_payload()}
             )
 
-        plan_key = str(subscription.get("plan") or "").lower().strip()
+        # Limits and features are the plan's current definition, not the values
+        # copied onto the subscription at purchase.
+        plan = await plan_catalog.get(subscription.get("plan"))
 
         return jsjson(
             {
@@ -177,10 +169,12 @@ async def current(user: AuthUser = Depends(require_auth)):
                     "plan": subscription["plan"],
                     "status": subscription["status"],
                     "eventsUsed": await plan_service.events_this_month(user.user_id),
-                    "eventsLimit": subscription["events_limit"],
-                    "domainsLimit": subscription["domains_limit"],
+                    "eventsLimit": plan.events_limit,
+                    "domainsLimit": plan.domains_limit,
+                    "teamLimit": plan.team_limit,
+                    "recordingsPerDay": plan.recordings_per_day,
                     "currentPeriodEnd": subscription["current_period_end"],
-                    "features": PLAN_FEATURES.get(plan_key) or PLAN_FEATURES[FREE_PLAN],
+                    "features": list(plan.features),
                 },
             }
         )
@@ -256,11 +250,7 @@ async def validate_promo(request: Request, user: AuthUser = Depends(require_auth
 
         promo = result["promo"]
         db_plan = await _plan_from_db(plan)
-        original_price = (
-            db_plan["price"]
-            if db_plan
-            else (FALLBACK_PRICES.get(plan, {}).get("price") or 0) / 100
-        )
+        original_price = db_plan["price"] if db_plan else 0
 
         if promo["discount_type"] == "percentage":
             discounted = js_round(original_price * (1 - promo["discount_value"] / 100))
@@ -307,14 +297,9 @@ async def checkout(request: Request, user: AuthUser = Depends(require_auth)):
         )
 
         db_plan = await _plan_from_db(plan) if plan else None
-        fallback = FALLBACK_PRICES.get(plan) if plan else None
-        original_price_units = (
-            db_plan["price"] if db_plan else (fallback or {}).get("price", 0) / 100
-        )
-        currency = (db_plan or {}).get("currency") or (fallback or {}).get(
-            "currency", "NGN"
-        )
-        amount_kobo = (db_plan["price"] * 100) if db_plan else (fallback or {}).get("price")
+        original_price_units = db_plan["price"] if db_plan else 0
+        currency = (db_plan or {}).get("currency") or "NGN"
+        amount_kobo = original_price_units * 100
 
         if not amount_kobo:
             return jsjson(
@@ -554,7 +539,7 @@ async def webhook(request: Request):
         elif event_name == "subscription.disable":
             subscription_code = event_data.get("subscription_code")
             if subscription_code and settings.DATABASE_URL:
-                free_tier = PLAN_LIMITS[FREE_PLAN]
+                free_tier = await plan_catalog.get(FREE_PLAN)
                 await query(
                     """
                     UPDATE subscriptions
@@ -562,8 +547,8 @@ async def webhook(request: Request):
                         events_limit = $1, domains_limit = $2, updated_at = NOW()
                     WHERE paystack_subscription_code = $3
                     """,
-                    free_tier["eventsLimit"],
-                    free_tier["domainsLimit"],
+                    free_tier.events_limit,
+                    free_tier.domains_limit,
                     subscription_code,
                 )
                 log.info(f"Subscription {subscription_code} disabled - downgraded to free")
@@ -586,7 +571,7 @@ async def usage(user: AuthUser = Depends(require_auth)):
                     "success": True,
                     "usage": {
                         "eventsThisMonth": 0,
-                        "eventsLimit": PLAN_LIMITS[FREE_PLAN]["eventsLimit"],
+                        "eventsLimit": (await plan_catalog.get(FREE_PLAN)).events_limit,
                         "percentUsed": 0,
                     },
                 }
@@ -625,13 +610,13 @@ async def _upgrade_subscription(user_id: str, plan: str, reference: str) -> None
     the receipt was never sent and the row was never upgraded, i.e. a paying
     customer got no features. `0006_subscriptions_constraints` now guarantees it.
 
-    `plan` is written straight through, so `subscriptions.plan` must accept every
-    value `plans.PLAN_LIMITS` offers. 0006 also widens that CHECK, which in
-    production did not include `agency` — an agency purchase could not be stored
-    at all.
+    `plan` is written straight through. 0014 dropped the CHECK that listed plan
+    ids, so plans an admin creates can be bought and stored.
     """
-    tier = PLAN_LIMITS.get(plan)
+    tier = await plan_catalog.find(plan)
     if not tier:
+        # Paid for a plan that no longer exists: keep the payment visible.
+        log.error(f"Payment for unknown plan {plan!r} by user {user_id} (ref {reference})")
         return
 
     period_end = datetime.now(UTC) + timedelta(days=30)
@@ -664,9 +649,9 @@ async def _upgrade_subscription(user_id: str, plan: str, reference: str) -> None
         """,
         user_id,
         reference,
-        plan,
-        tier["eventsLimit"],
-        tier["domainsLimit"],
+        tier.id,
+        tier.events_limit,
+        tier.domains_limit,
         period_end,
     )
 

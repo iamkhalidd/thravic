@@ -26,6 +26,7 @@ from ...json_response import jsjson
 from ...logging import create_logger
 from ...middleware.admin_auth import AdminUser, admin_auth, super_admin_auth
 from ...security import get_jwt_secret
+from ...services import plan_catalog
 from ...services.audit_service import log_action
 from ...services.email_service import (
     send_account_reactivated_email,
@@ -41,13 +42,6 @@ log = create_logger("Admin:Users")
 router = APIRouter()
 
 VALID_SORTS = ("created_at", "name", "email", "subscription")
-
-# Mirrors the PLAN_LIMITS table declared inside the PATCH handler in Express.
-PLAN_LIMITS: dict[str, dict[str, int]] = {
-    "free": {"events": 5_000, "domains": 1},
-    "pro": {"events": 100_000, "domains": 3},
-    "agency": {"events": 500_000, "domains": 20},
-}
 
 IMPERSONATION_SECONDS = 900
 
@@ -177,6 +171,8 @@ async def update_user(
         data, issues = update_user_schema(body)
         if issues:
             raise SimpleError(issues[0]["message"], 400)
+        if "subscription" in data and not await plan_catalog.find(data["subscription"]):
+            raise SimpleError(f'Unknown plan "{data["subscription"]}"', 400)
 
         updates: list[str] = []
         args: list = []
@@ -210,7 +206,7 @@ async def update_user(
         # statement always errors and the handler answers 500. See the module
         # docstring — the user row above is already committed by then.
         if subscription and user:
-            limits = PLAN_LIMITS.get(subscription) or PLAN_LIMITS["free"]
+            limits = await plan_catalog.get(subscription)
             await query(
                 """
                 INSERT INTO subscriptions (user_id, plan, status, events_limit, domains_limit)
@@ -221,8 +217,8 @@ async def update_user(
                 """,
                 user_id,
                 subscription,
-                limits["events"],
-                limits["domains"],
+                limits.events_limit,
+                limits.domains_limit,
             )
 
         await log_action(

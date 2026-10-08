@@ -17,7 +17,7 @@ from apscheduler.triggers.cron import CronTrigger
 
 from ..db import query
 from ..logging import create_logger
-from ..plans import PLAN_LIMITS
+from ..services import plan_catalog
 from ..services.email_service import send_usage_limit_email
 from .runner import run_if_due
 
@@ -27,8 +27,8 @@ JOB_NAME = "usage_alerts"
 RUN_EVERY = timedelta(minutes=55)
 THRESHOLDS = (80, 100)
 
-# Owners at or above the lowest threshold this month. The plan and limit follow
-# plan_service.for_user: the latest active subscription, else the free plan.
+# Every owner's usage this month and plan (latest active subscription, else
+# free). The limit is the plan's current definition, applied in Python.
 USAGE_QUERY = """
 WITH usage AS (
     SELECT d.user_id, COUNT(*)::int AS used
@@ -38,17 +38,15 @@ WITH usage AS (
     GROUP BY d.user_id
 )
 SELECT u.id, u.email, u.name, usage.used,
-       COALESCE(LOWER(s.plan), 'free') AS plan,
-       COALESCE(NULLIF(s.events_limit, 0), $2)::int AS events_limit
+       COALESCE(LOWER(s.plan), 'free') AS plan
 FROM usage
 JOIN users u ON u.id = usage.user_id
 LEFT JOIN LATERAL (
-    SELECT plan, events_limit FROM subscriptions
+    SELECT plan FROM subscriptions
     WHERE user_id = u.id AND status = 'active'
     ORDER BY created_at DESC LIMIT 1
 ) s ON TRUE
 WHERE COALESCE(u.role, 'user') <> 'suspended'
-  AND usage.used * 100 >= $3 * COALESCE(NULLIF(s.events_limit, 0), $2)
 """
 
 
@@ -59,12 +57,11 @@ def _month_start(now: datetime) -> date:
 async def send_usage_alerts() -> dict[str, Any]:
     now = datetime.now(UTC)
     month = _month_start(now)
-    rows = await query(
-        USAGE_QUERY,
-        datetime(now.year, now.month, 1, tzinfo=UTC),
-        int(PLAN_LIMITS["free"]["eventsLimit"]),
-        min(THRESHOLDS),
-    )
+    rows = []
+    for row in await query(USAGE_QUERY, datetime(now.year, now.month, 1, tzinfo=UTC)):
+        plan = await plan_catalog.get(row["plan"])
+        if plan.events_limit and row["used"] * 100 >= min(THRESHOLDS) * plan.events_limit:
+            rows.append({**row, "plan": plan.id, "events_limit": plan.events_limit})
 
     sent: dict[int, int] = {threshold: 0 for threshold in THRESHOLDS}
     failed = 0

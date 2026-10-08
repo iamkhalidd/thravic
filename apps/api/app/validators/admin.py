@@ -112,21 +112,13 @@ def _string(
             )
         )
     if pattern is not None and not _compile(pattern).match(raw):
-        issues.append(
-            issue_invalid_string(field, "regex", pattern_msg or "Invalid")
-        )
+        issues.append(issue_invalid_string(field, "regex", pattern_msg or "Invalid"))
     if is_email and not _EMAIL_RE.match(raw):
-        issues.append(
-            issue_invalid_string(field, "email", email_msg or "Invalid email")
-        )
+        issues.append(issue_invalid_string(field, "email", email_msg or "Invalid email"))
     if is_uuid and not ZOD_UUID_RE.match(raw):
         issues.append(issue_invalid_string(field, "uuid", uuid_msg or "Invalid uuid"))
     if is_datetime and not ZOD_DATETIME_RE.match(raw):
-        issues.append(
-            issue_invalid_string(
-                field, "datetime", datetime_msg or "Invalid datetime"
-            )
-        )
+        issues.append(issue_invalid_string(field, "datetime", datetime_msg or "Invalid datetime"))
 
     if len(issues) > before:
         return _OMIT
@@ -278,15 +270,12 @@ def _scalar_union(body: dict[str, Any], field: str, issues: list[dict]) -> Any:
     if received in _STRING_VARIANTS:
         return body[field]
 
-    issues.append(
-        issue_invalid_union(field, [(name, received) for name in _STRING_VARIANTS])
-    )
+    issues.append(issue_invalid_union(field, [(name, received) for name in _STRING_VARIANTS]))
     return _OMIT
 
 
 # ── Schemas ──────────────────────────────────────────────────────────────────
 
-SUBSCRIPTION_PLANS = ("free", "pro", "agency")
 USER_ROLES = ("user", "admin", "super_admin")
 CURRENCIES = ("NGN", "USD", "GBP", "EUR")
 INTERVALS = ("monthly", "yearly")
@@ -309,7 +298,16 @@ def update_user_schema(body: dict[str, Any]) -> tuple[dict, list[dict]]:
     if value is not _OMIT:
         data["email"] = value
 
-    value = _enum(body, "subscription", SUBSCRIPTION_PLANS, issues, required=False)
+    # Any plan id; the handler checks the plan exists (admins create plans).
+    value = _string(
+        body,
+        "subscription",
+        issues,
+        required=False,
+        max_len=50,
+        pattern=_PLAN_ID_PATTERN,
+        pattern_msg="Unknown plan",
+    )
     if value is not _OMIT:
         data["subscription"] = value
 
@@ -358,9 +356,7 @@ def transfer_domain_schema(body: dict[str, Any]) -> tuple[dict, list[dict]]:
     issues: list[dict] = []
     data: dict[str, Any] = {}
 
-    value = _string(
-        body, "newUserId", issues, is_uuid=True, uuid_msg="Invalid user ID"
-    )
+    value = _string(body, "newUserId", issues, is_uuid=True, uuid_msg="Invalid user ID")
     if value is not _OMIT:
         data["newUserId"] = value
 
@@ -371,7 +367,15 @@ def update_subscription_schema(body: dict[str, Any]) -> tuple[dict, list[dict]]:
     issues: list[dict] = []
     data: dict[str, Any] = {}
 
-    value = _enum(body, "plan", SUBSCRIPTION_PLANS, issues, required=False)
+    value = _string(
+        body,
+        "plan",
+        issues,
+        required=False,
+        max_len=50,
+        pattern=_PLAN_ID_PATTERN,
+        pattern_msg="Unknown plan",
+    )
     if value is not _OMIT:
         data["plan"] = value
 
@@ -460,6 +464,78 @@ _PLAN_LIMITS: dict[str, tuple[int | None, int | None]] = {
 }
 
 
+# Features a plan can grant (the ids the feature gate checks).
+PLAN_FEATURE_IDS = (
+    "analytics",
+    "realtime",
+    "utm",
+    "heatmaps",
+    "recordings",
+    "funnels",
+    "insights",
+    "export",
+    "experiments",
+    "webhooks",
+    "team",
+)
+MAX_EXTRA_FEATURES = 8
+
+
+def _plan_extras(
+    body: dict[str, Any], issues: list[dict], data: dict[str, Any], *, create: bool
+) -> None:
+    """Limits added with the plan catalog and the pricing card's copy.
+
+    `team_limit` / `recordings_per_day`: null means unlimited.
+    """
+    for field in ("team_limit", "recordings_per_day"):
+        value = _int(
+            body,
+            field,
+            issues,
+            required=False,
+            nullable=True,
+            minimum=0,
+            default=None if create else _OMIT,
+        )
+        if value is not _OMIT:
+            data[field] = value
+
+    value = _string(
+        body, "tagline", issues, required=False, max_len=200, default="" if create else _OMIT
+    )
+    if value is not _OMIT:
+        data["tagline"] = value
+
+    value = _string(
+        body, "badge", issues, required=False, max_len=40, default="" if create else _OMIT
+    )
+    if value is not _OMIT:
+        data["badge"] = value
+
+    value = _boolean(body, "show_on_landing", issues, default=True if create else _OMIT)
+    if value is not _OMIT:
+        data["show_on_landing"] = value
+
+    value = _string_array(body, "extra_features", issues, default=[] if create else _OMIT)
+    if value is not _OMIT:
+        lines = [line.strip() for line in value if line.strip()]
+        if len(lines) > MAX_EXTRA_FEATURES or any(len(line) > 80 for line in lines):
+            issues.append(
+                {
+                    "path": ["extra_features"],
+                    "message": f"Up to {MAX_EXTRA_FEATURES} extra lines of 80 characters",
+                }
+            )
+        else:
+            data["extra_features"] = lines
+
+    if "features" in data:
+        unknown = [f for f in data["features"] if f not in PLAN_FEATURE_IDS]
+        if unknown:
+            issues.append({"path": ["features"], "message": f"Unknown feature: {unknown[0]}"})
+
+
 def create_plan_schema(body: dict[str, Any]) -> tuple[dict, list[dict]]:
     """`createPlanSchema` — the fields with no `.default()` are required.
 
@@ -522,6 +598,7 @@ def create_plan_schema(body: dict[str, Any]) -> tuple[dict, list[dict]]:
     if value is not _OMIT:
         data["sort_order"] = value
 
+    _plan_extras(body, issues, data, create=True)
     return data, issues
 
 
@@ -535,9 +612,7 @@ def update_plan_schema(body: dict[str, Any]) -> tuple[dict, list[dict]]:
         data["name"] = value
 
     for field, (minimum, maximum) in _PLAN_LIMITS.items():
-        value = _int(
-            body, field, issues, required=False, minimum=minimum, maximum=maximum
-        )
+        value = _int(body, field, issues, required=False, minimum=minimum, maximum=maximum)
         if value is not _OMIT:
             data[field] = value
 
@@ -557,10 +632,12 @@ def update_plan_schema(body: dict[str, Any]) -> tuple[dict, list[dict]]:
     if value is not _OMIT:
         data["active"] = value
 
+    _plan_extras(body, issues, data, create=False)
     return data, issues
 
 
 # ── Promos (declared inline in `routes/admin/promos.ts`) ─────────────────────
+
 
 def _promo_code(value: str) -> str:
     return value.upper().strip()
@@ -570,9 +647,7 @@ def create_promo_schema(body: dict[str, Any]) -> tuple[dict, list[dict]]:
     issues: list[dict] = []
     data: dict[str, Any] = {}
 
-    value = _string(
-        body, "code", issues, min_len=4, max_len=50, transform=_promo_code
-    )
+    value = _string(body, "code", issues, min_len=4, max_len=50, transform=_promo_code)
     if value is not _OMIT:
         data["code"] = value
 

@@ -18,6 +18,7 @@ from ..db import query_one
 from ..errors import PayloadError, SimpleError
 from ..logging import create_logger
 from ..plans import PLAN_FEATURES, get_plan_for_feature
+from ..services import plan_catalog
 from .auth import AuthUser, require_auth
 
 log = create_logger("FeatureGate")
@@ -81,10 +82,10 @@ def require_feature(feature: str):
 
             row = await query_one(_PLAN_QUERY, target_user_id)
             plan = ((row["plan"] if row else "free") or "free").lower().strip()
-            allowed = PLAN_FEATURES.get(plan, PLAN_FEATURES["free"])
+            allowed = (await plan_catalog.get(plan)).features
 
             if feature not in allowed:
-                required_plan = get_plan_for_feature(feature)
+                required_plan = await plan_catalog.lowest_plan_with(feature)
                 log.info(
                     f'Feature gate denied: user {user.user_id} (plan={plan}) '
                     f'tried to access "{feature}"'

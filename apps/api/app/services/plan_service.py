@@ -1,9 +1,9 @@
 """What a user's plan allows — the one place limits are read for enforcement.
 
 The plan comes from the user's latest *active* subscription, as in the feature
-gate; anything else (no row, canceled, expired) is the free plan. Limits are read
-from the subscription row, which checkout writes from the plans table, so an admin
-price/limit change applies to new purchases.
+gate; anything else (no row, canceled, expired) is the free plan. Limits and
+features come from the plan's current definition (`plan_catalog`), so an admin
+change applies to everyone on that plan, not only to new purchases.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from datetime import UTC, datetime
 from .. import cache
 from ..db import query_one
 from ..logging import create_logger
-from ..plans import PLAN_FEATURES, PLAN_LIMITS
+from . import plan_catalog
 
 log = create_logger("PlanService")
 
@@ -37,34 +37,29 @@ class Plan:
     features: list[str]
     events_limit: int
     domains_limit: int
+    # None = unlimited.
+    team_limit: int | None = None
+    recordings_per_day: int | None = None
 
 
 async def for_user(user_id: str) -> Plan:
     row = user_id and await query_one(
         """
-        SELECT plan, events_limit, domains_limit FROM subscriptions
+        SELECT plan FROM subscriptions
         WHERE user_id = $1 AND status = 'active'
         ORDER BY created_at DESC LIMIT 1
         """,
         user_id,
     )
-    free = PLAN_LIMITS[FREE_PLAN]
-    if not row:
-        return Plan(
-            str(user_id),
-            FREE_PLAN,
-            PLAN_FEATURES[FREE_PLAN],
-            int(free["eventsLimit"]),
-            int(free["domainsLimit"]),
-        )
-
-    name = str(row.get("plan") or FREE_PLAN).lower().strip()
+    plan = await plan_catalog.get(row.get("plan") if row else FREE_PLAN)
     return Plan(
         str(user_id),
-        name,
-        PLAN_FEATURES.get(name, PLAN_FEATURES[FREE_PLAN]),
-        int(row.get("events_limit") or free["eventsLimit"]),
-        int(row.get("domains_limit") or free["domainsLimit"]),
+        plan.id,
+        list(plan.features),
+        plan.events_limit,
+        plan.domains_limit,
+        plan.team_limit,
+        plan.recordings_per_day,
     )
 
 
