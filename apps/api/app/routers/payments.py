@@ -33,6 +33,7 @@ from ..json_response import jsjson
 from ..logging import create_logger
 from ..middleware.admin_auth import AdminUser, admin_auth
 from ..middleware.auth import AuthUser, require_auth
+from ..middleware.profile_gate import profile_gate
 from ..services import domain_service, plan_catalog, plan_service, recording_service
 from ..services.email_service import send_payment_receipt_email
 
@@ -287,7 +288,7 @@ async def validate_promo(request: Request, user: AuthUser = Depends(require_auth
         raise SimpleError("Failed to validate code", 500) from None
 
 
-@router.post("/checkout")
+@router.post("/checkout", dependencies=[Depends(profile_gate)])
 async def checkout(request: Request, user: AuthUser = Depends(require_auth)):
     try:
         secret = _paystack_secret()

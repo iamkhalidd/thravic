@@ -1,10 +1,19 @@
 import type { UsageMeter } from './usage';
 
+/** Required at sign-up besides name, email and password (see lib/profile.ts). */
+export interface SignupProfile {
+    date_of_birth: string;
+    country: string;
+    phone: string;
+}
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 interface ApiResponse<T> {
     data?: T;
     error?: string;
+    /** The error response's body, for fields beyond `error` (e.g. `field`, `restricted`). */
+    details?: Record<string, unknown>;
 }
 
 // Get stored tokens
@@ -61,7 +70,7 @@ async function apiRequest<T>(
                     return apiRequest(endpoint, options);
                 }
             }
-            return { error: data.error || 'Request failed' };
+            return { error: data.error || 'Request failed', details: data };
         }
 
         return { data };
@@ -98,14 +107,14 @@ async function refreshToken(): Promise<boolean> {
 
 // Auth API
 export const auth = {
-    async register(email: string, password: string, name: string) {
+    async register(email: string, password: string, name: string, profile: SignupProfile) {
         const result = await apiRequest<{
             user: { id: string; email: string; name: string; subscription: string };
             accessToken: string;
             refreshToken: string;
         }>('/api/auth/register', {
             method: 'POST',
-            body: JSON.stringify({ email, password, name })
+            body: JSON.stringify({ email, password, name, ...profile })
         });
 
         if (result.data) {
@@ -132,6 +141,11 @@ export const auth = {
         return result;
     },
 
+    /** Forget this browser's session without calling the API (e.g. the account is gone). */
+    clearSession() {
+        clearTokens();
+    },
+
     async logout() {
         const { refreshToken: token } = getTokens();
         await apiRequest('/api/auth/logout', {
@@ -155,6 +169,10 @@ export const auth = {
             phone: string | null;
             country: string | null;
             timezone: string | null;
+            date_of_birth: string | null;
+            profile_complete: boolean;
+            missing_fields: string[];
+            restricted: string | null;
         }>('/api/auth/me');
     },
 
@@ -166,6 +184,7 @@ export const auth = {
         phone?: string;
         country?: string;
         timezone?: string;
+        date_of_birth?: string;
         preferences?: Record<string, any>;
     }) {
         return apiRequest('/api/auth/me', {

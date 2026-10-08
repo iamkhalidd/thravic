@@ -15,6 +15,8 @@ import re
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
+from .. import profile
+
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 MIN_PASSWORD_LENGTH = 8
@@ -42,6 +44,13 @@ class RegisterSchema(_StrictModel):
     email: str
     password: str
     name: str
+    # Required at sign-up (see app/profile.py); age is checked by the route.
+    # Defaults are validated so a missing field gets the same friendly message.
+    model_config = ConfigDict(extra="ignore", validate_default=True)
+
+    date_of_birth: str = ""
+    country: str = ""
+    phone: str = ""
 
     @field_validator("email")
     @classmethod
@@ -61,6 +70,21 @@ class RegisterSchema(_StrictModel):
         if len(value) < MIN_NAME_LENGTH:
             raise ValueError("Name must be at least 2 characters")
         return value
+
+    @field_validator("date_of_birth")
+    @classmethod
+    def _check_date_of_birth(cls, value: str) -> str:
+        return profile.parse_date_of_birth(value).isoformat()
+
+    @field_validator("country")
+    @classmethod
+    def _check_country(cls, value: str) -> str:
+        return profile.normalize_country(value)
+
+    @field_validator("phone")
+    @classmethod
+    def _check_phone(cls, value: str) -> str:
+        return profile.normalize_phone(value)
 
 
 class LoginSchema(_StrictModel):

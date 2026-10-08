@@ -15,18 +15,21 @@ Two behaviours are inherited from the Express source and preserved on purpose:
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import jwt
 from fastapi import APIRouter, Depends, Request
 
+from ... import profile
 from ...db import query, query_one
 from ...errors import SimpleError
 from ...js_compat import js_parse_int_or_nan
 from ...json_response import jsjson
 from ...logging import create_logger
+from ...middleware import profile_gate
 from ...middleware.admin_auth import AdminUser, admin_auth, super_admin_auth
 from ...security import get_jwt_secret
-from ...services import plan_catalog
+from ...services import plan_catalog, plan_service
 from ...services.audit_service import log_action
 from ...services.email_service import (
     send_account_reactivated_email,
@@ -87,6 +90,7 @@ async def list_users(request: Request):
         users = await query(
             f"""
             SELECT u.id, u.name, u.email, u.subscription, u.role, u.created_at,
+                   u.date_of_birth, u.country, u.phone, u.restricted_reason,
                    COUNT(DISTINCT d.id) as domains_count,
                    -- Counted from `events`: nothing writes `usage_logs`. Runs for
                    -- one page of users, served by the (domain_id, created_at) index.
@@ -109,6 +113,9 @@ async def list_users(request: Request):
             f"SELECT COUNT(*) as count FROM users u {where}", *args
         )
 
+        for user in users:
+            _add_profile_summary(user)
+
         return jsjson(
             {
                 "users": users,
@@ -128,7 +135,8 @@ async def user_detail(user_id: str):
         user = await query_one(
             """
             SELECT id, name, email, subscription, role, paystack_customer_code,
-                   preferences, created_at, updated_at
+                   preferences, created_at, updated_at, date_of_birth, country, phone,
+                   company, job_title, website, restricted_reason, restricted_at
             FROM users WHERE id = $1
             """,
             user_id,
@@ -136,6 +144,7 @@ async def user_detail(user_id: str):
 
         if not user:
             raise SimpleError("User not found", 404)
+        _add_profile_summary(user)
 
         domains = await query(
             """
@@ -240,6 +249,74 @@ async def update_user(
     except Exception as exc:  # noqa: BLE001
         log.error(f"User update error: {exc}")
         raise SimpleError("Failed to update user", 500) from None
+
+
+def _add_profile_summary(user: dict[str, Any]) -> None:
+    """Age (not the date itself in lists), profile completeness."""
+    born = profile.as_date(user.get("date_of_birth"))
+    user["date_of_birth"] = born.isoformat() if born else None
+    user["age"] = profile.age_on(born, profile.today()) if born else None
+    user["missing_fields"] = profile.missing_fields(user)
+    user["profile_complete"] = not user["missing_fields"]
+
+
+@router.put("/{user_id}/date-of-birth")
+async def correct_date_of_birth(
+    user_id: str, request: Request, admin: AdminUser = Depends(admin_auth)
+):
+    """Support's correction of a date of birth (users can only set theirs once).
+
+    18 or older lifts an under-18 restriction; under 18 restricts the account
+    (dashboard locked, collection stopped, deleted after the grace period).
+    """
+    try:
+        body = await request.json()
+        try:
+            born = profile.parse_date_of_birth((body or {}).get("date_of_birth"))
+        except profile.ProfileError as exc:
+            raise SimpleError(str(exc), 400) from None
+
+        adult = profile.is_adult(born)
+        user = await query_one(
+            """
+            UPDATE users SET date_of_birth = $2,
+                restricted_reason = CASE WHEN $3 THEN NULL ELSE $4 END,
+                restricted_at = CASE WHEN $3 THEN NULL ELSE COALESCE(restricted_at, NOW()) END,
+                updated_at = NOW()
+            WHERE id = $1
+            RETURNING id, restricted_reason, restricted_at
+            """,
+            user_id,
+            born,
+            adult,
+            profile.UNDERAGE,
+        )
+        if not user:
+            raise SimpleError("User not found", 404)
+
+        profile_gate.forget(user_id)
+        domains = await query("SELECT id FROM domains WHERE user_id = $1", user_id)
+        await plan_service.forget_paused_sites([str(d["id"]) for d in domains])
+        await log_action(
+            admin_id=admin.user_id,
+            action="user.date_of_birth",
+            target_type="user",
+            target_id=user_id,
+            details={"restricted": user["restricted_reason"]},
+            ip_address=client_ip(request),
+        )
+        return jsjson(
+            {
+                "date_of_birth": born.isoformat(),
+                "restricted": user["restricted_reason"],
+                "restricted_at": user["restricted_at"],
+            }
+        )
+    except SimpleError:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        log.error(f"Date of birth correction error: {exc}")
+        raise SimpleError("Failed to update date of birth", 500) from None
 
 
 @router.post("/{user_id}/suspend")

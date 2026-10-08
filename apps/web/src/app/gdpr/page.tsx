@@ -65,6 +65,10 @@ export default function GdprPage() {
                         <li style={s.listItem}>Our <strong>Customers</strong> act as Data Controllers</li>
                     </ul>
                     <p style={s.p}>We process personal data only on behalf of and under the instructions of our Customers.</p>
+                    <p style={s.p}>
+                        For our customers&rsquo; own account details (name, email, date of birth, country and phone),
+                        Thravic is the controller; the Privacy Policy (section 3.5) says what we keep and why.
+                    </p>
                     <p style={s.p}>Customers are responsible for:</p>
                     <ul style={s.list}>
                         <li style={s.listItem}>Determining the legal basis for processing</li>

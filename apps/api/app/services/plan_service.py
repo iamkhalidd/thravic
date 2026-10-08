@@ -241,13 +241,17 @@ def clear_local_quota_cache() -> None:
 # A lapsed plan can leave an owner with more sites than the free plan covers.
 # Those over the limit stop collecting; nothing is deleted, and the owner picks
 # which sites keep collecting (`domains.kept_active_at`, latest choice first,
-# then the oldest sites).
+# then the oldest sites). A restricted account's sites all stop.
 
 _local_paused: dict[str, tuple[float, bool]] = {}
 
 
 async def collecting_site_ids(owner_id: str) -> set[str] | None:
-    """The owner's sites that collect, or None when all of them do."""
+    """The owner's sites that collect, or None when all of them do. A restricted
+    account (an owner under 18) collects on none."""
+    owner = await query_one("SELECT restricted_reason FROM users WHERE id = $1", owner_id)
+    if owner and owner["restricted_reason"]:
+        return set()
     plan = await for_user(owner_id)
     rows = await query(
         """

@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { UsageMeters } from '@/components/UsageMeters';
+import { CountrySelect } from '@/components/CountrySelect';
+import { countryError, phoneError, websiteError } from '@/lib/profile';
 import { shortDate, TONE_COLORS, type BillingState, type UsageMeter as UsageMeterData } from '@/lib/usage';
 import {
     Settings,
@@ -64,6 +66,7 @@ interface UserData {
     job_title?: string | null;
     website?: string | null;
     phone?: string | null;
+    date_of_birth?: string | null;
     country?: string | null;
     timezone?: string | null;
     createdAt?: string;
@@ -82,6 +85,7 @@ function SettingsPageInner() {
     const [exportError, setExportError] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
+    const [profileError, setProfileError] = useState<string | null>(null);
     const [avatarUploading, setAvatarUploading] = useState(false);
 
     // Notifications state
@@ -219,11 +223,16 @@ function SettingsPageInner() {
     };
 
     const handleSaveProfile = async () => {
+        const problem = (name.trim().length < 2 ? 'Enter your full name' : null)
+            || countryError(country) || phoneError(phone) || websiteError(website);
+        setProfileError(problem);
+        if (problem) return;
         setSaving(true);
         try {
             const res = await auth.updateProfile({
                 name, company, job_title: jobTitle, website, phone, country, timezone
             });
+            if (res.error) setProfileError(res.error);
             if (res.data) {
                 setUser(prev => prev ? { ...prev, ...res.data as any } : null);
                 setSaved(true);
@@ -395,16 +404,20 @@ function SettingsPageInner() {
                                 <h4 style={{ marginBottom: 'var(--space-md)', fontSize: '1rem' }}>Personal Information</h4>
                                 <div className="grid grid-cols-2 gap-md">
                                     <div>
-                                        <label style={{ display: 'block', marginBottom: 'var(--space-xs)', fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>Full Name</label>
-                                        <input type="text" className="input" value={name} onChange={e => setName(e.target.value)} />
+                                        <label htmlFor="pf-name" style={{ display: 'block', marginBottom: 'var(--space-xs)', fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>Full Name <span aria-hidden="true" style={{ color: '#ef4444' }}>*</span></label>
+                                        <input id="pf-name" type="text" className="input" value={name} onChange={e => setName(e.target.value)} required autoComplete="name" />
                                     </div>
                                     <div>
                                         <label style={{ display: 'block', marginBottom: 'var(--space-xs)', fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>Email Address</label>
                                         <input type="email" className="input" value={email} disabled style={{ opacity: 0.7, cursor: 'not-allowed' }} title="Change email via support" />
                                     </div>
                                     <div>
-                                        <label style={{ display: 'block', marginBottom: 'var(--space-xs)', fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>Phone Number <span style={{ opacity: 0.5 }}>(optional)</span></label>
-                                        <input type="tel" className="input" value={phone} onChange={e => setPhone(e.target.value)} />
+                                        <label htmlFor="pf-phone" style={{ display: 'block', marginBottom: 'var(--space-xs)', fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>Phone Number <span aria-hidden="true" style={{ color: '#ef4444' }}>*</span></label>
+                                        <input id="pf-phone" type="tel" className="input" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+234 803 123 4567" required autoComplete="tel" />
+                                    </div>
+                                    <div>
+                                        <label htmlFor="pf-dob" style={{ display: 'block', marginBottom: 'var(--space-xs)', fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>Date of Birth</label>
+                                        <input id="pf-dob" type="date" className="input" value={user?.date_of_birth || ''} disabled style={{ opacity: 0.7, cursor: 'not-allowed' }} title="Contact support to correct your date of birth" />
                                     </div>
                                 </div>
                             </div>
@@ -433,8 +446,8 @@ function SettingsPageInner() {
                                 <h4 style={{ marginBottom: 'var(--space-md)', fontSize: '1rem' }}>Demographics</h4>
                                 <div className="grid grid-cols-2 gap-md">
                                     <div>
-                                        <label style={{ display: 'block', marginBottom: 'var(--space-xs)', fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>Country <span style={{ opacity: 0.5 }}>(optional)</span></label>
-                                        <input type="text" className="input" value={country} onChange={e => setCountry(e.target.value)} />
+                                        <label htmlFor="pf-country" style={{ display: 'block', marginBottom: 'var(--space-xs)', fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>Country <span aria-hidden="true" style={{ color: '#ef4444' }}>*</span></label>
+                                        <CountrySelect id="pf-country" value={country} onChange={setCountry} required />
                                     </div>
                                     <div>
                                         <label style={{ display: 'block', marginBottom: 'var(--space-xs)', fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>Timezone</label>
@@ -449,6 +462,9 @@ function SettingsPageInner() {
                             </div>
 
                             <div>
+                                {profileError && (
+                                    <p role="alert" style={{ color: '#ef4444', fontSize: '0.875rem', marginBottom: 'var(--space-sm)' }}>{profileError}</p>
+                                )}
                                 <button onClick={handleSaveProfile} className="btn btn-primary" disabled={saving}>
                                     {saved ? <Check size={18} /> : <Save size={18} />}
                                     {saving ? 'Saving...' : saved ? 'Saved!' : 'Save Profile'}

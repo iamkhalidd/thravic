@@ -220,7 +220,13 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
             return;
         }
         auth.getMe().then(result => {
-            if (result.data) setUser(result.data);
+            if (!result.data) return;
+            // Dashboard data needs a complete profile (the API refuses it otherwise).
+            if (!result.data.profile_complete || result.data.restricted) {
+                router.replace('/complete-profile');
+                return;
+            }
+            setUser(result.data);
         });
     }, []);
 

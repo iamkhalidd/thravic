@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Any
 
 from ..db import query, query_one
@@ -32,16 +33,26 @@ async def _ensure_free_subscription(user_id: str) -> None:
 # ── Create user (email + password) ───────────────────────────────────────────
 
 
-async def create_user(email: str, password: str, name: str) -> dict[str, Any] | None:
+async def create_user(
+    email: str,
+    password: str,
+    name: str,
+    date_of_birth: date | None = None,
+    country: str | None = None,
+    phone: str | None = None,
+) -> dict[str, Any] | None:
     row = await query_one(
         """
-        INSERT INTO users (email, password, name, preferences)
-        VALUES ($1, $2, $3, '{}')
+        INSERT INTO users (email, password, name, preferences, date_of_birth, country, phone)
+        VALUES ($1, $2, $3, '{}', $4, $5, $6)
         RETURNING *
         """,
         email,
         password,
         name,
+        date_of_birth,
+        country,
+        phone,
     )
     if row:
         await _ensure_free_subscription(row["id"])
@@ -170,6 +181,7 @@ async def update_preferences(
 
 _PROFILE_COLUMNS = (
     "name",
+    "date_of_birth",
     "company",
     "job_title",
     "website",

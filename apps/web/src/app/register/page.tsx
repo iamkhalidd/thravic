@@ -5,14 +5,27 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { BarChart3, Mail, Lock, User, ArrowRight, ArrowLeft } from 'lucide-react';
 import { auth } from '@/lib/api';
+import { CountrySelect } from '@/components/CountrySelect';
+import { countryError, dateOfBirthError, latestAdultBirthDate, phoneError } from '@/lib/profile';
+
+const labelStyle = {
+    display: 'block',
+    marginBottom: 'var(--space-xs)',
+    fontSize: '0.875rem',
+    color: 'var(--color-text-secondary)',
+} as const;
 
 export default function RegisterPage() {
     const router = useRouter();
     const [formData, setFormData] = useState({
         name: '',
         email: '',
-        password: ''
+        password: '',
+        dateOfBirth: '',
+        country: '',
+        phone: '',
     });
+    const [confirmedAdult, setConfirmedAdult] = useState(false);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
 
@@ -21,7 +34,19 @@ export default function RegisterPage() {
         setError('');
         setLoading(true);
 
-        const result = await auth.register(formData.email, formData.password, formData.name);
+        const problem = dateOfBirthError(formData.dateOfBirth) || countryError(formData.country) || phoneError(formData.phone)
+            || (confirmedAdult ? null : 'Please confirm you are 18 or older');
+        if (problem) {
+            setError(problem);
+            setLoading(false);
+            return;
+        }
+
+        const result = await auth.register(formData.email, formData.password, formData.name, {
+            date_of_birth: formData.dateOfBirth,
+            country: formData.country,
+            phone: formData.phone,
+        });
 
         if (result.error) {
             setError(result.error);
@@ -122,7 +147,7 @@ export default function RegisterPage() {
                     </div>
 
                     {error && (
-                        <div style={{
+                        <div role="alert" style={{
                             padding: 'var(--space-md)',
                             background: 'rgba(239, 68, 68, 0.1)',
                             border: '1px solid var(--color-error)',
@@ -135,7 +160,7 @@ export default function RegisterPage() {
                         </div>
                     )}
 
-                    <form onSubmit={handleSubmit}>
+                    <form onSubmit={handleSubmit} noValidate>
                         <div style={{ marginBottom: 'var(--space-md)' }}>
                             <label style={{
                                 display: 'block',
@@ -194,6 +219,42 @@ export default function RegisterPage() {
                             </div>
                         </div>
 
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-sm)', marginBottom: 'var(--space-md)' }}>
+                            <div>
+                                <label htmlFor="dob" style={labelStyle}>Date of birth</label>
+                                <input
+                                    id="dob"
+                                    type="date"
+                                    className="input"
+                                    value={formData.dateOfBirth}
+                                    max={latestAdultBirthDate()}
+                                    onChange={(e) => setFormData({ ...formData, dateOfBirth: e.target.value })}
+                                    required
+                                />
+                            </div>
+                            <div>
+                                <label htmlFor="country" style={labelStyle}>Country</label>
+                                <CountrySelect id="country" value={formData.country} onChange={country => setFormData({ ...formData, country })} required />
+                            </div>
+                        </div>
+
+                        <div style={{ marginBottom: 'var(--space-md)' }}>
+                            <label htmlFor="phone" style={labelStyle}>Phone number</label>
+                            <input
+                                id="phone"
+                                type="tel"
+                                className="input"
+                                placeholder="+234 803 123 4567"
+                                autoComplete="tel"
+                                value={formData.phone}
+                                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                                required
+                            />
+                            <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginTop: '4px' }}>
+                                Include your country code.
+                            </div>
+                        </div>
+
                         <div style={{ marginBottom: 'var(--space-lg)' }}>
                             <label style={{
                                 display: 'block',
@@ -223,6 +284,17 @@ export default function RegisterPage() {
                                 />
                             </div>
                         </div>
+
+                        <label style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', fontSize: '0.8125rem', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-md)', cursor: 'pointer' }}>
+                            <input
+                                type="checkbox"
+                                checked={confirmedAdult}
+                                onChange={(e) => setConfirmedAdult(e.target.checked)}
+                                style={{ marginTop: '2px' }}
+                                required
+                            />
+                            <span>I confirm I am 18 or older. Thravic is not available to anyone under 18.</span>
+                        </label>
 
                         <button
                             type="submit"

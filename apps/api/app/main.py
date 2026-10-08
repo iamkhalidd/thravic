@@ -15,7 +15,7 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 
 from .config import get_settings
@@ -25,6 +25,7 @@ from .json_response import js_iso_datetime, jsjson
 from .logging import configure_logging, create_logger
 from .middleware.cors import ThravicCORSMiddleware
 from .middleware.error_handler import register_exception_handlers
+from .middleware.profile_gate import profile_gate
 from .middleware.rate_limit import RateLimitMiddleware
 from .middleware.security_headers import SecurityHeadersMiddleware
 from .middleware.settings_gate import MaintenanceModeMiddleware
@@ -134,29 +135,61 @@ app.mount("/uploads", StaticFiles(directory=str(_upload_dir)), name="uploads")
 
 
 # ── Routes ───────────────────────────────────────────────────────────────────
+# Dashboard data needs a complete profile (and an unrestricted account).
+PROFILE_REQUIRED = [Depends(profile_gate)]
 app.include_router(auth_routes.router, prefix="/api/auth", tags=["auth"])
-app.include_router(analytics_routes.router, prefix="/api/analytics", tags=["analytics"])
-app.include_router(source_routes.router, prefix="/api/sources", tags=["sources"])
-app.include_router(heatmap_routes.router, prefix="/api/heatmaps", tags=["heatmaps"])
-app.include_router(insight_routes.router, prefix="/api/insights", tags=["insights"])
 app.include_router(
-    custom_event_routes.router, prefix="/api/custom-events", tags=["custom-events"]
+    analytics_routes.router, prefix="/api/analytics", tags=["analytics"],
+    dependencies=PROFILE_REQUIRED,
+)
+app.include_router(
+    source_routes.router, prefix="/api/sources", tags=["sources"],
+    dependencies=PROFILE_REQUIRED,
+)
+app.include_router(
+    heatmap_routes.router, prefix="/api/heatmaps", tags=["heatmaps"],
+    dependencies=PROFILE_REQUIRED,
+)
+app.include_router(
+    insight_routes.router, prefix="/api/insights", tags=["insights"],
+    dependencies=PROFILE_REQUIRED,
+)
+app.include_router(
+    custom_event_routes.router, prefix="/api/custom-events", tags=["custom-events"],
+    dependencies=PROFILE_REQUIRED,
 )
 app.include_router(
     announcement_routes.router, prefix="/api/announcements", tags=["announcements"]
 )
 app.include_router(contact_routes.router, prefix="/api/contact", tags=["contact"])
-app.include_router(domain_routes.router, prefix="/api/domains", tags=["domains"])
-app.include_router(funnel_routes.router, prefix="/api/funnels", tags=["funnels"])
 app.include_router(
-    recording_routes.router, prefix="/api/recordings", tags=["recordings"]
+    domain_routes.router, prefix="/api/domains", tags=["domains"],
+    dependencies=PROFILE_REQUIRED,
 )
 app.include_router(
-    experiment_routes.router, prefix="/api/experiments", tags=["experiments"]
+    funnel_routes.router, prefix="/api/funnels", tags=["funnels"],
+    dependencies=PROFILE_REQUIRED,
 )
-app.include_router(webhook_routes.router, prefix="/api/webhooks", tags=["webhooks"])
-app.include_router(team_routes.router, prefix="/api/teams", tags=["teams"])
-app.include_router(export_routes.router, prefix="/api/export", tags=["export"])
+app.include_router(
+    recording_routes.router, prefix="/api/recordings", tags=["recordings"],
+    dependencies=PROFILE_REQUIRED,
+)
+app.include_router(
+    experiment_routes.router, prefix="/api/experiments", tags=["experiments"],
+    dependencies=PROFILE_REQUIRED,
+)
+app.include_router(
+    webhook_routes.router, prefix="/api/webhooks", tags=["webhooks"],
+    dependencies=PROFILE_REQUIRED,
+)
+app.include_router(
+    team_routes.router, prefix="/api/teams", tags=["teams"],
+    dependencies=PROFILE_REQUIRED,
+)
+app.include_router(
+    export_routes.router, prefix="/api/export", tags=["export"],
+    dependencies=PROFILE_REQUIRED,
+)
 app.include_router(demo_routes.router, prefix="/api/demo", tags=["demo"])
 app.include_router(collect_routes.router, prefix="/api/collect", tags=["collect"])
 app.include_router(payment_routes.router, prefix="/api/payments", tags=["payments"])

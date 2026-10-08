@@ -348,6 +348,29 @@ async def send_subscription_notice_email(
     )
 
 
+async def send_account_restricted_email(to: str, name: str, grace_days: int) -> None:
+    """The account was restricted because its owner is under 18."""
+    support = get_settings().FRONTEND_URL or "http://localhost:3000"
+    safe_name = html.escape(name or "there")
+    paragraphs = [
+        "Thravic is only for people aged 18 or older, so your account has been "
+        "restricted: the dashboard is locked and your sites have stopped collecting data.",
+        f"The account and its data will be deleted in {grace_days} days. If your date of "
+        "birth was entered by mistake, contact support before then and we'll correct it.",
+    ]
+    await send_email(
+        to,
+        "Your Thravic account has been restricted",
+        _layout(
+            "<h2>Your Thravic account has been restricted</h2>"
+            f"<p>Hi {safe_name},</p>" + "".join(f"<p>{p}</p>" for p in paragraphs)
+            + f'<p><a href="{support}/contact">Contact support</a></p>'
+        ),
+        f"Hi {name or 'there'},\n\n" + "\n\n".join(paragraphs)
+        + f"\n\nContact support: {support}/contact",
+    )
+
+
 async def send_usage_limit_email(
     to: str,
     name: str,

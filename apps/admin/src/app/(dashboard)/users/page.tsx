@@ -13,6 +13,32 @@ interface User {
     domains_count: string;
     total_events: string;
     created_at: string;
+    date_of_birth: string | null;
+    age: number | null;
+    country: string | null;
+    phone: string | null;
+    profile_complete: boolean;
+    missing_fields: string[];
+    restricted_reason: string | null;
+}
+
+const FIELD_LABELS: Record<string, string> = {
+    name: 'name', date_of_birth: 'date of birth', country: 'country', phone: 'phone',
+};
+
+/** Age and profile state, for the list. */
+function ProfileCell({ user }: { user: User }) {
+    if (user.restricted_reason) {
+        return <span className="badge badge-canceled" title="Under 18: dashboard locked, collection stopped, deleted after 30 days">Restricted (under 18)</span>;
+    }
+    if (!user.profile_complete) {
+        return (
+            <span className="badge badge-grace" title={`Missing: ${user.missing_fields.map(f => FIELD_LABELS[f] ?? f).join(', ')}`}>
+                Incomplete
+            </span>
+        );
+    }
+    return <span>{user.age} · {user.country}</span>;
 }
 
 export default function UsersPage() {
@@ -28,6 +54,7 @@ export default function UsersPage() {
     const [emailForm, setEmailForm] = useState({ subject: '', message: '' });
     const [emailSending, setEmailSending] = useState(false);
     const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+    const [dateOfBirth, setDateOfBirth] = useState('');
     const limit = 25;
 
     const loadUsers = async () => {
@@ -71,6 +98,20 @@ export default function UsersPage() {
     const handleEdit = (user: User) => {
         setEditUser(user);
         setEditForm({ name: user.name, email: user.email, subscription: user.subscription, role: user.role || 'user' });
+        setDateOfBirth(user.date_of_birth || '');
+    };
+
+    /** Support's correction: 18+ lifts an under-18 restriction, under 18 applies one. */
+    const handleSaveDateOfBirth = async () => {
+        if (!editUser || !dateOfBirth) return;
+        try {
+            const result = await api.put(`/api/admin/users/${editUser.id}/date-of-birth`, { date_of_birth: dateOfBirth });
+            alert(result.restricted
+                ? 'Saved. This person is under 18, so the account is now restricted.'
+                : 'Saved. The account is not restricted.');
+            setEditUser(null);
+            loadUsers();
+        } catch (err: any) { alert(err.message); }
     };
 
     const handleSave = async () => {
@@ -217,6 +258,7 @@ export default function UsersPage() {
                             <th>Email</th>
                             <th>Plan</th>
                             <th>Role</th>
+                            <th>Age · Country</th>
                             <th>Domains</th>
                             <th>Events</th>
                             <th>Joined</th>
@@ -225,9 +267,9 @@ export default function UsersPage() {
                     </thead>
                     <tbody>
                         {loading ? (
-                            <tr><td colSpan={8} className="loading"><div className="spinner" /></td></tr>
+                            <tr><td colSpan={9} className="loading"><div className="spinner" /></td></tr>
                         ) : users.length === 0 ? (
-                            <tr><td colSpan={8} className="empty-state">No users found</td></tr>
+                            <tr><td colSpan={9} className="empty-state">No users found</td></tr>
                         ) : (
                             users.map((user) => (
                                 <tr key={user.id}>
@@ -235,6 +277,7 @@ export default function UsersPage() {
                                     <td>{user.email}</td>
                                     <td><span className={`badge badge-${user.subscription}`}>{user.subscription}</span></td>
                                     <td><span className={`badge badge-${user.role || 'user'}`}>{user.role || 'user'}</span></td>
+                                    <td><ProfileCell user={user} /></td>
                                     <td>{user.domains_count}</td>
                                     <td>{parseInt(user.total_events).toLocaleString()}</td>
                                     <td>{new Date(user.created_at).toLocaleDateString()}</td>
@@ -322,6 +365,17 @@ export default function UsersPage() {
                                     <option value="admin">Admin</option>
                                     <option value="super_admin">Super Admin</option>
                                 </select>
+                            </div>
+                            <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-md)' }}>
+                                <label htmlFor="admin-dob" style={{ display: 'block', fontSize: '13px', color: 'var(--color-text-secondary)', marginBottom: '4px' }}>Date of birth</label>
+                                <div style={{ display: 'flex', gap: 'var(--space-sm)' }}>
+                                    <input id="admin-dob" className="input" type="date" value={dateOfBirth} onChange={e => setDateOfBirth(e.target.value)} />
+                                    <button className="btn btn-ghost btn-sm" onClick={handleSaveDateOfBirth} disabled={!dateOfBirth || dateOfBirth === (editUser.date_of_birth || '')}>Correct</button>
+                                </div>
+                                <p style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginTop: '4px' }}>
+                                    Users set this once. Correct it only on request with proof; 18 or older lifts an under-18 restriction.
+                                    {editUser.phone && <> Phone: {editUser.phone}.</>}
+                                </p>
                             </div>
                             <div style={{ display: 'flex', gap: 'var(--space-sm)', justifyContent: 'flex-end', marginTop: 'var(--space-md)' }}>
                                 <button className="btn btn-ghost" onClick={() => setEditUser(null)}>Cancel</button>

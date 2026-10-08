@@ -15,7 +15,7 @@ import base64
 import re
 import secrets
 import time
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote, urlencode
@@ -26,11 +26,13 @@ import jwt
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, ConfigDict
 
-from .. import cache
+from .. import cache, profile
 from ..config import get_settings
+from ..db import query
 from ..errors import PayloadError, SimpleError
 from ..json_response import jsjson
 from ..logging import create_logger
+from ..middleware import profile_gate
 from ..middleware.auth import AuthUser, bearer_token, require_auth
 from ..middleware.rate_limit import get_client_ip
 from ..middleware.redirect_guard import redirect_to
@@ -42,7 +44,7 @@ from ..schemas.auth import (
     ResetPasswordSchema,
 )
 from ..security import get_jwt_refresh_secret, get_jwt_secret
-from ..services import email_service, token_store, user_service
+from ..services import domain_service, email_service, plan_service, token_store, user_service
 
 log = create_logger("Auth")
 
@@ -206,13 +208,23 @@ async def _is_reset_rate_limited(email: str) -> bool:
 
 @router.post("/register")
 async def register(payload: RegisterSchema, _gate: None = Depends(registration_gate)):
+    born = date.fromisoformat(payload.date_of_birth)
+    if not profile.is_adult(born):
+        # Nothing is stored for someone under 18, not even the attempt.
+        raise SimpleError(profile.UNDERAGE_MESSAGE, 403)
+
     existing = await user_service.find_by_email(payload.email)
     if existing:
         raise SimpleError("Email already registered", 400)
 
     try:
         user = await user_service.create_user(
-            payload.email, hash_password(payload.password), payload.name
+            payload.email,
+            hash_password(payload.password),
+            payload.name,
+            born,
+            payload.country,
+            payload.phone,
         )
         if not user:
             raise SimpleError("Registration failed", 500)
@@ -383,79 +395,132 @@ async def reset_password(payload: ResetPasswordSchema, request: Request):
     return jsjson({"message": "Password has been reset successfully"})
 
 
+def _me_payload(row: dict[str, Any]) -> dict[str, Any]:
+    missing = profile.missing_fields(row)
+    born = profile.as_date(row["date_of_birth"])
+    return {
+        "id": row["id"],
+        "email": row["email"],
+        "name": row["name"],
+        "subscription": row["subscription"],
+        "preferences": row["preferences"] or {},
+        "auth_provider": row["auth_provider"] or "email",
+        "avatar_url": row["avatar_url"] or _avatar_fallback(row["name"]),
+        "company": row["company"] or None,
+        "job_title": row["job_title"] or None,
+        "website": row["website"] or None,
+        "phone": row["phone"] or None,
+        "country": row["country"] or None,
+        "timezone": row["timezone"] or None,
+        "date_of_birth": born.isoformat() if born else None,
+        "profile_complete": not missing,
+        "missing_fields": missing,
+        "restricted": row["restricted_reason"],
+        "createdAt": row["created_at"],
+    }
+
+
 @router.get("/me")
 async def get_me(user: AuthUser = Depends(require_auth)):
     row = await user_service.find_by_id(user.user_id)
     if not row:
         raise SimpleError("User not found", 404)
 
-    return jsjson(
-        {
-            "id": row["id"],
-            "email": row["email"],
-            "name": row["name"],
-            "subscription": row["subscription"],
-            "preferences": row["preferences"] or {},
-            "auth_provider": row["auth_provider"] or "email",
-            "avatar_url": row["avatar_url"] or _avatar_fallback(row["name"]),
-            "company": row["company"] or None,
-            "job_title": row["job_title"] or None,
-            "website": row["website"] or None,
-            "phone": row["phone"] or None,
-            "country": row["country"] or None,
-            "timezone": row["timezone"] or None,
-            "createdAt": row["created_at"],
-        }
-    )
+    return jsjson(_me_payload(row))
 
 
 @router.patch("/me")
 async def update_me(body: dict[str, Any], user: AuthUser = Depends(require_auth)):
+    """Update preferences and profile fields; every field is checked (app/profile.py).
+
+    The date of birth can be set once. Someone under 18 is refused: an account
+    with no sites is deleted, one with sites is restricted (see `_refuse_underage`).
+    """
     try:
-        preferences = body.get("preferences")
-        if preferences and isinstance(preferences, dict):
-            await user_service.update_preferences(user.user_id, preferences)
-
-        profile_fields = {
-            key: body[key]
-            for key in (
-                "name",
-                "company",
-                "job_title",
-                "website",
-                "phone",
-                "country",
-                "timezone",
-            )
-            if key in body
-        }
-        if profile_fields:
-            await user_service.update_profile(user.user_id, profile_fields)
-
         row = await user_service.find_by_id(user.user_id)
         if not row:
             raise SimpleError("User not found", 404)
 
-        return jsjson(
-            {
-                "id": row["id"],
-                "name": row["name"],
-                "email": row["email"],
-                "avatar_url": row["avatar_url"] or _avatar_fallback(row["name"]),
-                "company": row["company"],
-                "job_title": row["job_title"],
-                "website": row["website"],
-                "phone": row["phone"],
-                "country": row["country"],
-                "timezone": row["timezone"],
-                "preferences": row["preferences"],
-            }
-        )
-    except SimpleError:
+        try:
+            fields = profile.clean_profile_fields(body)
+            given = body.get("date_of_birth")
+            born = profile.parse_date_of_birth(given) if given not in (None, "") else None
+        except profile.ProfileError as exc:
+            raise PayloadError({"error": str(exc), "field": exc.field}, 400) from None
+
+        stored = profile.as_date(row["date_of_birth"])
+        if born is not None and born != stored:
+            if stored is not None:
+                raise PayloadError(
+                    {
+                        "error": "Your date of birth can't be changed here. "
+                        "Contact support if it's wrong.",
+                        "field": "date_of_birth",
+                    },
+                    400,
+                )
+            if not profile.is_adult(born):
+                return await _refuse_underage(row, born)
+            fields["date_of_birth"] = born
+
+        preferences = body.get("preferences")
+        if preferences and isinstance(preferences, dict):
+            await user_service.update_preferences(user.user_id, preferences)
+        if fields:
+            await user_service.update_profile(user.user_id, fields)
+        profile_gate.forget(user.user_id)
+
+        row = await user_service.find_by_id(user.user_id)
+        if not row:
+            raise SimpleError("User not found", 404)
+        return jsjson(_me_payload(row))
+    except (SimpleError, PayloadError):
         raise
     except Exception as exc:
         log.error(f"Update profile error: {exc}")
         raise SimpleError("Failed to update profile", 500) from None
+
+
+async def _refuse_underage(row: dict[str, Any], born: date):
+    """Someone under 18 gave their date of birth on an existing account.
+
+    With no sites there is nothing to lose: the account is deleted now. With
+    sites, the account is restricted (dashboard locked, collection stopped) and
+    deleted after `profile.UNDERAGE_GRACE_DAYS` unless support finds it was a mistake.
+    """
+    user_id = str(row["id"])
+    if await domain_service.count_by_user(user_id) == 0:
+        try:
+            await query("DELETE FROM users WHERE id = $1", user_id)
+            log.info(f"Deleted under-18 account {user_id} with no sites")
+            return jsjson(
+                {"error": profile.UNDERAGE_MESSAGE, "restricted": profile.UNDERAGE,
+                 "accountDeleted": True},
+                status_code=403,
+            )
+        except Exception as exc:  # noqa: BLE001 — restrict instead
+            log.error(f"Could not delete under-18 account {user_id}: {exc}")
+
+    await query(
+        "UPDATE users SET date_of_birth = $2, restricted_reason = $3, restricted_at = NOW(), "
+        "updated_at = NOW() WHERE id = $1",
+        user_id,
+        born,
+        profile.UNDERAGE,
+    )
+    profile_gate.forget(user_id)
+    domains = await query("SELECT id FROM domains WHERE user_id = $1", user_id)
+    await plan_service.forget_paused_sites([str(d["id"]) for d in domains])
+    _fire_and_forget(
+        email_service.send_account_restricted_email(
+            row["email"], row["name"], profile.UNDERAGE_GRACE_DAYS
+        ),
+        "Restricted email",
+    )
+    log.info(f"Restricted under-18 account {user_id}")
+    return jsjson(
+        {"error": profile.UNDERAGE_MESSAGE, "restricted": profile.UNDERAGE}, status_code=403
+    )
 
 
 class _AvatarBody(BaseModel):

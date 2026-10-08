@@ -102,6 +102,23 @@ export default function PrivacyPage() {
                             <strong>IP Address Handling:</strong> IP addresses may be temporarily processed for security and geolocation purposes but are not stored in a persistent, human-readable format.
                         </p>
                     </div>
+                    <div style={s.card}>
+                        <h3 style={s.h3}>3.5 Your Account Details</h3>
+                        <p style={s.p}>
+                            For the people who sign up to Thravic (not the visitors to their websites), Thravic is
+                            the controller of the following account details:
+                        </p>
+                        <ul style={s.list}>
+                            <li style={s.listItem}><strong>Full name and email address:</strong> to run your account and contact you about it.</li>
+                            <li style={s.listItem}><strong>Date of birth:</strong> to confirm you are 18 or older. It is shown only to you and to Thravic support, and can be corrected by support.</li>
+                            <li style={s.listItem}><strong>Country and phone number:</strong> to know who our customers are, for billing, and to reach you about your account or its security.</li>
+                            <li style={s.listItem}><strong>Company, job title, website and timezone</strong> (optional): to tailor reports and support to you.</li>
+                        </ul>
+                        <p style={{ ...s.p, marginBottom: 0 }}>
+                            These details are kept while your account exists and deleted with it. They are never
+                            sold or used for advertising. You can view and update them under Settings &rarr; Account.
+                        </p>
+                    </div>
                 </section>
 
                 {/* 4. Purpose of Processing */}
@@ -291,6 +308,13 @@ export default function PrivacyPage() {
 
                 <section style={s.section}>
                     <h2 style={s.h2}>17. Children&rsquo;s Data</h2>
+                    <p style={s.p}>
+                        Thravic accounts are only for people aged 18 or older; sign-up asks for a date of birth and
+                        refuses anyone younger. If we learn that an account belongs to someone under 18, it is
+                        restricted at once (its dashboard is locked and its sites stop collecting data) and deleted
+                        with its data after 30 days, unless the date of birth was entered by mistake and support
+                        corrects it.
+                    </p>
                     <p style={s.p}>Thravic does not knowingly collect data from children under applicable legal age thresholds.</p>
                 </section>
 
