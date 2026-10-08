@@ -199,7 +199,7 @@ export default function DemoPage() {
                 )}
 
                 {/* Navigation — matches real dashboard */}
-                <nav style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: sidebarCollapsed ? '8px 4px' : '8px 0' }}>
+                <nav className="no-scrollbar" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: sidebarCollapsed ? '8px 4px' : '8px 0' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                         {navStructure.map((item, i) => {
                             const Icon = item.icon;

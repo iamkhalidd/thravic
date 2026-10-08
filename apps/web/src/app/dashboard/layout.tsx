@@ -388,7 +388,7 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                 )}
 
                 {/* Navigation */}
-                <nav style={{
+                <nav className="no-scrollbar" style={{
                     flex: 1, overflowY: 'auto', overflowX: 'hidden',
                     padding: (sidebarCollapsed && !isMobile) ? '8px 4px' : '8px 0',
                 }}>
