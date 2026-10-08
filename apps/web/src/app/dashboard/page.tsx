@@ -31,6 +31,9 @@ import { ScriptInstallation } from '@/components/ScriptInstallation';
 
 const sourceColors = ['#f4f5f6', '#d1d5db', '#8a8f98', '#575c66', '#3f434a', '#2d3036'];
 
+// Fallback when the script request fails; the API normally supplies the snippet.
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+
 export default function DashboardPage() {
     const [domainList, setDomainList] = useState<Domain[]>([]);
     const [selectedDomainId, setSelectedDomainId] = useState<string | null>(null);
@@ -299,7 +302,7 @@ export default function DashboardPage() {
                                     whiteSpace: 'pre-wrap',
                                     wordBreak: 'break-all'
                                 }}>
-                                    {trackingScript || `<script async src="https://your-api.com/tf.js" data-tracking-id="${selectedDomain?.trackingId}"></script>`}
+                                    {trackingScript || `<script async src="${API_URL}/tf.js" data-tracking-id="${selectedDomain?.trackingId}"></script>`}
                                 </pre>
                                 <button
                                     onClick={handleCopyScript}
@@ -371,7 +374,7 @@ export default function DashboardPage() {
                             Select your platform below and follow the steps to install Thravic.
                         </p>
 
-                        <ScriptInstallation script={trackingScript || `<script async src="https://trackflow-7ufa.onrender.com/tf.js" data-tracking-id="${selectedDomain.trackingId}"></script>`} />
+                        <ScriptInstallation script={trackingScript || `<script async src="${API_URL}/tf.js" data-tracking-id="${selectedDomain.trackingId}"></script>`} />
 
                         <div style={{ marginTop: 'var(--space-xl)', display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-sm)' }}>
                             <button onClick={() => setShowInstructions(false)} className="btn btn-secondary">

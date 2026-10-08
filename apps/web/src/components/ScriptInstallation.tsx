@@ -1,17 +1,19 @@
 'use client';
 
 import { useState } from 'react';
-import { Copy, Check, Globe, CircleDot, ShoppingBag, Zap, Atom, ClipboardList } from 'lucide-react';
+import { Copy, Check, Globe, CircleDot, ShoppingBag, Zap, Atom, ClipboardList, Bot } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { buildInstallPrompt, nextScriptTag, parseTrackerTag } from '@/lib/installPrompt';
 
-type Platform = 'html' | 'wordpress' | 'shopify' | 'webflow' | 'nextjs';
+type Platform = 'html' | 'wordpress' | 'shopify' | 'webflow' | 'nextjs' | 'ai';
 
 const PLATFORM_TABS: { id: Platform; label: string; icon: LucideIcon }[] = [
     { id: 'html', label: 'HTML', icon: Globe },
     { id: 'wordpress', label: 'WordPress', icon: CircleDot },
     { id: 'shopify', label: 'Shopify', icon: ShoppingBag },
     { id: 'webflow', label: 'Webflow', icon: Zap },
-    { id: 'nextjs', label: 'Next.js / React', icon: Atom },
+    { id: 'nextjs', label: 'Next.js', icon: Atom },
+    { id: 'ai', label: 'AI agent', icon: Bot },
 ];
 
 function getPlatformInstructions(platform: Platform, script: string) {
@@ -65,26 +67,38 @@ function getPlatformInstructions(platform: Platform, script: string) {
                     'Click "Verify Installation" below.',
                 ],
             };
-        case 'nextjs':
+        case 'nextjs': {
+            const tag = parseTrackerTag(script);
             return {
-                snippet: `// In your app/layout.tsx or pages/_app.tsx
+                snippet: tag
+                    ? `// app/layout.tsx (App Router)
 import Script from 'next/script';
 
-// Add inside your root layout <head> or component:
-<Script
-  id="thravic"
-  strategy="afterInteractive"
-  dangerouslySetInnerHTML={{
-    __html: \`${script.replace(/`/g, '\\`')}\`
-  }}
-/>`,
+// inside <body> of the root layout:
+${nextScriptTag(tag)}`
+                    : script,
                 steps: [
-                    'Install the snippet in your root layout file (app/layout.tsx) or pages/_app.tsx.',
-                    'Use the Next.js <Script> component with strategy="afterInteractive" as shown above.',
+                    'App Router: add the <Script> above inside <body> of app/layout.tsx, once.',
+                    'Pages Router: paste the plain HTML snippet (HTML tab) inside <Head> in pages/_document.tsx instead.',
                     'Commit and deploy your changes.',
                     'Click "Verify Installation" below.',
                 ],
             };
+        }
+        case 'ai': {
+            const tag = parseTrackerTag(script);
+            return {
+                snippet: tag
+                    ? buildInstallPrompt(tag)
+                    : `Add this analytics script to this website, once, inside <head> of the shared layout so it loads on every page. Keep it exactly as written.\n\n${script}`,
+                steps: [
+                    'Copy the prompt above.',
+                    'Paste it into your AI coding agent (Cursor, Claude Code, GitHub Copilot, Windsurf, Lovable, Bolt, v0, …) with your website project open.',
+                    'Review the change it makes — it should touch one shared file (plus your security policy if you have one).',
+                    'Deploy, then click "Verify Installation" below.',
+                ],
+            };
+        }
     }
 }
 
@@ -154,7 +168,7 @@ export function ScriptInstallation({ script }: ScriptInstallationProps) {
                     color: 'var(--color-text-secondary)',
                     maxHeight: '240px',
                     whiteSpace: 'pre-wrap',
-                    wordBreak: 'break-all',
+                    wordBreak: platform === 'ai' ? 'normal' : 'break-all',
                 }}>
                     {platformInfo.snippet}
                 </pre>
@@ -170,7 +184,7 @@ export function ScriptInstallation({ script }: ScriptInstallationProps) {
                     }}
                 >
                     {copied ? <Check size={14} /> : <Copy size={14} />}
-                    {copied ? 'Copied!' : 'Copy'}
+                    {copied ? 'Copied!' : platform === 'ai' ? 'Copy prompt' : 'Copy'}
                 </button>
             </div>
 
