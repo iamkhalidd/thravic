@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import {
     Sparkles,
     TrendingUp,
@@ -10,23 +11,52 @@ import {
     Zap,
     ArrowRight,
     RefreshCw,
-    ChevronRight
+    ChevronRight,
+    FileText,
+    Filter,
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
-import { domains } from '@/lib/api';
+import { useDomain } from '@/contexts/DomainContext';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
+// GET /api/insights/{domainId}: today's report. Every number in an insight comes
+// from its `evidence` (computed from the site's data, not by the model).
 interface Insight {
     id: string;
-    type: 'trend' | 'anomaly' | 'performance' | 'opportunity' | 'warning';
+    type: 'traffic' | 'page' | 'technical' | 'funnel' | 'opportunity';
     priority: 'high' | 'medium' | 'low';
     title: string;
     description: string;
-    metric: string;
-    value: number | string;
-    change?: number;
     recommendation?: string;
+    evidence: Array<{ subject: string; numbers: Record<string, number> }>;
+    link: string;
+}
+
+interface InsightReport {
+    status: 'ok' | 'insufficient_data';
+    insights: Insight[];
+    aiGenerated: boolean;
+    generatedAt: string;
+    refreshesLeft: number;
+    minSessions: number;
+}
+
+// `sessionsChangePct` -> "Sessions change", with the unit taken from the suffix.
+function formatEvidence(key: string, value: number): [string, string] {
+    const units: Array<[string, string]> = [['Pct', '%'], ['Ms', ' ms'], ['Seconds', ' s']];
+    let unit = '';
+    let name = key;
+    for (const [suffix, symbol] of units) {
+        if (name.endsWith(suffix)) {
+            name = name.slice(0, -suffix.length);
+            unit = symbol;
+            break;
+        }
+    }
+    const label = name.replace(/([A-Z])/g, ' $1').toLowerCase();
+    const sign = key.endsWith('ChangePct') || key.endsWith('Delta') ? (value > 0 ? '+' : '') : '';
+    return [label.charAt(0).toUpperCase() + label.slice(1), `${sign}${value.toLocaleString()}${unit}`];
 }
 
 interface TrendData {
@@ -49,11 +79,11 @@ interface TrendData {
 }
 
 const insightIcons: Record<string, React.ElementType> = {
-    trend: TrendingUp,
-    anomaly: AlertTriangle,
-    performance: Zap,
+    traffic: TrendingUp,
+    page: FileText,
+    technical: Zap,
+    funnel: Filter,
     opportunity: Target,
-    warning: AlertTriangle
 };
 
 const priorityColors: Record<string, string> = {
@@ -62,12 +92,14 @@ const priorityColors: Record<string, string> = {
     low: 'var(--color-success)'
 };
 
-async function getInsights(domainId: string) {
+async function getInsights(domainId: string, refresh = false) {
     const token = localStorage.getItem('accessToken');
-    const res = await fetch(`${API_URL}/api/insights/${domainId}`, {
+    const res = await fetch(`${API_URL}/api/insights/${domainId}${refresh ? '/refresh' : ''}`, {
+        method: refresh ? 'POST' : 'GET',
         headers: { Authorization: `Bearer ${token}` }
     });
-    return res.json();
+    const body = await res.json();
+    return res.ok ? { report: body as InsightReport } : { error: (body?.error as string) || 'Could not load insights' };
 }
 
 async function getTrends(domainId: string) {
@@ -79,40 +111,49 @@ async function getTrends(domainId: string) {
 }
 
 export default function InsightsPage() {
-    const [selectedDomainId, setSelectedDomainId] = useState<string | null>(null);
-    const [insights, setInsights] = useState<Insight[]>([]);
+    const { selectedDomainId, loading: domainLoading } = useDomain();
+    const [report, setReport] = useState<InsightReport | null>(null);
     const [trends, setTrends] = useState<TrendData | null>(null);
     const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
+    const [error, setError] = useState<string | null>(null);
     const [selectedInsight, setSelectedInsight] = useState<Insight | null>(null);
+    const insights = report?.insights ?? [];
 
     useEffect(() => {
-        domains.list().then(result => {
-            if (result.data && result.data.domains.length > 0) {
-                setSelectedDomainId(result.data.domains[0].id);
-            } else {
-                setLoading(false);
-            }
-        });
-    }, []);
-
-    useEffect(() => {
-        if (!selectedDomainId) return;
+        if (!selectedDomainId) {
+            if (!domainLoading) setLoading(false);
+            return;
+        }
 
         const loadData = async () => {
             setLoading(true);
+            setError(null);
+            setSelectedInsight(null);
 
             const [insightsData, trendsData] = await Promise.all([
                 getInsights(selectedDomainId),
                 getTrends(selectedDomainId)
             ]);
 
-            setInsights(insightsData.insights || []);
+            setReport(insightsData.report ?? null);
+            setError(insightsData.error ?? null);
             setTrends(trendsData);
             setLoading(false);
         };
 
         loadData();
-    }, [selectedDomainId]);
+    }, [selectedDomainId, domainLoading]);
+
+    const refresh = async () => {
+        if (!selectedDomainId) return;
+        setRefreshing(true);
+        setError(null);
+        const result = await getInsights(selectedDomainId, true);
+        if (result.report) setReport(result.report);
+        else setError(result.error ?? null);
+        setRefreshing(false);
+    };
 
     // Combine historical and forecast for chart
     const chartData = trends ? [
@@ -156,19 +197,34 @@ export default function InsightsPage() {
                         <Sparkles size={12} style={{ marginRight: '4px' }} />
                         {insights.length} insights
                     </span>
+                    {report && report.status === 'ok' && (
+                        <span className="badge" title={report.aiGenerated ? 'Written by AI from your numbers' : 'AI unavailable: written by rules from the same numbers'}>
+                            {report.aiGenerated ? 'AI' : 'Rule-based'}
+                        </span>
+                    )}
                 </div>
-                <button
-                    onClick={() => {
-                        if (selectedDomainId) {
-                            getInsights(selectedDomainId).then(data => setInsights(data.insights || []));
-                        }
-                    }}
-                    className="btn btn-secondary"
-                >
-                    <RefreshCw size={16} />
-                    Refresh
-                </button>
+                <div className="flex items-center gap-md">
+                    {report && (
+                        <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>
+                            Updated {new Date(report.generatedAt).toLocaleString()} · {report.refreshesLeft} refresh{report.refreshesLeft === 1 ? '' : 'es'} left today
+                        </span>
+                    )}
+                    <button
+                        onClick={refresh}
+                        disabled={refreshing || !report || report.refreshesLeft === 0}
+                        className="btn btn-secondary"
+                    >
+                        <RefreshCw size={16} className={refreshing ? 'spin' : undefined} />
+                        {refreshing ? 'Analysing…' : 'Refresh'}
+                    </button>
+                </div>
             </div>
+
+            {error && (
+                <div role="alert" className="card" style={{ marginBottom: 'var(--space-lg)', color: 'var(--color-error)' }}>
+                    {error}
+                </div>
+            )}
 
             <div className="grid grid-cols-3 gap-lg" style={{ marginBottom: 'var(--space-xl)' }}>
                 {/* Traffic Forecast Chart */}
@@ -341,7 +397,11 @@ export default function InsightsPage() {
                 {insights.length === 0 ? (
                     <div style={{ textAlign: 'center', padding: 'var(--space-xl)', color: 'var(--color-text-muted)' }}>
                         <Sparkles size={48} style={{ marginBottom: 'var(--space-md)', opacity: 0.5 }} />
-                        <p>No insights yet. Collect more data to see AI-powered recommendations.</p>
+                        <p>
+                            {report?.status === 'insufficient_data'
+                                ? `Not enough data yet: insights need at least ${report.minSessions} sessions in the last 7 days.`
+                                : 'No insights yet.'}
+                        </p>
                     </div>
                 ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
@@ -394,19 +454,47 @@ export default function InsightsPage() {
                                                 {insight.description}
                                             </p>
 
-                                            {selectedInsight?.id === insight.id && insight.recommendation && (
-                                                <div style={{
-                                                    padding: 'var(--space-sm) var(--space-md)',
-                                                    background: 'var(--color-bg-tertiary)',
-                                                    borderRadius: 'var(--radius-md)',
-                                                    borderLeft: '3px solid var(--color-accent-primary)'
-                                                }}>
-                                                    <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
-                                                        Recommendation
-                                                    </span>
-                                                    <p style={{ fontSize: '0.875rem', margin: 'var(--space-xs) 0 0' }}>
-                                                        {insight.recommendation}
-                                                    </p>
+                                            {selectedInsight?.id === insight.id && (
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
+                                                    {insight.recommendation && (
+                                                        <div style={{
+                                                            padding: 'var(--space-sm) var(--space-md)',
+                                                            background: 'var(--color-bg-tertiary)',
+                                                            borderRadius: 'var(--radius-md)',
+                                                            borderLeft: '3px solid var(--color-accent-primary)'
+                                                        }}>
+                                                            <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
+                                                                Recommendation
+                                                            </span>
+                                                            <p style={{ fontSize: '0.875rem', margin: 'var(--space-xs) 0 0' }}>
+                                                                {insight.recommendation}
+                                                            </p>
+                                                        </div>
+                                                    )}
+                                                    {insight.evidence.map(item => (
+                                                        <div key={item.subject} style={{ fontSize: '0.8rem' }}>
+                                                            <div style={{ color: 'var(--color-text-muted)', marginBottom: 4 }}>
+                                                                Based on: {item.subject}
+                                                            </div>
+                                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-xs) var(--space-md)' }}>
+                                                                {Object.entries(item.numbers).map(([key, value]) => {
+                                                                    const [label, shown] = formatEvidence(key, value);
+                                                                    return (
+                                                                        <span key={key}>
+                                                                            <span style={{ color: 'var(--color-text-muted)' }}>{label}:</span> {shown}
+                                                                        </span>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                    <Link
+                                                        href={insight.link}
+                                                        onClick={(e) => e.stopPropagation()}
+                                                        style={{ fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                                                    >
+                                                        See the data <ArrowRight size={14} />
+                                                    </Link>
                                                 </div>
                                             )}
                                         </div>

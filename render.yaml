@@ -80,6 +80,12 @@ services:
         sync: false
       - key: GITHUB_CLIENT_SECRET
         sync: false
-      # AI insights (optional; the endpoints 403 when unset)
-      - key: GEMINI_API_KEY
+      # AI insights (optional). Without a key, insights are rule-based over the
+      # same computed facts. Any OpenAI-compatible API; DeepSeek by default.
+      # Set AI_MODEL to the exact model name shown in your provider's console.
+      - key: AI_API_KEY
+        sync: false
+      - key: AI_BASE_URL
+        value: https://api.deepseek.com
+      - key: AI_MODEL
         sync: false

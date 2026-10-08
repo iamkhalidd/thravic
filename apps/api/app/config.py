@@ -92,7 +92,11 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_SECRET: str | None = None
     GITHUB_CLIENT_ID: str | None = None
     GITHUB_CLIENT_SECRET: str | None = None
-    GEMINI_API_KEY: str | None = None
+    # AI insights: any OpenAI-compatible chat completions API (DeepSeek by default).
+    # Without a key, insights fall back to rules over the same computed facts.
+    AI_API_KEY: str | None = None
+    AI_BASE_URL: str = "https://api.deepseek.com"
+    AI_MODEL: str = "deepseek-chat"
 
     # ── Parity harness ────────────────────────
     EXPRESS_BASE_URL: str = "http://localhost:3001"
