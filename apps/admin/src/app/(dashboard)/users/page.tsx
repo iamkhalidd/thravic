@@ -55,6 +55,11 @@ export default function UsersPage() {
     const [emailSending, setEmailSending] = useState(false);
     const [isSuperAdmin, setIsSuperAdmin] = useState(false);
     const [dateOfBirth, setDateOfBirth] = useState('');
+    const [plans, setPlans] = useState<{ id: string; name: string }[]>([]);
+
+    useEffect(() => {
+        api.get('/api/admin/plans').then(data => setPlans(data.plans || [])).catch(console.error);
+    }, []);
     const limit = 25;
 
     const loadUsers = async () => {
@@ -243,9 +248,7 @@ export default function UsersPage() {
                     onChange={(e) => { setPlan(e.target.value); setOffset(0); }}
                 >
                     <option value="">All Plans</option>
-                    <option value="free">Free</option>
-                    <option value="pro">Pro</option>
-                    <option value="agency">Agency</option>
+                    {plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
             </div>
 
@@ -351,12 +354,16 @@ export default function UsersPage() {
                                 <input className="input" value={editForm.email} onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))} />
                             </div>
                             <div>
-                                <label style={{ display: 'block', fontSize: '13px', color: 'var(--color-text-secondary)', marginBottom: '4px' }}>Plan</label>
-                                <select className="input" value={editForm.subscription} onChange={e => setEditForm(f => ({ ...f, subscription: e.target.value }))}>
-                                    <option value="free">Free</option>
-                                    <option value="pro">Pro</option>
-                                    <option value="agency">Agency</option>
+                                <label htmlFor="admin-user-plan" style={{ display: 'block', fontSize: '13px', color: 'var(--color-text-secondary)', marginBottom: '4px' }}>Plan</label>
+                                <select id="admin-user-plan" className="input" value={editForm.subscription} onChange={e => setEditForm(f => ({ ...f, subscription: e.target.value }))}>
+                                    {plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                    {!plans.some(p => p.id === editForm.subscription) && (
+                                        <option value={editForm.subscription}>{editForm.subscription}</option>
+                                    )}
                                 </select>
+                                <p style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginTop: '4px' }}>
+                                    A grant: takes effect now with no end date, or keeps the current paid period if one is running.
+                                </p>
                             </div>
                             <div>
                                 <label style={{ display: 'block', fontSize: '13px', color: 'var(--color-text-secondary)', marginBottom: '4px' }}>Role</label>

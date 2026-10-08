@@ -1,15 +1,9 @@
-"""Admin user management — port of `routes/admin/users.ts` (8 handlers).
+"""Admin user management — port of `routes/admin/users.ts`.
 
-Two behaviours are inherited from the Express source and preserved on purpose:
-
-* `PATCH /:id` syncs the `subscriptions` row with an
-  `ON CONFLICT (user_id) DO UPDATE`, but `subscriptions` has **no unique
-  constraint on `user_id`** — only its primary key. Postgres therefore rejects the
-  statement, the handler's catch turns it into a 500, and because the earlier
-  `UPDATE users` already committed, the name/email change sticks while the plan
-  change does not. So changing a user's plan from the admin UI currently always
-  fails with "Failed to update user".
-* `DELETE /:id` and `POST /:id/impersonate` require `super_admin`.
+* `PATCH /:id` can change a user's plan; that grant takes effect at once (see
+  the handler). `subscriptions_user_id_unique` (0006) makes its upsert work.
+* `DELETE /:id` and `POST /:id/impersonate` require `super_admin`. Deleting a
+  user keeps their audit entries, settings changes and promo records (0018).
 """
 
 from __future__ import annotations
@@ -36,6 +30,7 @@ from ...services.email_service import (
     send_account_suspended_email,
     send_email,
 )
+from ...services.plan_service import entitled
 from ...validators.admin import admin_reset_password_schema, update_user_schema
 from ..auth import hash_password
 from ._util import client_ip, empty_json_response, fire_and_forget
@@ -210,19 +205,23 @@ async def update_user(
 
         subscription = data.get("subscription")
 
-        # Deliberately NOT wrapped in a transaction, and deliberately allowed to
-        # fail: `subscriptions` has no unique constraint on `user_id`, so this
-        # statement always errors and the handler answers 500. See the module
-        # docstring — the user row above is already committed by then.
+        # An admin's plan change is a grant: it takes effect now. A paid period
+        # that still grants access keeps its end date; otherwise (none, or one
+        # that lapsed) the grant has no end date. Limits come from the plan's
+        # definition; the copies on the row are kept in step for the admin list.
         if subscription and user:
             limits = await plan_catalog.get(subscription)
             await query(
-                """
+                f"""
                 INSERT INTO subscriptions (user_id, plan, status, events_limit, domains_limit)
                 VALUES ($1, $2, 'active', $3, $4)
                 ON CONFLICT (user_id) DO UPDATE
-                  SET plan = $2, events_limit = $3, domains_limit = $4,
-                      updated_at = NOW(), events_used = subscriptions.events_used
+                  SET plan = $2, events_limit = $3, domains_limit = $4, status = 'active',
+                      current_period_end = CASE
+                          WHEN {entitled("subscriptions")}
+                          THEN subscriptions.current_period_end
+                      END,
+                      updated_at = NOW()
                 """,
                 user_id,
                 subscription,

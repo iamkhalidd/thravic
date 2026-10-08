@@ -338,8 +338,6 @@ async def test_support_can_correct_a_date_of_birth(db_pool, legacy_user):
 
     assert response.status_code == 200, response.json()
     assert response.json()["restricted"] is None
-    async with db_pool.acquire() as conn:
-        await conn.execute("DELETE FROM admin_audit_log WHERE admin_id = $1", legacy_user["id"])
 
 
 @requires_test_db

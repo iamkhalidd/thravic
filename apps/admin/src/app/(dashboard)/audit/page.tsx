@@ -6,8 +6,8 @@ import { FileText, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface AuditEntry {
     id: string;
-    admin_email: string;
-    admin_name: string;
+    admin_email: string | null;
+    admin_name: string | null;
     action: string;
     target_type: string | null;
     target_id: string | null;
@@ -89,7 +89,7 @@ export default function AuditPage() {
                             entries.map(entry => (
                                 <tr key={entry.id}>
                                     <td style={{ whiteSpace: 'nowrap', fontSize: '13px' }}>{new Date(entry.created_at).toLocaleString()}</td>
-                                    <td style={{ fontWeight: 500 }}>{entry.admin_name || entry.admin_email}</td>
+                                    <td style={{ fontWeight: 500 }}>{entry.admin_name || entry.admin_email || 'Deleted user'}</td>
                                     <td>
                                         <span style={{
                                             display: 'inline-flex', alignItems: 'center', gap: '6px',
