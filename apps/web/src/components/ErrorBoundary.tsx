@@ -6,6 +6,9 @@ import { AlertTriangle, RefreshCw } from 'lucide-react';
 interface Props {
     children: ReactNode;
     fallback?: ReactNode;
+    /** When this changes (e.g. the route), a caught error is cleared, so one
+     *  broken page doesn't keep every other page behind the error screen. */
+    resetKey?: unknown;
 }
 
 interface State {
@@ -25,6 +28,12 @@ export class ErrorBoundary extends Component<Props, State> {
 
     componentDidCatch(error: Error, info: React.ErrorInfo) {
         console.error('[ErrorBoundary]', error, info.componentStack);
+    }
+
+    componentDidUpdate(prevProps: Props) {
+        if (this.state.hasError && prevProps.resetKey !== this.props.resetKey) {
+            this.setState({ hasError: false, error: null });
+        }
     }
 
     handleRetry = () => {

@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import '@/styles/globals.css';
-import { ToastProvider, ErrorBoundary } from '@/components';
+import { ToastProvider, RouteErrorBoundary } from '@/components';
 import CookieConsentBanner from '@/components/CookieConsentBanner';
 import { ThemeProvider } from '@/components/ThemeProvider';
 
@@ -27,9 +27,9 @@ export default function RootLayout({
             <body>
                 <ThemeProvider attribute="data-theme" defaultTheme="dark">
                     <ToastProvider>
-                        <ErrorBoundary>
+                        <RouteErrorBoundary>
                             {children}
-                        </ErrorBoundary>
+                        </RouteErrorBoundary>
                     </ToastProvider>
                     <CookieConsentBanner />
                 </ThemeProvider>

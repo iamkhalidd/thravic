@@ -14,8 +14,9 @@ const THRESHOLDS: Record<string, { good: number; poor: number; unit: string; lab
     fcp: { good: 1800, poor: 3000, unit: 'ms', label: 'First Contentful Paint' },
 };
 
-function getScore(key: string, value: number | null): { color: string; label: string } {
-    if (value === null || value === undefined) return { color: 'var(--color-text-muted)', label: 'No data' };
+function getScore(key: string, raw: number | string | null): { color: string; label: string } {
+    const value = raw === null || raw === undefined ? NaN : Number(raw);
+    if (Number.isNaN(value)) return { color: 'var(--color-text-muted)', label: 'No data' };
     const t = THRESHOLDS[key];
     if (!t) return { color: 'var(--color-text-primary)', label: '' };
     if (value <= t.good) return { color: '#22c55e', label: 'Good' };
@@ -23,8 +24,10 @@ function getScore(key: string, value: number | null): { color: string; label: st
     return { color: '#ef4444', label: 'Poor' };
 }
 
-function formatValue(key: string, value: number | null): string {
-    if (value === null || value === undefined) return '—';
+function formatValue(key: string, raw: number | string | null): string {
+    // Numbers can arrive as strings (Postgres numerics); never call methods on them blind.
+    const value = raw === null || raw === undefined ? NaN : Number(raw);
+    if (Number.isNaN(value)) return '—';
     const t = THRESHOLDS[key];
     if (key === 'cls') return value.toFixed(3);
     if (t?.unit === 'ms') {
@@ -32,6 +35,16 @@ function formatValue(key: string, value: number | null): string {
         return `${Math.round(value)}ms`;
     }
     return String(Math.round(value));
+}
+
+// The API groups by page path ("/pricing"); older rows may still be full URLs.
+function pathOf(url: string | null): string {
+    if (!url) return '/';
+    try {
+        return new URL(url).pathname || '/';
+    } catch {
+        return url;
+    }
 }
 
 export default function PerformancePage() {
@@ -171,7 +184,7 @@ export default function PerformancePage() {
                             {byPage.map((page: any, idx: number) => (
                                 <tr key={idx} style={{ borderTop: '1px solid var(--color-border)' }}>
                                     <td style={{ padding: 'var(--space-md)', color: 'var(--color-text-primary)', maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                        {new URL(page.url).pathname || '/'}
+                                        {pathOf(page.url)}
                                     </td>
                                     <td style={{ textAlign: 'right', padding: 'var(--space-md)', color: getScore('lcp', page.avg_lcp).color, fontWeight: 500 }}>
                                         {formatValue('lcp', page.avg_lcp)}

@@ -172,7 +172,7 @@ async def performance(
             SELECT
                 ROUND(AVG((data->>'lcp')::numeric))::int as avg_lcp,
                 ROUND(AVG((data->>'fid')::numeric))::int as avg_fid,
-                ROUND(AVG((data->>'cls')::numeric * 1000)) / 1000.0 as avg_cls,
+                (ROUND(AVG((data->>'cls')::numeric * 1000)) / 1000.0)::float as avg_cls,
                 ROUND(AVG((data->>'ttfb')::numeric))::int as avg_ttfb,
                 ROUND(AVG((data->>'fcp')::numeric))::int as avg_fcp,
                 ROUND(AVG((data->>'loadTime')::numeric))::int as avg_load_time,

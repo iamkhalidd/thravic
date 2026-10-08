@@ -39,6 +39,7 @@ import { DateRangeProvider, useDateRange, datePresets } from '@/contexts/DateRan
 import { AnnouncementBanner } from '@/components/AnnouncementBanner';
 import { ImpersonationBanner } from '@/components/ImpersonationBanner';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { RouteErrorBoundary } from '@/components/RouteErrorBoundary';
 
 const navStructure = [
     { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', exact: true },
@@ -657,7 +658,8 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
 
                 {/* Page Content */}
                 <div key={refreshKey} className="dash-content">
-                    {children}
+                    {/* Per page, so a broken page keeps the sidebar and other pages working. */}
+                    <RouteErrorBoundary>{children}</RouteErrorBoundary>
                 </div>
             </main>
 

@@ -4,6 +4,7 @@ export { ChartCard } from './ChartCard';
 export { DataTable } from './DataTable';
 export { EmptyState } from './EmptyState';
 export { ErrorBoundary } from './ErrorBoundary';
+export { RouteErrorBoundary } from './RouteErrorBoundary';
 export { ToastProvider, useToast } from './Toast';
 export { UpgradeGate } from './UpgradeGate';
 export { AnnouncementBanner } from './AnnouncementBanner';
