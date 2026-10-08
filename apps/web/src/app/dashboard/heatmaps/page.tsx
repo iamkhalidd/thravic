@@ -10,6 +10,8 @@ import {
     Loader2
 } from 'lucide-react';
 import { useDomain } from '@/contexts/DomainContext';
+import { PageHeader } from '@/components/PageHeader';
+import { ChartCard } from '@/components/ChartCard';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
@@ -60,6 +62,20 @@ function getHeatmapColor(intensity: number): string {
     return 'rgba(255, 50, 0, 0.8)';
 }
 
+
+const TYPES = [
+    { value: 'click', label: 'Clicks', icon: MousePointer2 },
+    { value: 'scroll', label: 'Scroll', icon: ArrowDown },
+] as const;
+
+const VIEWPORTS = [
+    { value: 'desktop', label: 'Desktop', icon: Monitor },
+    { value: 'tablet', label: 'Tablet', icon: Tablet },
+    { value: 'mobile', label: 'Mobile', icon: Smartphone },
+] as const;
+
+const segmentButton = { display: 'inline-flex', alignItems: 'center', gap: 6 } as const;
+
 export default function HeatmapsPage() {
     const { selectedDomainId, loading: domainLoading } = useDomain();
     const [pages, setPages] = useState<PageWithHeatmap[]>([]);
@@ -69,29 +85,39 @@ export default function HeatmapsPage() {
     const [heatmapData, setHeatmapData] = useState<HeatmapData | null>(null);
     const [loading, setLoading] = useState(true);
     const [loadingHeatmap, setLoadingHeatmap] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
+    // The heatmap API always covers its own fixed 30-day window; it takes no date range.
     useEffect(() => {
         if (!selectedDomainId) {
             if (!domainLoading) setLoading(false);
             return;
         }
 
+        let cancelled = false;
         setLoading(true);
-        getPages(selectedDomainId).then(data => {
-            setPages(data.pages || []);
-            // Reset on every domain switch so a page from the previous domain is not kept.
-            setSelectedPage(data.pages?.length ? data.pages[0].path : null);
-            setLoading(false);
-        });
+        getPages(selectedDomainId)
+            .then(data => {
+                if (cancelled) return;
+                setError(data.error ? String(data.error) : null);
+                setPages(data.pages || []);
+                // Reset on every domain switch so a page from the previous domain is not kept.
+                setSelectedPage(data.pages?.length ? data.pages[0].path : null);
+            })
+            .catch(() => { if (!cancelled) setError('Network error'); })
+            .finally(() => { if (!cancelled) setLoading(false); });
+        return () => { cancelled = true; };
     }, [selectedDomainId, domainLoading]);
 
     useEffect(() => {
         if (!selectedDomainId || !selectedPage) return;
 
+        let cancelled = false;
         const loadHeatmap = async () => {
             setLoadingHeatmap(true);
 
-            const data = await getHeatmap(selectedDomainId, heatmapType, selectedPage, viewport);
+            const data = await getHeatmap(selectedDomainId, heatmapType, selectedPage, viewport).catch(() => ({}));
+            if (cancelled) return;
 
             setHeatmapData({
                 points: data.points || [],
@@ -104,178 +130,128 @@ export default function HeatmapsPage() {
         };
 
         loadHeatmap();
+        return () => { cancelled = true; };
     }, [selectedDomainId, selectedPage, heatmapType, viewport]);
 
-    if (loading) {
-        return (
-            <div>
-                <div className="skeleton" style={{ height: '40px', width: '200px', marginBottom: 'var(--space-xl)' }} />
-                <div className="grid grid-cols-4 gap-lg">
-                    <div className="card">
-                        <div className="skeleton" style={{ height: '300px' }} />
-                    </div>
-                    <div style={{ gridColumn: 'span 3' }} className="card">
-                        <div className="skeleton" style={{ height: '400px' }} />
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
     const maxCount = Math.max(...(heatmapData?.points.map(p => p.count) || [1]));
+    const busy = loading || domainLoading;
+
+    const controls = (
+        <>
+            <div className="segmented" role="tablist" aria-label="Heatmap type">
+                {TYPES.map(t => (
+                    <button
+                        key={t.value}
+                        type="button"
+                        role="tab"
+                        aria-selected={heatmapType === t.value}
+                        onClick={() => setHeatmapType(t.value)}
+                        style={segmentButton}
+                    >
+                        <t.icon size={14} aria-hidden="true" />
+                        {t.label}
+                    </button>
+                ))}
+            </div>
+            <div className="segmented" role="tablist" aria-label="Device">
+                {VIEWPORTS.map(v => (
+                    <button
+                        key={v.value}
+                        type="button"
+                        role="tab"
+                        aria-selected={viewport === v.value}
+                        onClick={() => setViewport(v.value)}
+                        title={`${v.label} visitors`}
+                        style={segmentButton}
+                    >
+                        <v.icon size={14} aria-hidden="true" />
+                        {v.label}
+                    </button>
+                ))}
+            </div>
+        </>
+    );
 
     return (
-        <div>
-            {/* Header */}
-            <div className="flex items-center justify-between" style={{ marginBottom: 'var(--space-xl)' }}>
-                <h1>Heatmaps</h1>
-                <div className="flex items-center gap-md">
-                    {/* Heatmap Type Toggle */}
-                    <div style={{
-                        display: 'flex',
-                        background: 'var(--color-bg-card)',
-                        border: '1px solid var(--color-border)',
-                        borderRadius: 'var(--radius-md)',
-                        overflow: 'hidden'
-                    }}>
-                        <button
-                            onClick={() => setHeatmapType('click')}
-                            style={{
-                                padding: 'var(--space-sm) var(--space-md)',
-                                background: heatmapType === 'click' ? 'var(--color-accent-primary)' : 'transparent',
-                                border: 'none',
-                                color: heatmapType === 'click' ? 'var(--color-bg-primary)' : 'var(--color-text-primary)',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: 'var(--space-xs)'
-                            }}
-                        >
-                            <MousePointer2 size={16} />
-                            Clicks
-                        </button>
-                        <button
-                            onClick={() => setHeatmapType('scroll')}
-                            style={{
-                                padding: 'var(--space-sm) var(--space-md)',
-                                background: heatmapType === 'scroll' ? 'var(--color-accent-primary)' : 'transparent',
-                                border: 'none',
-                                color: heatmapType === 'scroll' ? 'var(--color-bg-primary)' : 'var(--color-text-primary)',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: 'var(--space-xs)'
-                            }}
-                        >
-                            <ArrowDown size={16} />
-                            Scroll
-                        </button>
-                    </div>
+        <div className="page-stack">
+            <PageHeader
+                title="Heatmaps"
+                subtitle="Where visitors click and how far they scroll, over the last 30 days."
+                actions={controls}
+            />
 
-                    {/* Viewport Toggle */}
-                    <div style={{
-                        display: 'flex',
-                        background: 'var(--color-bg-card)',
-                        border: '1px solid var(--color-border)',
-                        borderRadius: 'var(--radius-md)',
-                        overflow: 'hidden'
-                    }}>
-                        {[
-                            { value: 'desktop', label: 'Desktop', icon: Monitor },
-                            { value: 'tablet', label: 'Tablet', icon: Tablet },
-                            { value: 'mobile', label: 'Mobile', icon: Smartphone }
-                        ].map(v => (
-                            <button
-                                key={v.value}
-                                onClick={() => setViewport(v.value as any)}
-                                aria-label={`${v.label} visitors`}
-                                aria-pressed={viewport === v.value}
-                                title={`${v.label} visitors`}
-                                style={{
-                                    padding: 'var(--space-sm)',
-                                    background: viewport === v.value ? 'var(--color-accent-primary)' : 'transparent',
-                                    border: 'none',
-                                    color: viewport === v.value ? 'var(--color-bg-primary)' : 'var(--color-text-primary)',
-                                    cursor: 'pointer'
-                                }}
-                            >
-                                <v.icon size={18} />
-                            </button>
-                        ))}
+            {!selectedDomainId && !domainLoading ? (
+                <div className="card"><div className="empty-note">Select a site to see its heatmaps.</div></div>
+            ) : error ? (
+                <div className="card">
+                    <div className="empty-note" role="alert" style={{ color: 'var(--color-error)' }}>
+                        Couldn&apos;t load heatmaps: {error}
                     </div>
                 </div>
-            </div>
-
-            {pages.length === 0 ? (
-                <div className="card" style={{ textAlign: 'center', padding: 'var(--space-2xl)' }}>
-                    <MousePointer2 size={48} style={{ color: 'var(--color-text-muted)', marginBottom: 'var(--space-lg)' }} />
-                    <h3 style={{ marginBottom: 'var(--space-sm)' }}>No heatmap data yet</h3>
-                    <p>Start tracking to see click and scroll heatmaps</p>
-                </div>
+            ) : !busy && pages.length === 0 ? (
+                <ChartCard title="Pages">
+                    <div className="empty-note">No clicks recorded yet. Heatmaps appear once visitors interact with your pages.</div>
+                </ChartCard>
             ) : (
-                <div className="grid grid-cols-4 gap-lg">
-                    {/* Page List */}
-                    <div>
-                        <div className="card" style={{ padding: 0 }}>
-                            <div style={{
-                                padding: 'var(--space-md)',
-                                borderBottom: '1px solid var(--color-border)',
-                                fontSize: '0.875rem',
-                                fontWeight: 500
-                            }}>
-                                Pages
-                            </div>
-                            <div style={{ maxHeight: '500px', overflowY: 'auto' }}>
-                                {pages.map(page => (
-                                    <button
-                                        key={page.path}
-                                        onClick={() => setSelectedPage(page.path)}
-                                        style={{
-                                            width: '100%',
-                                            padding: 'var(--space-md)',
-                                            background: selectedPage === page.path ? 'var(--color-bg-hover)' : 'transparent',
-                                            border: 'none',
-                                            borderBottom: '1px solid var(--color-border)',
-                                            textAlign: 'left',
-                                            cursor: 'pointer'
-                                        }}
-                                    >
-                                        <div style={{
-                                            fontSize: '0.875rem',
-                                            color: 'var(--color-text-primary)',
-                                            marginBottom: 'var(--space-xs)',
-                                            overflow: 'hidden',
-                                            textOverflow: 'ellipsis',
-                                            whiteSpace: 'nowrap'
-                                        }}>
-                                            {page.path}
-                                        </div>
-                                        <div className="flex items-center gap-md" style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
-                                            <span>{page.clicks} clicks</span>
-                                            <span>{page.visitors} visitors</span>
-                                        </div>
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'flex-start' }}>
+                    {/* Page list */}
+                    <div style={{ flex: '1 1 240px', minWidth: 0, maxWidth: '100%' }}>
+                        <ChartCard title="Pages" subtitle="By clicks" flush loading={busy} height={300}>
+                            <ul style={{ listStyle: 'none', margin: '12px 0 0', padding: 0, maxHeight: 520, overflowY: 'auto', borderTop: '1px solid var(--color-border)' }}>
+                                {pages.map(page => {
+                                    const active = selectedPage === page.path;
+                                    return (
+                                        <li key={page.path}>
+                                            <button
+                                                type="button"
+                                                onClick={() => setSelectedPage(page.path)}
+                                                aria-current={active ? 'true' : undefined}
+                                                style={{
+                                                    width: '100%',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'space-between',
+                                                    gap: 12,
+                                                    padding: '8px 20px',
+                                                    minHeight: 36,
+                                                    background: active ? 'var(--color-bg-hover)' : 'transparent',
+                                                    border: 'none',
+                                                    borderBottom: '1px solid var(--color-border)',
+                                                    boxShadow: active ? 'inset 2px 0 0 var(--color-text-primary)' : 'none',
+                                                    textAlign: 'left',
+                                                    cursor: 'pointer',
+                                                    fontSize: '0.8125rem',
+                                                    color: 'var(--color-text-primary)',
+                                                    fontWeight: active ? 500 : 400,
+                                                }}
+                                            >
+                                                <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={page.path}>
+                                                    {page.path}
+                                                </span>
+                                                <span style={{ flexShrink: 0, fontSize: '0.75rem', color: 'var(--color-text-secondary)', fontVariantNumeric: 'tabular-nums', fontWeight: 400 }}>
+                                                    {page.clicks.toLocaleString()} clicks · {page.visitors.toLocaleString()} visitors
+                                                </span>
+                                            </button>
+                                        </li>
+                                    );
+                                })}
+                            </ul>
+                        </ChartCard>
                     </div>
 
-                    {/* Heatmap Visualization */}
-                    <div style={{ gridColumn: 'span 3' }}>
-                        <div className="card">
-                            <div className="card-header" style={{ marginBottom: 'var(--space-md)' }}>
-                                <h4 className="card-title">
-                                    {heatmapType === 'click' ? 'Click Heatmap' : 'Scroll Depth'}
-                                </h4>
-                                <div className="flex items-center gap-md">
-                                    <span style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
-                                        {heatmapData?.totalInteractions || 0} interactions
-                                    </span>
-                                    <span style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
-                                        {heatmapData?.uniqueVisitors || 0} visitors
-                                    </span>
-                                </div>
-                            </div>
+                    {/* Heatmap visualization */}
+                    <div style={{ flex: '3 1 520px', minWidth: 0, maxWidth: '100%' }}>
+                        <ChartCard
+                            title={heatmapType === 'click' ? 'Click heatmap' : 'Scroll depth'}
+                            subtitle={selectedPage ?? undefined}
+                            action={
+                                <span style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                                    {(heatmapData?.totalInteractions || 0).toLocaleString()} interactions · {(heatmapData?.uniqueVisitors || 0).toLocaleString()} visitors
+                                </span>
+                            }
+                            loading={busy}
+                            height={400}
+                        >
 
                             {loadingHeatmap ? (
                                 <div style={{
@@ -284,7 +260,7 @@ export default function HeatmapsPage() {
                                     alignItems: 'center',
                                     justifyContent: 'center'
                                 }}>
-                                    <Loader2 size={32} className="animate-spin" style={{ color: 'var(--color-accent-primary)' }} />
+                                    <Loader2 size={32} className="animate-spin" style={{ color: 'var(--color-text-muted)' }} />
                                 </div>
                             ) : heatmapType === 'click' ? (
                                 /* Click Heatmap Grid */
@@ -327,7 +303,9 @@ export default function HeatmapsPage() {
                                         top: 'var(--space-md)',
                                         left: 'var(--space-md)',
                                         padding: 'var(--space-xs) var(--space-sm)',
-                                        background: 'rgba(0,0,0,0.7)',
+                                        background: 'var(--color-bg-card)',
+                                        border: '1px solid var(--color-border)',
+                                        color: 'var(--color-text-primary)',
                                         borderRadius: 'var(--radius-sm)',
                                         fontSize: '0.75rem'
                                     }}>
@@ -377,22 +355,22 @@ export default function HeatmapsPage() {
                                 </div>
                             )}
 
-                            {/* Color Legend */}
+                            {/* Color legend */}
                             <div className="flex items-center justify-center gap-md" style={{
-                                marginTop: 'var(--space-lg)',
-                                padding: 'var(--space-md)',
+                                marginTop: 16,
+                                paddingTop: 12,
                                 borderTop: '1px solid var(--color-border)'
                             }}>
-                                <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>Low</span>
+                                <span style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>Low</span>
                                 <div style={{
                                     width: '150px',
                                     height: '8px',
                                     borderRadius: 'var(--radius-full)',
                                     background: 'linear-gradient(to right, rgba(0,100,255,0.4), rgba(0,255,100,0.5), rgba(255,255,0,0.6), rgba(255,50,0,0.8))'
                                 }} />
-                                <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>High</span>
+                                <span style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>High</span>
                             </div>
-                        </div>
+                        </ChartCard>
                     </div>
                 </div>
             )}

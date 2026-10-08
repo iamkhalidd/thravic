@@ -23,6 +23,12 @@
   --color-accent-secondary: #8a8f98;
   --color-primary: #f4f5f6;
 
+  /* Status colours (text-safe: >= 4.5:1 on the card surface). Always pair
+     with a label or icon; never colour alone. */
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+  --color-error: #f87171;
+
   /* Charts: validated categorical slots (dark steps), hairline chrome */
   --chart-1: #3987e5;
   --chart-2: #d95926;
@@ -87,6 +93,10 @@
 
   --color-border: rgba(0, 0, 0, 0.1);
   --color-border-hover: rgba(0, 0, 0, 0.2);
+
+  --color-success: #15803d;
+  --color-warning: #b45309;
+  --color-error: #dc2626;
 
   --chart-1: #2a78d6;
   --chart-2: #eb6834;

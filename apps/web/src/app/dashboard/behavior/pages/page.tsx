@@ -1,265 +1,180 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import {
-    FileText,
-    ArrowUpRight,
-    ArrowDownRight,
-    Clock,
-    MousePointer,
-    Eye,
-    LogIn,
-    LogOut,
-    Search
-} from 'lucide-react';
+import { Search, AlertTriangle } from 'lucide-react';
 import { analytics } from '@/lib/api';
 import { useDomain } from '@/contexts/DomainContext';
+import { useApiRange } from '@/contexts/DateRangeContext';
+import { PageHeader } from '@/components/PageHeader';
+import { ChartCard } from '@/components/ChartCard';
+import { duration } from '@/components/charts/format';
+
+interface PageRow {
+    path: string;
+    pageviews: number;
+    avgTime: number;
+    entries: number;
+    exits: number;
+    bounceRate: number;
+}
+
+type SortKey = 'pageviews' | 'avgTime' | 'entries' | 'exits' | 'bounceRate';
+
+const COLUMNS: Array<{ key: SortKey; label: string }> = [
+    { key: 'pageviews', label: 'Views' },
+    { key: 'avgTime', label: 'Avg. time' },
+    { key: 'entries', label: 'Entries' },
+    { key: 'exits', label: 'Exits' },
+    { key: 'bounceRate', label: 'Bounce' },
+];
+
+/** Bounce rates above this are flagged. */
+const HIGH_BOUNCE = 60;
 
 export default function PagesPage() {
     const { selectedDomainId, loading: domainLoading } = useDomain();
-    const [pages, setPages] = useState<any[]>([]);
+    const range = useApiRange();
+    const [pages, setPages] = useState<PageRow[]>([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
-    const [sortBy, setSortBy] = useState('pageviews');
+    const [sortBy, setSortBy] = useState<SortKey>('pageviews');
 
     useEffect(() => {
-        const loadPages = async () => {
-            if (!selectedDomainId) return;
-            setLoading(true);
-            const result = await analytics.getTopPages(selectedDomainId);
-            if (result.data) {
-                setPages(result.data.pages || []);
-            }
-            setLoading(false);
-        };
-
-        if (selectedDomainId) {
-            loadPages();
+        if (!selectedDomainId) {
+            if (!domainLoading) setLoading(false);
+            return;
         }
-    }, [selectedDomainId]);
+        let cancelled = false;
+        setLoading(true);
+        analytics.getTopPages(selectedDomainId, range.start, range.end).then(result => {
+            if (cancelled) return;
+            setError(result.error ?? null);
+            setPages(result.data?.pages ?? []);
+            setLoading(false);
+        });
+        return () => { cancelled = true; };
+    }, [selectedDomainId, range, domainLoading]);
 
-
+    const query = searchQuery.toLowerCase();
     const filteredPages = pages
-        .filter(p => p.path?.toLowerCase().includes(searchQuery.toLowerCase()))
+        .filter(p => (p.path || '/').toLowerCase().includes(query))
         .sort((a, b) => (b[sortBy] || 0) - (a[sortBy] || 0));
+    const maxViews = Math.max(...pages.map(p => p.pageviews || 0), 1);
 
-    if (domainLoading || loading) {
-        return (
-            <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-xl)' }}>
-                <div className="loading-spinner" />
-            </div>
-        );
-    }
-
-    if (!selectedDomainId) {
-        return (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-xl)', color: 'var(--color-text-secondary)' }}>
-                <p>Please select a domain to view page analytics</p>
-            </div>
-        );
-    }
+    const search = (
+        <label style={{
+            display: 'flex', alignItems: 'center', gap: 6, padding: '5px 10px',
+            background: 'var(--color-bg-tertiary)', border: '1px solid var(--color-border)',
+            borderRadius: 'var(--radius-md)', maxWidth: '100%',
+        }}>
+            <Search size={14} aria-hidden="true" style={{ color: 'var(--color-text-muted)', flexShrink: 0 }} />
+            <input
+                type="search"
+                aria-label="Search pages"
+                placeholder="Search pages"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{
+                    background: 'transparent', border: 'none', outline: 'none', minWidth: 0,
+                    width: 180, fontSize: '0.8125rem', color: 'var(--color-text-primary)',
+                }}
+            />
+        </label>
+    );
 
     return (
-        <div>
-            {/* Page Header */}
-            <div style={{ marginBottom: 'var(--space-xl)' }}>
-                <h1 style={{
-                    fontSize: '1.5rem',
-                    fontWeight: 600,
-                    color: 'var(--color-text-primary)',
-                    marginBottom: 'var(--space-xs)'
-                }}>
-                    Pages
-                </h1>
-                <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>
-                    Analyze performance of individual pages
-                </p>
-            </div>
+        <div className="page-stack">
+            <PageHeader title="Pages" subtitle="Views, time on page, entries and exits for each page." />
 
-            {/* Controls */}
-            <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginBottom: 'var(--space-lg)'
-            }}>
-                <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 'var(--space-xs)',
-                    padding: 'var(--space-xs) var(--space-sm)',
-                    background: 'var(--color-bg-tertiary)',
-                    borderRadius: 'var(--radius-md)',
-                    border: '1px solid var(--color-border)'
-                }}>
-                    <Search size={14} style={{ color: 'var(--color-text-tertiary)' }} />
-                    <input
-                        type="text"
-                        placeholder="Search pages..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        style={{
-                            background: 'transparent',
-                            border: 'none',
-                            outline: 'none',
-                            fontSize: '0.8125rem',
-                            color: 'var(--color-text-primary)',
-                            width: '200px'
-                        }}
-                    />
-                </div>
-            </div>
-
-            {/* Pages Table */}
-            <div className="dash-table-wrap" style={{
-                background: 'var(--color-bg-secondary)',
-                borderRadius: 'var(--radius-lg)',
-                border: '1px solid var(--color-border)',
-                overflow: 'hidden'
-            }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8125rem' }}>
-                    <thead>
-                        <tr style={{ background: 'var(--color-bg-tertiary)' }}>
-                            <th style={{
-                                textAlign: 'left',
-                                padding: 'var(--space-md)',
-                                fontWeight: 500,
-                                color: 'var(--color-text-secondary)'
-                            }}>Page</th>
-                            <th style={{
-                                textAlign: 'right',
-                                padding: 'var(--space-md)',
-                                fontWeight: 500,
-                                color: 'var(--color-text-secondary)',
-                                cursor: 'pointer'
-                            }} onClick={() => setSortBy('pageviews')}>
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
-                                    <Eye size={12} /> Views {sortBy === 'pageviews' && '↓'}
-                                </div>
-                            </th>
-                            <th style={{
-                                textAlign: 'right',
-                                padding: 'var(--space-md)',
-                                fontWeight: 500,
-                                color: 'var(--color-text-secondary)',
-                                cursor: 'pointer'
-                            }} onClick={() => setSortBy('avgTime')}>
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
-                                    <Clock size={12} /> Avg Time {sortBy === 'avgTime' && '↓'}
-                                </div>
-                            </th>
-                            <th style={{
-                                textAlign: 'right',
-                                padding: 'var(--space-md)',
-                                fontWeight: 500,
-                                color: 'var(--color-text-secondary)',
-                                cursor: 'pointer'
-                            }} onClick={() => setSortBy('entries')}>
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
-                                    <LogIn size={12} /> Entries {sortBy === 'entries' && '↓'}
-                                </div>
-                            </th>
-                            <th style={{
-                                textAlign: 'right',
-                                padding: 'var(--space-md)',
-                                fontWeight: 500,
-                                color: 'var(--color-text-secondary)',
-                                cursor: 'pointer'
-                            }} onClick={() => setSortBy('exits')}>
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
-                                    <LogOut size={12} /> Exits {sortBy === 'exits' && '↓'}
-                                </div>
-                            </th>
-                            <th style={{
-                                textAlign: 'right',
-                                padding: 'var(--space-md)',
-                                fontWeight: 500,
-                                color: 'var(--color-text-secondary)'
-                            }}>Bounce</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {filteredPages.length === 0 ? (
-                            <tr>
-                                <td colSpan={6} style={{
-                                    padding: 'var(--space-xl)',
-                                    textAlign: 'center',
-                                    color: 'var(--color-text-secondary)'
-                                }}>
-                                    No pages found
-                                </td>
-                            </tr>
-                        ) : (
-                            filteredPages.map((page, idx) => (
-                                <tr
-                                    key={idx}
-                                    style={{
-                                        borderTop: '1px solid var(--color-border)',
-                                        cursor: 'pointer'
-                                    }}
-                                >
-                                    <td style={{ padding: 'var(--space-md)', color: 'var(--color-text-primary)' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)' }}>
-                                            <FileText size={14} style={{ color: 'var(--color-text-tertiary)' }} />
-                                            <span style={{
-                                                maxWidth: '300px',
-                                                overflow: 'hidden',
-                                                textOverflow: 'ellipsis',
-                                                whiteSpace: 'nowrap'
-                                            }}>
-                                                {page.path || '/'}
-                                            </span>
-                                        </div>
-                                    </td>
-                                    <td style={{
-                                        textAlign: 'right',
-                                        padding: 'var(--space-md)',
-                                        color: 'var(--color-text-primary)',
-                                        fontWeight: 500
-                                    }}>
-                                        {(page.pageviews || 0).toLocaleString()}
-                                    </td>
-                                    <td style={{
-                                        textAlign: 'right',
-                                        padding: 'var(--space-md)',
-                                        color: 'var(--color-text-primary)'
-                                    }}>
-                                        {formatTime(page.avgTime || 0)}
-                                    </td>
-                                    <td style={{
-                                        textAlign: 'right',
-                                        padding: 'var(--space-md)',
-                                        color: 'var(--color-text-primary)'
-                                    }}>
-                                        {(page.entries || 0).toLocaleString()}
-                                    </td>
-                                    <td style={{
-                                        textAlign: 'right',
-                                        padding: 'var(--space-md)',
-                                        color: 'var(--color-text-primary)'
-                                    }}>
-                                        {(page.exits || 0).toLocaleString()}
-                                    </td>
-                                    <td style={{
-                                        textAlign: 'right',
-                                        padding: 'var(--space-md)',
-                                        color: (page.bounceRate || 0) > 60 ? 'var(--color-warning)' : 'var(--color-text-primary)'
-                                    }}>
-                                        {(page.bounceRate || 0).toFixed(1)}%
-                                    </td>
-                                </tr>
-                            ))
-                        )}
-                    </tbody>
-                </table>
-            </div>
+            {!selectedDomainId && !domainLoading ? (
+                <div className="card"><div className="empty-note">Select a site to see its pages.</div></div>
+            ) : (
+                <ChartCard
+                    title="All pages"
+                    subtitle={loading ? undefined : `${filteredPages.length.toLocaleString()} of ${pages.length.toLocaleString()} pages`}
+                    action={search}
+                    flush
+                    loading={loading || domainLoading}
+                    height={360}
+                >
+                    {error ? (
+                        <div className="empty-note" role="alert" style={{ color: 'var(--color-error)' }}>
+                            Couldn&apos;t load pages: {error}
+                        </div>
+                    ) : (
+                        <div className="dash-table-wrap" style={{ marginTop: 12 }}>
+                            <table className="data-table">
+                                <thead>
+                                    <tr>
+                                        <th style={{ paddingLeft: 20 }}>Page</th>
+                                        {COLUMNS.map(col => (
+                                            <th
+                                                key={col.key}
+                                                className="num"
+                                                aria-sort={sortBy === col.key ? 'descending' : 'none'}
+                                                style={col.key === 'bounceRate' ? { paddingRight: 20 } : undefined}
+                                            >
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setSortBy(col.key)}
+                                                    style={{
+                                                        background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+                                                        font: 'inherit', fontWeight: sortBy === col.key ? 600 : 500,
+                                                        color: sortBy === col.key ? 'var(--color-text-primary)' : 'inherit',
+                                                    }}
+                                                >
+                                                    {col.label}{sortBy === col.key ? ' ↓' : ''}
+                                                </button>
+                                            </th>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {filteredPages.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={6} className="empty-note">
+                                                {pages.length === 0 ? 'No pageviews in this period.' : 'No pages match your search.'}
+                                            </td>
+                                        </tr>
+                                    ) : filteredPages.map(page => {
+                                        const views = page.pageviews || 0;
+                                        const bounce = page.bounceRate || 0;
+                                        return (
+                                            <tr key={page.path || '/'}>
+                                                <td style={{ paddingLeft: 20, maxWidth: 360, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={page.path || '/'}>
+                                                    {page.path || '/'}
+                                                </td>
+                                                <td className="num">
+                                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, verticalAlign: 'middle' }}>
+                                                        <span aria-hidden="true" style={{ width: 48, height: 6, borderRadius: 3, background: 'var(--color-bg-tertiary)', overflow: 'hidden' }}>
+                                                            <span style={{ display: 'block', height: '100%', width: `${(views / maxViews) * 100}%`, background: 'var(--color-text-muted)', borderRadius: 3 }} />
+                                                        </span>
+                                                        <span style={{ fontWeight: 500, minWidth: '3.5em' }}>{views.toLocaleString()}</span>
+                                                    </span>
+                                                </td>
+                                                <td className="num">{duration(page.avgTime || 0)}</td>
+                                                <td className="num">{(page.entries || 0).toLocaleString()}</td>
+                                                <td className="num">{(page.exits || 0).toLocaleString()}</td>
+                                                <td className="num" style={{ paddingRight: 20 }}>
+                                                    {bounce > HIGH_BOUNCE && (
+                                                        <AlertTriangle
+                                                            size={12}
+                                                            aria-label="High bounce rate"
+                                                            style={{ color: 'var(--color-warning)', marginRight: 4, verticalAlign: '-1px' }}
+                                                        />
+                                                    )}
+                                                    {bounce.toFixed(1)}%
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </ChartCard>
+            )}
         </div>
     );
-}
-
-function formatTime(seconds: number): string {
-    if (seconds < 60) return `${Math.round(seconds)}s`;
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.round(seconds % 60);
-    return `${mins}m ${secs}s`;
 }
