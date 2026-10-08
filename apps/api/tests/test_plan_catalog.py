@@ -135,7 +135,7 @@ async def test_a_plan_an_admin_created_can_be_bought(
         return None
 
     monkeypatch.setattr(payments, "_fire_and_forget", lambda coro: coro.close())
-    await payments._upgrade_subscription(owner, plan, "ref_test")
+    await payments._upgrade_subscription(owner, plan, f"ref_{plan}")
 
     granted = await plan_service.for_user(owner)
     assert (granted.name, granted.events_limit) == (plan, 20_000)

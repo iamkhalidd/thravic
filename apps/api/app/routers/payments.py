@@ -553,23 +553,6 @@ async def webhook(request: Request):
                 except Exception:
                     pass  # column may not exist yet - safe to skip
 
-        elif event_name == "subscription.disable":
-            subscription_code = event_data.get("subscription_code")
-            if subscription_code and settings.DATABASE_URL:
-                free_tier = await plan_catalog.get(FREE_PLAN)
-                await query(
-                    """
-                    UPDATE subscriptions
-                    SET plan = 'free', status = 'canceled',
-                        events_limit = $1, domains_limit = $2, updated_at = NOW()
-                    WHERE paystack_subscription_code = $3
-                    """,
-                    free_tier.events_limit,
-                    free_tier.domains_limit,
-                    subscription_code,
-                )
-                log.info(f"Subscription {subscription_code} disabled - downgraded to free")
-
         else:
             log.debug(f"Unhandled Paystack event: {event_name}")
 
@@ -629,10 +612,8 @@ async def _upgrade_subscription(
     claimed in `payment_history` (unique on `paystack_ref`); a reference already
     applied changes nothing. `amount` is in kobo, as Paystack reports it.
 
-    Paying again for the same plan while it still grants access (in its period
-    or its grace days) extends it from the current end: renewing early loses no
-    days, and renewing during grace does not get the grace days for free. Any
-    other payment starts a fresh period now.
+    The new period comes from `plan_service.next_period`: renewals extend from
+    the current end, a switch to another plan carries the unused days over.
 
     `ON CONFLICT (user_id)` relies on `subscriptions_user_id_unique` (0006).
     `plan` is written straight through: 0014 dropped the CHECK listing plan ids.
@@ -642,12 +623,6 @@ async def _upgrade_subscription(
         # Paid for a plan that no longer exists: keep the payment visible.
         log.error(f"Payment for unknown plan {plan!r} by user {user_id} (ref {reference})")
         return
-
-    renewing = (
-        "subscriptions.plan = EXCLUDED.plan AND subscriptions.current_period_end IS NOT NULL "
-        f"AND {plan_service.entitled('subscriptions')}"
-    )
-    days = plan_service.PERIOD_DAYS.get(tier.interval, plan_service.PERIOD_DAYS["monthly"])
 
     # One transaction: a payment is marked applied only if the plan was granted.
     async with transaction() as conn:
@@ -676,37 +651,38 @@ async def _upgrade_subscription(
             reference,
             user_id,
         )
-        period_end = await conn.fetchval(
-            f"""
+        current = await conn.fetchrow(
+            "SELECT plan, status, current_period_start, current_period_end "
+            "FROM subscriptions WHERE user_id = $1 FOR UPDATE",
+            user_id,
+        )
+        previous = await plan_catalog.find(current["plan"]) if current else None
+        period_start, period_end = plan_service.next_period(
+            dict(current) if current else None, tier, previous, datetime.now(UTC)
+        )
+        await conn.execute(
+            """
             INSERT INTO subscriptions
                 (user_id, paystack_subscription_code, plan, status, events_limit,
                  domains_limit, current_period_start, current_period_end)
-            VALUES ($1, $2, $3, 'active', $4, $5, NOW(), NOW() + make_interval(days => $6))
+            VALUES ($1, $2, $3, 'active', $4, $5, $6, $7)
             ON CONFLICT (user_id) DO UPDATE SET
                 paystack_subscription_code = $2,
                 plan                       = $3,
                 status                     = 'active',
                 events_limit               = $4,
                 domains_limit              = $5,
-                current_period_start       = CASE
-                    WHEN NOT ({renewing}) THEN NOW()
-                    WHEN subscriptions.current_period_end > NOW()
-                        THEN COALESCE(subscriptions.current_period_start, NOW())
-                    ELSE subscriptions.current_period_end
-                END,
-                current_period_end         = CASE
-                    WHEN {renewing} THEN subscriptions.current_period_end
-                    ELSE NOW()
-                END + make_interval(days => $6),
+                current_period_start       = $6,
+                current_period_end         = $7,
                 updated_at                 = NOW()
-            RETURNING current_period_end
             """,
             user_id,
             reference,
             tier.id,
             tier.events_limit,
             tier.domains_limit,
-            days,
+            period_start,
+            period_end,
         )
 
     try:

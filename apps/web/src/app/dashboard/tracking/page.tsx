@@ -26,12 +26,13 @@ const SWITCHES: Array<{ key: DomainSwitch; label: string; description: string; f
 ];
 
 export default function TrackingPage() {
-    const { selectedDomainId, selectedDomain } = useDomain();
+    const { selectedDomainId, selectedDomain, refresh } = useDomain();
     const { hasFeature } = useSubscription();
 
     const [settings, setSettings] = useState<DomainSettings | null>(null);
     const [saving, setSaving] = useState<DomainSwitch | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [keeping, setKeeping] = useState(false);
 
     useEffect(() => {
         if (!selectedDomainId) return;
@@ -59,6 +60,16 @@ export default function TrackingPage() {
         setSaving(null);
     };
 
+    const keepActive = async () => {
+        if (!selectedDomainId) return;
+        setKeeping(true);
+        setError(null);
+        const { error } = await domains.keepActive(selectedDomainId);
+        if (error) setError(error);
+        else await refresh();
+        setKeeping(false);
+    };
+
     return (
         <div className="page-container">
             <div className="page-header">
@@ -71,6 +82,30 @@ export default function TrackingPage() {
                     </p>
                 </div>
             </div>
+
+            {selectedDomain?.paused && (
+                <div role="status" className="card" style={{
+                    marginBottom: 'var(--space-md)', padding: 'var(--space-md) var(--space-lg)',
+                    borderLeft: '3px solid var(--color-warning, #f5a623)',
+                }}>
+                    <div style={{ fontWeight: 600, marginBottom: '4px' }}>This site is paused</div>
+                    <div style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
+                        The account&apos;s plan covers fewer websites than it has, so this one isn&apos;t
+                        collecting new data. Everything already collected is kept.
+                        {selectedDomain.isOwner
+                            ? ' Renew to resume every site, or choose this one to keep collecting instead.'
+                            : ' The site owner can renew or choose which sites keep collecting.'}
+                    </div>
+                    {selectedDomain.isOwner && (
+                        <div style={{ display: 'flex', gap: 'var(--space-sm)', marginTop: 'var(--space-sm)', flexWrap: 'wrap' }}>
+                            <button type="button" className="btn btn-primary" onClick={keepActive} disabled={keeping}>
+                                {keeping ? 'Switching…' : 'Keep collecting on this site'}
+                            </button>
+                            <Link href="/dashboard/settings" className="btn btn-secondary">Renew plan</Link>
+                        </div>
+                    )}
+                </div>
+            )}
 
             {error && (
                 <div role="alert" style={{

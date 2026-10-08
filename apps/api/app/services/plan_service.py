@@ -10,10 +10,11 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from .. import cache
-from ..db import query_one
+from ..db import query, query_one
 from ..logging import create_logger
 from . import plan_catalog
 
@@ -51,6 +52,51 @@ QUOTA_CACHE_SECONDS = 60
 
 # Fallback when Redis is unavailable: owner/month key -> (expires_at, over_limit).
 _local_quota: dict[str, tuple[float, bool]] = {}
+
+
+
+def period_days(plan: plan_catalog.PlanDef) -> int:
+    return PERIOD_DAYS.get(plan.interval, PERIOD_DAYS["monthly"])
+
+
+def next_period(
+    current: dict[str, Any] | None,
+    bought: plan_catalog.PlanDef,
+    previous: plan_catalog.PlanDef | None,
+    now: datetime,
+) -> tuple[datetime, datetime]:
+    """The (start, end) a payment for `bought` gives, given the subscription row.
+
+    * Same plan, still granting access: extends from the current end. Renewing
+      early loses no days; renewing in grace continues from the old end, so the
+      grace days are not free.
+    * A different paid plan still in its period: switches now, and the days
+      left are converted at list price into days of the new plan, so an upgrade
+      or a downgrade never throws away what was paid.
+    * Anything else (first payment, lapsed, admin grant without an end): a new
+      period from now.
+    """
+    days = timedelta(days=period_days(bought))
+    end = (current or {}).get("current_period_end")
+    granting = (
+        current is not None
+        and current.get("status") == "active"
+        and end is not None
+        and end + timedelta(days=GRACE_DAYS) > now
+    )
+    if not granting:
+        return now, now + days
+
+    if current["plan"] == bought.id:
+        start = (current.get("current_period_start") or now) if end > now else end
+        return start, end + days
+
+    credit = timedelta(0)
+    if previous and previous.price > 0 and bought.price > 0 and end > now:
+        old_daily = previous.price / period_days(previous)
+        new_daily = bought.price / period_days(bought)
+        credit = (end - now) * (old_daily / new_daily)
+    return now, now + days + credit
 
 
 @dataclass(frozen=True)
@@ -139,5 +185,66 @@ async def over_event_limit(owner_id: str) -> bool:
 
 
 def clear_local_quota_cache() -> None:
-    """Drop the in-process fallback (used by tests)."""
+    """Drop the in-process fallbacks (used by tests)."""
     _local_quota.clear()
+    _local_paused.clear()
+
+
+# ── Sites over the plan's website limit ─────────────────────────────────────
+# A lapsed plan can leave an owner with more sites than the free plan covers.
+# Those over the limit stop collecting; nothing is deleted, and the owner picks
+# which sites keep collecting (`domains.kept_active_at`, latest choice first,
+# then the oldest sites).
+
+_local_paused: dict[str, tuple[float, bool]] = {}
+
+
+async def collecting_site_ids(owner_id: str) -> set[str] | None:
+    """The owner's sites that collect, or None when all of them do."""
+    plan = await for_user(owner_id)
+    rows = await query(
+        """
+        SELECT id FROM domains WHERE user_id = $1
+        ORDER BY kept_active_at DESC NULLS LAST, created_at ASC, id ASC
+        """,
+        owner_id,
+    )
+    if len(rows) <= plan.domains_limit:
+        return None
+    return {str(r["id"]) for r in rows[: plan.domains_limit]}
+
+
+async def site_paused(owner_id: str, domain_id: str) -> bool:
+    """Whether this site is over its owner's website limit and must not collect.
+
+    Cached like the event limit, and fails open: an error here never costs data.
+    """
+    key = f"site-paused:{domain_id}"
+    try:
+        cached = await cache.get(key)
+        if cached is not None:
+            return bool(cached)
+        local = _local_paused.get(key)
+        if local and local[0] > time.monotonic():
+            return local[1]
+
+        collecting = await collecting_site_ids(owner_id)
+        paused = collecting is not None and str(domain_id) not in collecting
+
+        await cache.set(key, paused, QUOTA_CACHE_SECONDS)
+        _local_paused[key] = (time.monotonic() + QUOTA_CACHE_SECONDS, paused)
+        return paused
+    except Exception as exc:
+        log.error(f"Site limit check failed, accepting events: {exc}")
+        return False
+
+
+async def forget_paused_sites(domain_ids: list[str]) -> None:
+    """Drop cached answers after the owner changes which sites collect."""
+    for domain_id in domain_ids:
+        key = f"site-paused:{domain_id}"
+        _local_paused.pop(key, None)
+        try:
+            await cache.delete(key)
+        except Exception:  # noqa: BLE001 — the cache expires on its own
+            pass

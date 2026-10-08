@@ -16,6 +16,9 @@ export interface Domain {
     createdAt?: string;
     settings?: DomainSettings;
     features?: string[];
+    isOwner?: boolean;
+    /** Over the owner's website limit (a lapsed plan): kept, but not collecting. */
+    paused?: boolean;
 }
 
 export interface DomainSettings {

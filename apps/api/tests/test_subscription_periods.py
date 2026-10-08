@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
+import httpx
 import pytest
 
 from app.jobs import subscription_reminders
@@ -212,16 +213,62 @@ async def test_paying_after_it_lapsed_starts_a_new_period(
     assert (await plan_service.for_user(owner)).name == plan
 
 
-async def test_a_different_plan_starts_a_new_period(seeded_domain, db_pool, make_plan, no_receipts):
-    old, new = await make_plan(), await make_plan(price=9000)
+async def test_upgrading_carries_the_unused_days_over(
+    seeded_domain, db_pool, make_plan, no_receipts
+):
+    # 10 days left of a 1,000/month plan are worth 5 days of a 2,000/month plan.
+    old, new = await make_plan(price=1000), await make_plan(price=2000)
     owner = await _owner(db_pool, seeded_domain)
     await _subscribe(db_pool, owner, old, NOW + 10 * DAY)
 
-    await payments._upgrade_subscription(owner, new, f"ref_{owner}_switch", 900_000, "NGN")
+    await payments._upgrade_subscription(owner, new, f"ref_{owner}_up", 200_000, "NGN")
 
     row = await _period(db_pool, owner)
     assert row["plan"] == new
-    assert _close_to(row["current_period_end"], NOW + 30 * DAY)
+    assert _close_to(row["current_period_start"], NOW)
+    assert _close_to(row["current_period_end"], NOW + 35 * DAY)
+    assert (await plan_service.for_user(owner)).name == new  # switched at once
+
+
+def _def(plan_id, price, interval="monthly"):
+    return plan_catalog.PlanDef(id=plan_id, name=plan_id, price=price, interval=interval)
+
+
+@pytest.mark.parametrize(
+    ("current", "bought", "previous", "expected"),
+    [
+        # Downgrade: 10 days of 2,000/month buy 20 days of 1,000/month.
+        (("big", NOW + 10 * DAY), _def("small", 1000), _def("big", 2000), (NOW, NOW + 50 * DAY)),
+        # Monthly to yearly: 15 days of 3,000/30d are 1,500 of 36,500/365d = 15 days.
+        (
+            ("m", NOW + 15 * DAY),
+            _def("y", 36_500, "yearly"),
+            _def("m", 3000),
+            (NOW, NOW + 380 * DAY),
+        ),
+        # Switching during grace: nothing left to carry over.
+        (("big", NOW - DAY), _def("small", 1000), _def("big", 2000), (NOW, NOW + 30 * DAY)),
+        # The old plan was deleted: no price to convert, a fresh period.
+        (("gone", NOW + 10 * DAY), _def("small", 1000), None, (NOW, NOW + 30 * DAY)),
+        # No subscription yet.
+        (None, _def("small", 1000), None, (NOW, NOW + 30 * DAY)),
+    ],
+)
+def test_next_period(current, bought, previous, expected):
+    row = (
+        {
+            "plan": current[0],
+            "status": "active",
+            "current_period_start": current[1] - 30 * DAY,
+            "current_period_end": current[1],
+        }
+        if current
+        else None
+    )
+
+    start, end = plan_service.next_period(row, bought, previous, NOW)
+
+    assert _close_to(start, expected[0]) and _close_to(end, expected[1])
 
 
 async def test_a_yearly_plan_buys_a_year(seeded_domain, db_pool, make_plan, no_receipts):
@@ -255,87 +302,132 @@ async def test_payment_records_outlive_the_account(db_pool, make_plan, no_receip
     assert kept["user_id"] is None and kept["amount"] == 500_000
 
 
-# ── Reminders ──────────────────────────────────────────────────────────────
+# ── Lifecycle emails ───────────────────────────────────────────────────────
 
 
 @pytest.fixture
-def reminders(monkeypatch):
-    sent: list[tuple] = []
+def notices(monkeypatch):
+    sent: list[dict] = []
 
-    async def _send(to, name, plan_name, period_end, grace_days):
-        sent.append((to, plan_name, period_end, grace_days))
+    async def _send(to, name, kind, **details):
+        sent.append({"to": to, "kind": kind, **details})
 
-    monkeypatch.setattr(subscription_reminders, "send_renewal_reminder_email", _send)
+    monkeypatch.setattr(subscription_reminders, "send_subscription_notice_email", _send)
     return sent
 
 
 async def _mine(sent, db_pool, owner):
     async with db_pool.acquire() as conn:
         email = await conn.fetchval("SELECT email FROM users WHERE id = $1", owner)
-    return [s for s in sent if s[0] == email]
+    return [s for s in sent if s["to"] == email]
 
 
-async def test_owners_are_reminded_once_a_week_before_the_end(
-    seeded_domain, db_pool, make_plan, reminders
+@pytest.mark.parametrize(
+    ("period_end", "kind"),
+    [
+        (NOW + 20 * DAY, None),  # too early
+        (NOW + 6 * DAY, "renew_7d"),
+        (NOW + 12 * timedelta(hours=1), "renew_1d"),
+        (NOW - DAY, "grace_started"),
+        (NOW - (plan_service.GRACE_DAYS + 1) * DAY, "downgraded"),
+        (NOW - 60 * DAY, None),  # lapsed long ago: not emailed now
+        (None, None),  # no end date
+    ],
+)
+async def test_each_stage_gets_its_email_once(
+    seeded_domain, db_pool, make_plan, notices, period_end, kind
 ):
     plan = await make_plan(name="Growth")
     owner = await _owner(db_pool, seeded_domain)
-    end = NOW + 6 * DAY
-    await _subscribe(db_pool, owner, plan, end)
+    await _subscribe(db_pool, owner, plan, period_end)
 
-    await subscription_reminders.send_renewal_reminders()
-    await subscription_reminders.send_renewal_reminders()
+    await subscription_reminders.send_subscription_notices()
+    await subscription_reminders.send_subscription_notices()
 
-    mine = await _mine(reminders, db_pool, owner)
-    assert len(mine) == 1
-    assert mine[0][1] == "Growth" and mine[0][3] == plan_service.GRACE_DAYS
+    mine = await _mine(notices, db_pool, owner)
+    assert [m["kind"] for m in mine] == ([kind] if kind else [])
+    if kind:
+        assert mine[0]["plan_name"] == "Growth"
+        assert mine[0]["grace_days"] == plan_service.GRACE_DAYS
 
 
-async def test_a_renewed_period_gets_its_own_reminder(seeded_domain, db_pool, make_plan, reminders):
+async def test_the_downgrade_email_counts_paused_sites(seeded_domain, db_pool, make_plan, notices):
+    plan = await make_plan()
+    owner = await _owner(db_pool, seeded_domain)
+    async with db_pool.acquire() as conn:
+        for i in range(2):
+            await conn.execute(
+                "INSERT INTO domains (user_id, domain, name, tracking_id) VALUES ($1, $2, $2, $3)",
+                owner,
+                f"extra{i}.example.invalid",
+                f"trk_{owner[:8]}_{i}",
+            )
+    await _subscribe(db_pool, owner, plan, NOW - (plan_service.GRACE_DAYS + 1) * DAY)
+
+    await subscription_reminders.send_subscription_notices()
+
+    free = await plan_catalog.get("free")
+    (mine,) = await _mine(notices, db_pool, owner)
+    assert mine["paused_sites"] == 3 - free.domains_limit
+
+
+async def test_a_renewed_period_starts_the_emails_over(seeded_domain, db_pool, make_plan, notices):
     plan = await make_plan()
     owner = await _owner(db_pool, seeded_domain)
     await _subscribe(db_pool, owner, plan, NOW + 6 * DAY)
-    await subscription_reminders.send_renewal_reminders()
+    await subscription_reminders.send_subscription_notices()
 
-    await _subscribe(db_pool, owner, plan, NOW + 5 * DAY + 30 * DAY)  # renewed
-    await subscription_reminders.send_renewal_reminders()  # too early for the new one
-    await _subscribe(db_pool, owner, plan, NOW + 5 * DAY)  # a week before the new end
-    await subscription_reminders.send_renewal_reminders()
+    await _subscribe(db_pool, owner, plan, NOW + 5 * DAY)  # renewed: a new end
+    await subscription_reminders.send_subscription_notices()
 
-    assert len(await _mine(reminders, db_pool, owner)) == 2
+    assert [m["kind"] for m in await _mine(notices, db_pool, owner)] == ["renew_7d"] * 2
 
 
-@pytest.mark.parametrize("period_end", [NOW + 20 * DAY, NOW - DAY, None])
-async def test_no_reminder_outside_the_last_week(
-    seeded_domain, db_pool, make_plan, reminders, period_end
-):
-    plan = await make_plan()
-    owner = await _owner(db_pool, seeded_domain)
-    await _subscribe(db_pool, owner, plan, period_end)
-
-    await subscription_reminders.send_renewal_reminders()
-
-    assert await _mine(reminders, db_pool, owner) == []
-
-
-async def test_a_failed_reminder_is_retried(seeded_domain, db_pool, make_plan, monkeypatch):
+async def test_a_failed_email_is_retried(seeded_domain, db_pool, make_plan, monkeypatch):
     plan = await make_plan()
     owner = await _owner(db_pool, seeded_domain)
     await _subscribe(db_pool, owner, plan, NOW + 3 * DAY)
     attempts = []
 
-    async def _flaky(*args):
-        attempts.append(args)
+    async def _flaky(to, *args, **kwargs):
+        attempts.append(to)
         if len(attempts) == 1:
             raise RuntimeError("provider down")
 
-    monkeypatch.setattr(subscription_reminders, "send_renewal_reminder_email", _flaky)
-    await subscription_reminders.send_renewal_reminders()
-    await subscription_reminders.send_renewal_reminders()
+    monkeypatch.setattr(subscription_reminders, "send_subscription_notice_email", _flaky)
+    await subscription_reminders.send_subscription_notices()
+    await subscription_reminders.send_subscription_notices()
 
     async with db_pool.acquire() as conn:
         email = await conn.fetchval("SELECT email FROM users WHERE id = $1", owner)
-    assert len([a for a in attempts if a[0] == email]) == 2
+    assert attempts.count(email) == 2
+
+
+@pytest.mark.parametrize("kind", ["renew_7d", "renew_1d", "grace_started", "downgraded"])
+async def test_every_notice_renders(monkeypatch, kind):
+    from app.services import email_service
+
+    captured = {}
+
+    async def _capture(to, subject, html, text=""):
+        captured.update(subject=subject, html=html, text=text)
+
+    monkeypatch.setattr(email_service, "send_email_or_raise", _capture)
+    await email_service.send_subscription_notice_email(
+        "a@example.invalid",
+        "Ada <script>",
+        kind,
+        plan_name="Pro",
+        period_end=NOW,
+        grace_days=3,
+        paused_sites=2,
+    )
+
+    assert "Pro" in captured["subject"] or "Hobby" in captured["subject"]
+    assert "<script>" not in captured["html"]  # names are escaped
+    assert "<a " not in captured["text"]
+    if kind == "downgraded":
+        assert "2 of your sites stopped collecting" in captured["html"]
 
 
 # ── Data is kept after a lapse ─────────────────────────────────────────────
@@ -391,3 +483,100 @@ async def test_a_lapsed_account_keeps_its_retention_for_a_while(
 )
 def test_billing_state(paid, granted, end, state):
     assert payments._billing_state(paid, granted, end) == state
+
+
+# ── Sites over the website limit ───────────────────────────────────────────
+
+
+async def _add_sites(db_pool, owner, count):
+    ids = []
+    async with db_pool.acquire() as conn:
+        for i in range(count):
+            ids.append(
+                str(
+                    await conn.fetchval(
+                        "INSERT INTO domains (user_id, domain, name, tracking_id, created_at) "
+                        "VALUES ($1, $2, $2, $3, NOW() + make_interval(secs => $4)) RETURNING id",
+                        owner,
+                        f"site{i}.example.invalid",
+                        f"trk_{owner[:8]}_s{i}",
+                        i + 1,
+                    )
+                )
+            )
+    return ids
+
+
+@pytest.fixture
+def fresh_site_cache():
+    plan_service.clear_local_quota_cache()
+    yield
+    plan_service.clear_local_quota_cache()
+
+
+async def test_sites_over_the_limit_pause_when_the_plan_lapses(
+    seeded_domain, db_pool, make_plan, fresh_site_cache
+):
+    plan = await make_plan(domains_limit=3)
+    owner = await _owner(db_pool, seeded_domain)
+    extra = await _add_sites(db_pool, owner, 2)
+    await _subscribe(db_pool, owner, plan, NOW + 5 * DAY)
+
+    assert await plan_service.collecting_site_ids(owner) is None  # all 3 collect
+
+    await _subscribe(db_pool, owner, plan, NOW - 10 * DAY)  # lapsed: back on free
+    free = await plan_catalog.get("free")
+    collecting = await plan_service.collecting_site_ids(owner)
+
+    oldest_first = [seeded_domain, *extra]
+    assert collecting == set(oldest_first[: free.domains_limit])
+    assert await plan_service.site_paused(owner, extra[-1]) is True
+    assert await plan_service.site_paused(owner, seeded_domain) is False
+
+
+async def test_the_owner_chooses_which_site_keeps_collecting(
+    seeded_domain, db_pool, make_plan, fresh_site_cache
+):
+    from app.main import app
+    from app.middleware.auth import AuthUser, require_auth
+
+    owner = await _owner(db_pool, seeded_domain)
+    extra = await _add_sites(db_pool, owner, 2)  # free plan: only the oldest collects
+    assert await plan_service.site_paused(owner, extra[1]) is True  # cached answer
+
+    app.dependency_overrides[require_auth] = lambda: AuthUser(
+        user_id=owner, email="o@example.invalid"
+    )
+    try:
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://t"
+        ) as client:
+            chose = await client.post(f"/api/domains/{extra[1]}/keep-active")
+            listed = (await client.get("/api/domains")).json()["domains"]
+    finally:
+        app.dependency_overrides.clear()
+
+    assert chose.status_code == 200
+    assert await plan_service.site_paused(owner, extra[1]) is False  # cache dropped
+    assert await plan_service.site_paused(owner, seeded_domain) is True
+    paused = {d["id"]: d["paused"] for d in listed}
+    assert paused == {seeded_domain: True, extra[0]: True, extra[1]: False}
+    assert all(d["isOwner"] for d in listed)
+
+
+async def test_only_the_owner_can_choose(seeded_domain, db_pool):
+    from app.main import app
+    from app.middleware.auth import AuthUser, require_auth
+
+    app.dependency_overrides[require_auth] = lambda: AuthUser(
+        user_id="00000000-0000-4000-8000-000000000009", email="x@example.invalid"
+    )
+    try:
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://t"
+        ) as client:
+            response = await client.post(f"/api/domains/{seeded_domain}/keep-active")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 404

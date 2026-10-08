@@ -1,18 +1,15 @@
 """Admin subscriptions and billing — port of `routes/admin/subscriptions.ts`.
 
-Three handlers. `POST /:id/cancel` only talks to Paystack when the owning user has
-a `paystack_subscription_code`; the fixture users do not, so the local-cancel path
-is the one exercised by the parity specs.
+Three handlers. `POST /:id/cancel` ends access locally: payments are one-off
+Paystack charges, so there is no Paystack subscription to cancel.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-import httpx
 from fastapi import APIRouter, Depends, Request
 
-from ...config import get_settings
 from ...db import query, query_one
 from ...errors import SimpleError
 from ...js_compat import js_parse_int_or_nan
@@ -28,8 +25,6 @@ from ._util import client_ip
 log = create_logger("Admin:Subscriptions")
 
 router = APIRouter()
-
-PAYSTACK_BASE = "https://api.paystack.co"
 
 
 def _count(row: dict | None) -> int:
@@ -181,43 +176,8 @@ async def cancel_subscription(
         if not sub:
             raise SimpleError("Subscription not found", 404)
 
-        user = await query_one("SELECT * FROM users WHERE id = $1", sub["user_id"])
-        if not user:
-            raise SimpleError("User not found", 404)
-
-        sub_code = user.get("paystack_subscription_code")
-
-        if sub_code:
-            log.info(
-                f"Canceling Paystack subscription for sub {subscription_id}, code {sub_code}"
-            )
-            secret = get_settings().PAYSTACK_SECRET_KEY
-            if not secret:
-                raise RuntimeError("PAYSTACK_SECRET_KEY is missing")
-
-            headers = {"Authorization": f"Bearer {secret}"}
-            try:
-                async with httpx.AsyncClient(timeout=20) as client:
-                    fetched = await client.get(
-                        f"{PAYSTACK_BASE}/subscription/{sub_code}", headers=headers
-                    )
-                    token = (
-                        fetched.json().get("data", {}).get("email_token")
-                        if fetched.status_code < 400
-                        else None
-                    )
-                    await client.post(
-                        f"{PAYSTACK_BASE}/subscription/disable",
-                        json={"code": sub_code, "token": token},
-                        headers=headers,
-                    )
-                log.info("Paystack subscription disabled successfully")
-            except Exception as exc:  # noqa: BLE001
-                # Express surfaces Paystack's own message when it has one.
-                message = _paystack_message(exc) or "Failed to cancel at Paystack"
-                log.error(f"Failed to disable at Paystack: {message}")
-                raise SimpleError(message, 500) from None
-
+        # Payments are one-off Paystack charges, not Paystack subscriptions, so
+        # there is nothing to cancel at Paystack: canceling ends access here.
         await query(
             "UPDATE subscriptions SET status = $1, updated_at = NOW() WHERE id = $2",
             "canceled",
@@ -243,19 +203,6 @@ async def cancel_subscription(
     except Exception as exc:  # noqa: BLE001
         log.error(f"Subscription cancel error: {exc}")
         raise SimpleError("Failed to cancel subscription", 500) from None
-
-
-def _paystack_message(exc: Exception) -> str | None:
-    """`err.response?.data?.message` from the axios error shape."""
-    response = getattr(exc, "response", None)
-    if response is None:
-        return None
-    try:
-        payload = response.json()
-    except Exception:
-        return None
-    message = payload.get("message") if isinstance(payload, dict) else None
-    return message if isinstance(message, str) else None
 
 
 async def _json_body(request: Request) -> dict:

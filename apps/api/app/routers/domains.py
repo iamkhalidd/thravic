@@ -9,6 +9,7 @@ import httpx
 from fastapi import APIRouter, Depends, Request
 
 from ..config import get_settings
+from ..db import query
 from ..errors import PayloadError, SimpleError
 from ..json_response import jsjson
 from ..logging import create_logger
@@ -132,9 +133,16 @@ async def list_domains(user: AuthUser = Depends(require_auth)):
     try:
         domains = await domain_service.list_by_user(user.user_id)
 
+        # Per owner: the sites still collecting when they have more than the plan
+        # covers (None = all of them).
+        collecting: dict[str, set[str] | None] = {}
         payload = []
         for domain in domains:
             owner_plan = await plan_catalog.get(domain.get("owner_plan"))
+            owner_id = str(domain["user_id"])
+            if owner_id not in collecting:
+                collecting[owner_id] = await plan_service.collecting_site_ids(owner_id)
+            active = collecting[owner_id]
             payload.append(
                 {
                     "id": domain["id"],
@@ -145,6 +153,9 @@ async def list_domains(user: AuthUser = Depends(require_auth)):
                     "createdAt": domain["created_at"],
                     # Unknown plans fall back to the free feature set
                     "features": list(owner_plan.features),
+                    "isOwner": owner_id == str(user.user_id),
+                    # Over the owner's website limit: kept, but not collecting.
+                    "paused": active is not None and str(domain["id"]) not in active,
                 }
             )
         return jsjson({"domains": payload})
@@ -342,6 +353,30 @@ async def update_settings(
     except Exception as exc:
         log.error(f"Update settings error: {exc}")
         raise SimpleError(FAILED_SETTINGS, 500) from None
+
+
+@router.post("/{domainId}/keep-active")
+async def keep_active(domainId: str, user: AuthUser = Depends(require_auth)):
+    """Make this one of the sites that keep collecting when the owner has more
+    sites than the plan covers. Owner only."""
+    try:
+        domain = await domain_service.get_by_id(domainId)
+        if not domain_service.is_owner(domain, user.user_id):
+            raise SimpleError("Domain not found", 404)
+
+        owned = await query(
+            "UPDATE domains SET kept_active_at = CASE WHEN id = $1 THEN NOW() "
+            "ELSE kept_active_at END WHERE user_id = $2 RETURNING id",
+            domain["id"],
+            domain["user_id"],
+        )
+        await plan_service.forget_paused_sites([str(r["id"]) for r in owned])
+        return jsjson({"success": True})
+    except SimpleError:
+        raise
+    except Exception as exc:
+        log.error(f"Keep site active error: {exc}")
+        raise SimpleError("Failed to update the site", 500) from None
 
 
 @router.delete("/{domainId}")

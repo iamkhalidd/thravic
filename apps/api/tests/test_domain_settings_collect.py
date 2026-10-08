@@ -73,7 +73,11 @@ def site(monkeypatch):
         return record["over_limit"]
 
     monkeypatch.setattr(plan_service, "owner_plan", _owner_plan)
+    async def _site_paused(_owner_id, _domain_id):
+        return record.get("paused", False)
+
     monkeypatch.setattr(plan_service, "over_event_limit", _over_event_limit)
+    monkeypatch.setattr(plan_service, "site_paused", _site_paused)
     return record
 
 
@@ -261,3 +265,18 @@ def test_settings_refuse_other_limit_values(body):
 
     assert settings is None
     assert "must be one of" in message
+
+
+def test_a_paused_site_is_acknowledged_but_not_stored(client, site, stored):
+    """Over the owner's website limit after a lapsed plan: kept, not collecting."""
+    site["paused"] = True
+    site["settings"] = {"sessionRecording": True}
+
+    single = client.post(f"/api/collect/{TRACKING_ID}", json=_event("pageview"))
+    batch = client.post(f"/api/collect/{TRACKING_ID}/batch", json={"events": [_event("click")]})
+    recording = client.post(f"/api/collect/{TRACKING_ID}/recording/start", json={})
+
+    assert single.status_code == 202 and single.json()["dropped"] == "site_paused"
+    assert batch.json() == {"success": True, "processed": 0, "dropped": "site_paused"}
+    assert recording.status_code == 403
+    assert stored == []

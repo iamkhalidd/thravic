@@ -234,8 +234,18 @@ export const domains = {
                 name: string;
                 trackingId: string;
                 verified: boolean;
+                features?: string[];
+                isOwner?: boolean;
+                paused?: boolean;
             }>;
         }>('/api/domains');
+    },
+
+    /** Make this one of the sites that keep collecting when the plan covers fewer. */
+    async keepActive(id: string) {
+        return apiRequest<{ success: boolean }>(`/api/domains/${id}/keep-active`, {
+            method: 'POST'
+        });
     },
 
     async create(domain: string, name?: string) {

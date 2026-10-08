@@ -213,6 +213,8 @@ async def _body(request: Request) -> dict:
 
 # `dropped` value on a 202 when the owner's plan has no events left this month.
 EVENT_LIMIT_REACHED = "monthly_event_limit"
+# ...and when the site is over the owner's website limit (a lapsed paid plan).
+SITE_PAUSED = "site_paused"
 
 
 @router.post("/{trackingId}")
@@ -233,6 +235,8 @@ async def collect_event(trackingId: str, request: Request):
         # since a rejection would make the tracker retry the event forever.
         if await plan_service.over_event_limit(str(domain["user_id"])):
             return jsjson({"success": True, "dropped": EVENT_LIMIT_REACHED}, status_code=202)
+        if await plan_service.site_paused(str(domain["user_id"]), str(domain["id"])):
+            return jsjson({"success": True, "dropped": SITE_PAUSED}, status_code=202)
 
         user_agent = request.headers.get("user-agent") or ""
         location = check_ip(_client_ip(request))
@@ -315,6 +319,10 @@ async def collect_batch(trackingId: str, request: Request):
             return jsjson(
                 {"success": True, "processed": 0, "dropped": EVENT_LIMIT_REACHED},
                 status_code=202,
+            )
+        if await plan_service.site_paused(str(domain["user_id"]), str(domain["id"])):
+            return jsjson(
+                {"success": True, "processed": 0, "dropped": SITE_PAUSED}, status_code=202
             )
 
         # Event types switched off for this domain are acknowledged but not stored.
@@ -562,6 +570,8 @@ async def recording_start(trackingId: str, request: Request):
             raise SimpleError("Session recording is not enabled for this site", 403)
         if await plan_service.over_event_limit(str(domain["user_id"])):
             raise SimpleError("This site has reached its monthly event limit", 403)
+        if await plan_service.site_paused(str(domain["user_id"]), str(domain["id"])):
+            raise SimpleError("This site is paused: the account's plan covers fewer sites", 403)
         limit = domain_service.effective_settings(domain)["recordingDailyLimit"]
         if await recording_service.count_started_today(domain["id"]) >= limit:
             raise SimpleError("This site has reached its daily recording limit", 429)

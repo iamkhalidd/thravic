@@ -10,8 +10,9 @@ so a delivery failure never changes an API response.
 from __future__ import annotations
 
 import html
+import re
 import smtplib
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from email.message import EmailMessage
 from typing import Any
 
@@ -271,31 +272,79 @@ async def send_payment_receipt_email(
     )
 
 
-async def send_renewal_reminder_email(
-    to: str, name: str, plan_name: str, period_end: datetime, grace_days: int
+async def send_subscription_notice_email(
+    to: str,
+    name: str,
+    kind: str,
+    *,
+    plan_name: str,
+    period_end: datetime,
+    grace_days: int,
+    free_plan_name: str = "Hobby",
+    free_sites: int = 1,
+    paused_sites: int = 0,
+    data_hold_days: int = 90,
 ) -> None:
-    """The paid period ends soon. Raises if the provider rejects it, so the job
-    can try again on its next run."""
-    renew_url = f"{get_settings().FRONTEND_URL or 'http://localhost:3000'}/dashboard/settings"
-    ends = _js_date_string(period_end)
-    safe_name, safe_plan = html.escape(name or "there"), html.escape(plan_name)
+    """One email per stage of a paid period that is ending:
 
+    `renew_7d` / `renew_1d` before the end, `grace_started` when it ends (access
+    continues `grace_days` more), `downgraded` when the account falls back to the
+    free plan. Raises if the provider rejects it, so the job can retry.
+    """
+    renew_url = f"{get_settings().FRONTEND_URL or 'http://localhost:3000'}/dashboard/settings"
+    sites_url = renew_url.replace("/settings", "/tracking")
+    ends = _js_date_string(period_end)
+    grace_ends = _js_date_string(period_end + timedelta(days=grace_days))
+    plan, free = html.escape(plan_name), html.escape(free_plan_name)
+    data_kept = (
+        f"Your data is kept for {data_hold_days} days and everything comes back when you renew."
+    )
+
+    if kind in ("renew_7d", "renew_1d"):
+        when = "tomorrow" if kind == "renew_1d" else f"on {ends}"
+        subject = f"Your Thravic {plan_name} plan ends {when}"
+        paragraphs = [
+            f"Plans don't renew automatically. Renew before {ends} to keep your "
+            f"{plan} features without a break.",
+            f"If you don't, you keep access for {grace_days} more days, then the account "
+            f"moves to the free {free} plan. {data_kept}",
+        ]
+        action = "Renew now"
+    elif kind == "grace_started":
+        subject = f"Your Thravic {plan_name} plan has ended — {grace_days} days to renew"
+        paragraphs = [
+            f"Your {plan} plan ended on {ends}. You keep full access until {grace_ends}.",
+            f"After that the account moves to the free {free} plan. {data_kept}",
+        ]
+        action = "Renew now"
+    elif kind == "downgraded":
+        subject = f"Your Thravic account is now on the {free_plan_name} plan"
+        paragraphs = [
+            f"Your {plan} plan wasn't renewed, so on {grace_ends} the account moved to the "
+            f"free {free} plan. Nothing was deleted. {data_kept}",
+        ]
+        if paused_sites:
+            paragraphs.append(
+                f"{free} covers {free_sites} website{'' if free_sites == 1 else 's'}, so "
+                f"{paused_sites} of your sites stopped collecting. Their data stays; you can "
+                f'choose which site keeps collecting on the <a href="{sites_url}">Tracking</a> '
+                "page."
+            )
+        action = f"Renew {plan}"
+    else:
+        raise ValueError(f"Unknown subscription notice {kind!r}")
+
+    body = "".join(f"<p>{p}</p>" for p in paragraphs)
+    text = "\n\n".join(re.sub(r"<[^>]+>", "", p) for p in paragraphs)
     await send_email_or_raise(
         to,
-        f"Your Thravic {plan_name} plan ends on {ends}",
+        subject,
         _layout(
-            f"<h2>Your {safe_plan} plan ends on {ends}</h2>"
-            f"<p>Hi {safe_name}, plans don't renew automatically. Renew before {ends} "
-            f"to keep your {safe_plan} features without a break.</p>"
-            f"<p>If you don't, you'll keep access for {grace_days} more days, then the "
-            "account moves to the free Hobby plan. <strong>Your data is kept</strong> "
-            "and everything comes back when you renew.</p>"
-            f'<p><a href="{renew_url}">Renew now</a></p>'
+            f"<h2>{html.escape(subject)}</h2>"
+            f"<p>Hi {html.escape(name or 'there')},</p>{body}"
+            f'<p><a href="{renew_url}">{action}</a></p>'
         ),
-        f"Hi {name or 'there'},\n\nYour {plan_name} plan ends on {ends}. Plans don't renew "
-        f"automatically.\n\nIf you don't renew, you keep access for {grace_days} more days, "
-        "then the account moves to the free Hobby plan. Your data is kept and everything "
-        f"comes back when you renew.\n\nRenew: {renew_url}",
+        f"Hi {name or 'there'},\n\n{text}\n\n{action}: {renew_url}",
     )
 
 

@@ -354,7 +354,12 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                                                 border: 'none', textAlign: 'left', cursor: 'pointer',
                                                 fontSize: '0.8125rem', color: selectedDomain === domain.id ? 'var(--color-accent-primary)' : 'var(--color-text-primary)',
                                             }}
-                                        >{domain.domain}</button>
+                                        >
+                                            {domain.domain}
+                                            {domain.paused && (
+                                                <span style={{ marginLeft: '6px', fontSize: '0.6875rem', color: 'var(--color-text-muted)' }}>Paused</span>
+                                            )}
+                                        </button>
                                     ))}
                                     <Link
                                         href="/dashboard/domains/new"
