@@ -4,7 +4,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { useDomain } from '@/contexts/DomainContext';
 import { useSubscription } from '@/hooks/useSubscription';
 import { UpgradeGate } from '@/components/UpgradeGate';
-import { Users, UserPlus, Trash2, Shield, Eye, Mail, Crown } from 'lucide-react';
+import { Trash2, Shield, Eye, Mail, Crown } from 'lucide-react';
+import { PageHeader } from '@/components/PageHeader';
+import { ChartCard } from '@/components/ChartCard';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
@@ -46,6 +48,7 @@ export default function TeamPage() {
     const [inviting, setInviting] = useState(false);
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
     const [removingId, setRemovingId] = useState<string | null>(null);
+    const [loadError, setLoadError] = useState<string | null>(null);
 
     const loadMembers = useCallback(async () => {
         if (!selectedDomainId) return;
@@ -53,6 +56,7 @@ export default function TeamPage() {
         try {
             const result = await teamApi<TeamMember[]>(`/api/teams/${selectedDomainId}/members`);
             setMembers(result.data || []);
+            setLoadError(result.error ?? null);
         } catch {
             setMembers([]);
         } finally {
@@ -66,7 +70,7 @@ export default function TeamPage() {
         } else {
             setLoading(false);
         }
-    }, [selectedDomainId, hasFeature, loadMembers]);
+    }, [selectedDomainId, selectedDomain?.features, hasFeature, loadMembers]);
 
     const handleInvite = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -97,7 +101,11 @@ export default function TeamPage() {
         if (!selectedDomainId || !confirm('Remove this member from your domain?')) return;
         setRemovingId(memberId);
         try {
-            await teamApi(`/api/teams/${selectedDomainId}/members/${memberId}`, { method: 'DELETE' });
+            const result = await teamApi(`/api/teams/${selectedDomainId}/members/${memberId}`, { method: 'DELETE' });
+            if (result.error) {
+                setMessage({ type: 'error', text: result.error });
+                return;
+            }
             setMembers(prev => prev.filter(m => m.id !== memberId));
             setMessage({ type: 'success', text: 'Member removed' });
         } catch (err: any) {
@@ -110,13 +118,8 @@ export default function TeamPage() {
     // Gate: team feature requires Pro+
     if (!subLoading && !hasFeature('team', selectedDomain?.features || undefined)) {
         return (
-            <div className="page-container">
-                <div className="page-header">
-                    <div>
-                        <h2 className="page-title">Team</h2>
-                        <p className="page-subtitle">Collaborate with your team on analytics</p>
-                    </div>
-                </div>
+            <div className="page-stack">
+                <PageHeader title="Team" subtitle="Collaborate with your team on analytics." />
                 <UpgradeGate feature="team" requiredPlan="pro"
                     message="Invite team members to view and manage your analytics. Upgrade to Pro to unlock team collaboration." />
             </div>
@@ -124,28 +127,22 @@ export default function TeamPage() {
     }
 
     return (
-        <div className="page-container">
-            {/* Header */}
-            <div className="page-header">
-                <div>
-                    <h2 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <Users size={24} /> Team
-                    </h2>
-                    <p className="page-subtitle">
-                        Manage who has access to <strong>{selectedDomain?.domain || 'your domain'}</strong>
-                    </p>
-                </div>
-            </div>
+        <div className="page-stack">
+            <PageHeader
+                title="Team"
+                subtitle={<>Manage who has access to <strong style={{ fontWeight: 500, color: 'var(--color-text-primary)' }}>{selectedDomain?.domain || 'your site'}</strong>.</>}
+            />
 
             {/* Invite form */}
-            <div className="card" style={{ padding: 'var(--space-lg)', marginBottom: 'var(--space-lg)' }}>
-                <h3 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: 'var(--space-md)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <UserPlus size={18} /> Invite a Team Member
-                </h3>
-                <form onSubmit={handleInvite} style={{ display: 'flex', gap: 'var(--space-sm)', flexWrap: 'wrap', alignItems: 'flex-end' }}>
-                    <div style={{ flex: '1 1 250px' }}>
-                        <label style={labelStyle}>Email Address</label>
+            <ChartCard
+                title="Invite a team member"
+                subtitle="Viewers can see analytics and reports. Admins can also manage settings, team and webhooks."
+            >
+                <form onSubmit={handleInvite} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                    <div style={{ flex: '1 1 240px', minWidth: 0 }}>
+                        <label htmlFor="invite-email" style={labelStyle}>Email address</label>
                         <input
+                            id="invite-email"
                             className="input"
                             type="email"
                             placeholder="colleague@company.com"
@@ -154,9 +151,9 @@ export default function TeamPage() {
                             required
                         />
                     </div>
-                    <div style={{ flex: '0 0 140px' }}>
-                        <label style={labelStyle}>Role</label>
-                        <select className="input" value={inviteRole} onChange={e => setInviteRole(e.target.value as 'viewer' | 'admin')}>
+                    <div style={{ flex: '0 1 140px' }}>
+                        <label htmlFor="invite-role" style={labelStyle}>Role</label>
+                        <select id="invite-role" className="input" value={inviteRole} onChange={e => setInviteRole(e.target.value as 'viewer' | 'admin')}>
                             <option value="viewer">Viewer</option>
                             <option value="admin">Admin</option>
                         </select>
@@ -165,118 +162,100 @@ export default function TeamPage() {
                         type="submit"
                         className="btn btn-primary"
                         disabled={inviting || !inviteEmail.trim()}
-                        style={{ height: '42px', display: 'flex', alignItems: 'center', gap: '6px' }}
                     >
                         <Mail size={16} />
-                        {inviting ? 'Inviting...' : 'Invite'}
+                        {inviting ? 'Inviting…' : 'Invite'}
                     </button>
                 </form>
 
                 {message && (
-                    <div style={{
-                        marginTop: 'var(--space-sm)', padding: '8px 12px', borderRadius: '6px',
-                        fontSize: '0.875rem',
-                        background: message.type === 'success' ? 'rgba(0,214,143,0.1)' : 'rgba(255,85,85,0.1)',
-                        color: message.type === 'success' ? '#00d68f' : '#ff5555',
-                        borderLeft: `3px solid ${message.type === 'success' ? '#00d68f' : '#ff5555'}`,
+                    <p role={message.type === 'error' ? 'alert' : 'status'} style={{
+                        marginTop: 10, fontSize: '0.8125rem',
+                        color: message.type === 'success' ? 'var(--color-success)' : 'var(--color-error)',
                     }}>
                         {message.text}
-                    </div>
+                    </p>
                 )}
-
-                <p style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', marginTop: 'var(--space-sm)' }}>
-                    <strong>Viewer</strong> — Can view analytics and reports &nbsp;&nbsp;|&nbsp;&nbsp;
-                    <strong>Admin</strong> — Can also manage settings, team, and webhooks
-                </p>
-            </div>
+            </ChartCard>
 
             {/* Members list */}
-            <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-                <div style={{ padding: 'var(--space-md) var(--space-lg)', borderBottom: '1px solid var(--color-border)' }}>
-                    <h3 style={{ fontSize: '1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <Users size={18} /> Members ({members.length})
-                    </h3>
-                </div>
-
+            <ChartCard flush title="Members" subtitle={loading ? undefined : `${members.length} ${members.length === 1 ? 'person' : 'people'}`}>
                 {loading ? (
-                    <div className="loading" style={{ padding: '3rem' }}><div className="spinner" /></div>
-                ) : members.length === 0 ? (
-                    <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--color-text-muted)' }}>
-                        <Users size={40} style={{ opacity: 0.3, marginBottom: '12px' }} />
-                        <p>No team members yet.</p>
-                        <p style={{ fontSize: '0.85rem' }}>Invite colleagues to collaborate on analytics for this domain.</p>
+                    <div className="skeleton" style={{ height: 120, margin: '0 20px 20px' }} />
+                ) : loadError ? (
+                    <div role="alert" className="empty-note" style={{ color: 'var(--color-error)' }}>
+                        Could not load members: {loadError}
                     </div>
+                ) : members.length === 0 ? (
+                    <div className="empty-note">No team members yet. Invite a colleague above.</div>
                 ) : (
-                    <div>
-                        {members.map(member => (
-                            <div
-                                key={member.id}
-                                style={{
-                                    display: 'flex', alignItems: 'center', gap: 'var(--space-md)',
-                                    padding: 'var(--space-md) var(--space-lg)',
-                                    borderBottom: '1px solid var(--color-border)',
-                                }}
-                            >
-                                {/* Avatar */}
-                                <div style={{
-                                    width: 40, height: 40, borderRadius: '50%',
-                                    background: 'var(--color-bg-tertiary)',
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                    fontWeight: 600, fontSize: '1rem', color: 'var(--color-accent)',
-                                    flexShrink: 0,
-                                }}>
-                                    {member.name?.charAt(0)?.toUpperCase() || member.email.charAt(0).toUpperCase()}
-                                </div>
-
-                                {/* Info */}
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                    <div style={{ fontWeight: 600, fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                        {member.name || 'Unnamed'}
-                                    </div>
-                                    <div style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                        {member.email}
-                                    </div>
-                                </div>
-
-                                {/* Role badge */}
-                                <div style={{
-                                    display: 'flex', alignItems: 'center', gap: '4px',
-                                    padding: '4px 10px', borderRadius: '12px',
-                                    fontSize: '0.8rem', fontWeight: 600,
-                                    background: member.role === 'owner' ? 'rgba(255,170,0,0.15)' : member.role === 'admin' ? 'rgba(109,92,255,0.15)' : 'rgba(255,255,255,0.05)',
-                                    color: member.role === 'owner' ? '#ffaa00' : member.role === 'admin' ? 'var(--color-accent)' : 'var(--color-text-secondary)',
-                                }}>
-                                    {member.role === 'owner' ? <Crown size={12} /> : member.role === 'admin' ? <Shield size={12} /> : <Eye size={12} />}
-                                    {member.role.charAt(0).toUpperCase() + member.role.slice(1)}
-                                </div>
-
-                                {/* Joined date */}
-                                <div style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', whiteSpace: 'nowrap' }}>
-                                    {new Date(member.created_at).toLocaleDateString()}
-                                </div>
-
-                                {/* Remove button */}
-                                {member.role !== 'owner' ? (
-                                    <button
-                                        className="btn btn-ghost btn-sm"
-                                        onClick={() => handleRemove(member.id)}
-                                        disabled={removingId === member.id}
-                                        title="Remove member"
-                                        style={{ color: '#ff5555' }}
-                                    >
-                                        <Trash2 size={14} />
-                                    </button>
-                                ) : <div style={{ width: 32 }}></div>}
-                            </div>
-                        ))}
+                    <div style={{ overflowX: 'auto', marginTop: 6 }}>
+                        <table className="data-table">
+                            <thead>
+                                <tr>
+                                    <th style={{ paddingLeft: 20 }}>Member</th>
+                                    <th>Role</th>
+                                    <th className="num">Added</th>
+                                    <th aria-label="Actions" style={{ width: 52, paddingRight: 20 }} />
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {members.map(member => {
+                                    const RoleIcon = member.role === 'owner' ? Crown : member.role === 'admin' ? Shield : Eye;
+                                    return (
+                                        <tr key={member.id}>
+                                            <td style={{ paddingLeft: 20 }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                                                    <span aria-hidden="true" style={{
+                                                        width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+                                                        background: 'var(--color-bg-tertiary)', border: '1px solid var(--color-border)',
+                                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                        fontWeight: 600, fontSize: '0.75rem', color: 'var(--color-text-secondary)',
+                                                    }}>
+                                                        {member.name?.charAt(0)?.toUpperCase() || member.email.charAt(0).toUpperCase()}
+                                                    </span>
+                                                    <div style={{ minWidth: 0 }}>
+                                                        <div style={{ fontWeight: 500 }}>{member.name || 'Unnamed'}</div>
+                                                        <div className="muted" style={{ fontSize: '0.75rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                            {member.email}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <span className="badge" style={{ gap: 4 }}>
+                                                    <RoleIcon size={12} aria-hidden="true" />
+                                                    {member.role.charAt(0).toUpperCase() + member.role.slice(1)}
+                                                </span>
+                                            </td>
+                                            <td className="num muted">{new Date(member.created_at).toLocaleDateString()}</td>
+                                            <td style={{ paddingRight: 20, textAlign: 'right' }}>
+                                                {member.role !== 'owner' && (
+                                                    <button
+                                                        className="btn btn-ghost"
+                                                        onClick={() => handleRemove(member.id)}
+                                                        disabled={removingId === member.id}
+                                                        title="Remove member"
+                                                        aria-label={`Remove ${member.name || member.email}`}
+                                                        style={{ padding: 6, color: 'var(--color-text-secondary)' }}
+                                                    >
+                                                        <Trash2 size={14} />
+                                                    </button>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
                     </div>
                 )}
-            </div>
+            </ChartCard>
         </div>
     );
 }
 
 const labelStyle: React.CSSProperties = {
-    display: 'block', fontSize: '0.8rem', fontWeight: 500,
+    display: 'block', fontSize: '0.8125rem', fontWeight: 500,
     color: 'var(--color-text-secondary)', marginBottom: '4px',
 };

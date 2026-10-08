@@ -22,8 +22,8 @@ export function meterTone(used: number, limit: number | null): MeterTone {
 
 export const TONE_COLORS: Record<MeterTone, string> = {
     ok: 'var(--color-text-primary)',
-    warn: '#f59e0b',
-    over: '#ef4444',
+    warn: 'var(--color-warning)',
+    over: 'var(--color-error)',
 };
 
 export function percent(used: number, limit: number | null): number {

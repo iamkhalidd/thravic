@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { Download, FileText, Loader } from 'lucide-react';
 import { exportData, type ExportType } from '@/lib/api';
 import { useDomain } from '@/contexts/DomainContext';
+import { PageHeader } from '@/components/PageHeader';
+import { ChartCard } from '@/components/ChartCard';
 
 // What GET /api/export/{domainId}?type=... returns: the 10,000 most recent rows.
 const datasets: Array<{ type: ExportType; name: string; description: string }> = [
@@ -34,42 +36,29 @@ export default function ReportsPage() {
         setDownloading(null);
     };
 
+    const header = (
+        <PageHeader
+            title="Reports"
+            subtitle="Download this site's raw data as CSV, up to the 10,000 most recent rows."
+        />
+    );
+
     if (!selectedDomainId && !domainLoading) {
         return (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-xl)', color: 'var(--color-text-secondary)' }}>
-                <p>Please select a domain to export its data</p>
+            <div className="page-stack">
+                {header}
+                <div className="card"><div className="empty-note">Select a site to export its data.</div></div>
             </div>
         );
     }
 
     return (
-        <div>
-            {/* Page Header */}
-            <div style={{ marginBottom: 'var(--space-xl)' }}>
-                <h1 style={{
-                    fontSize: '1.5rem',
-                    fontWeight: 600,
-                    color: 'var(--color-text-primary)',
-                    marginBottom: 'var(--space-xs)'
-                }}>
-                    Reports
-                </h1>
-                <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>
-                    Download this domain&apos;s raw data as CSV, up to the 10,000 most recent rows
-                </p>
-            </div>
+        <div className="page-stack">
+            {header}
 
             {error && (
-                <div style={{
-                    padding: 'var(--space-md)',
-                    marginBottom: 'var(--space-lg)',
-                    background: 'var(--color-bg-secondary)',
-                    borderRadius: 'var(--radius-md)',
-                    borderLeft: '3px solid #ff5555',
-                    fontSize: '0.875rem',
-                    color: 'var(--color-text-primary)'
-                }}>
-                    {error.message}
+                <div role="alert" className="card" style={{ borderColor: 'var(--color-error)', padding: '12px 16px', fontSize: '0.875rem' }}>
+                    <span style={{ color: 'var(--color-error)' }}>{error.message}</span>
                     {error.upgrade && (
                         <>
                             {' '}
@@ -81,72 +70,44 @@ export default function ReportsPage() {
                 </div>
             )}
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
-                {datasets.map(dataset => (
-                    <div
-                        key={dataset.type}
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 'var(--space-md)',
-                            padding: 'var(--space-lg)',
-                            background: 'var(--color-bg-secondary)',
-                            borderRadius: 'var(--radius-lg)',
-                            border: '1px solid var(--color-border)'
-                        }}
-                    >
-                        <div style={{
-                            width: '48px',
-                            height: '48px',
-                            flexShrink: 0,
-                            borderRadius: 'var(--radius-md)',
-                            background: 'var(--color-primary-alpha)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center'
-                        }}>
-                            <FileText size={24} style={{ color: 'var(--color-text-primary)', textDecoration: 'underline' }} />
-                        </div>
-
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{
-                                fontSize: '0.9375rem',
-                                fontWeight: 500,
-                                color: 'var(--color-text-primary)',
-                                marginBottom: '4px'
-                            }}>
-                                {dataset.name}
-                            </div>
-                            <div style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>
-                                {dataset.description}
-                            </div>
-                        </div>
-
-                        <button
-                            onClick={() => handleDownload(dataset.type)}
-                            disabled={!selectedDomainId || downloading !== null}
+            <ChartCard flush title="CSV exports" subtitle="Each file holds the most recent rows, newest first.">
+                <ul style={{ listStyle: 'none', margin: '10px 0 0', padding: 0, borderTop: '1px solid var(--color-border)' }}>
+                    {datasets.map((dataset, index) => (
+                        <li
+                            key={dataset.type}
                             style={{
-                                padding: 'var(--space-xs) var(--space-md)',
-                                background: 'var(--color-bg-tertiary)',
-                                border: '1px solid var(--color-border)',
-                                borderRadius: 'var(--radius-md)',
-                                cursor: downloading ? 'wait' : 'pointer',
                                 display: 'flex',
                                 alignItems: 'center',
-                                gap: '6px',
-                                fontSize: '0.8125rem',
-                                color: 'var(--color-text-secondary)',
-                                flexShrink: 0
+                                gap: 12,
+                                padding: '12px 20px',
+                                borderTop: index ? '1px solid var(--color-border)' : undefined,
+                                flexWrap: 'wrap',
                             }}
                         >
-                            {downloading === dataset.type
-                                ? <Loader size={14} style={{ animation: 'spin 1s linear infinite' }} />
-                                : <Download size={14} />}
-                            Download CSV
-                        </button>
-                    </div>
-                ))}
-            </div>
+                            <FileText size={16} aria-hidden="true" style={{ color: 'var(--color-text-secondary)', flexShrink: 0 }} />
+                            <div style={{ flex: '1 1 260px', minWidth: 0 }}>
+                                <div style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--color-text-primary)' }}>
+                                    {dataset.name}
+                                </div>
+                                <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)', marginTop: 2 }}>
+                                    {dataset.description}
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => handleDownload(dataset.type)}
+                                disabled={!selectedDomainId || downloading !== null}
+                                className="btn btn-secondary"
+                                style={{ padding: '6px 12px', fontSize: '0.8125rem', cursor: downloading ? 'wait' : undefined, flexShrink: 0 }}
+                            >
+                                {downloading === dataset.type
+                                    ? <Loader size={14} style={{ animation: 'spin 1s linear infinite' }} />
+                                    : <Download size={14} />}
+                                Download CSV
+                            </button>
+                        </li>
+                    ))}
+                </ul>
+            </ChartCard>
 
             <style>{`
                 @keyframes spin {

@@ -54,14 +54,14 @@ export default function RecordingControls({
     };
 
     if (!settings) {
-        return error ? <div className="card" role="alert" style={{ marginBottom: 'var(--space-lg)' }}>{error}</div> : null;
+        return error ? <div className="card" role="alert">{error}</div> : null;
     }
 
     const on = settings.sessionRecording && !locked;
     const limitReached = on && startedToday !== null && startedToday >= settings.recordingDailyLimit;
 
     return (
-        <div className="card" style={{ marginBottom: 'var(--space-lg)' }}>
+        <div className="card">
             <div className="flex items-center justify-between" style={{ gap: 'var(--space-md)', flexWrap: 'wrap' }}>
                 <div>
                     <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>

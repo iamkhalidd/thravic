@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useDomain } from '@/contexts/DomainContext';
 import { useSubscription, type PlanFeature } from '@/hooks/useSubscription';
-import { SlidersHorizontal } from 'lucide-react';
+import { PageHeader } from '@/components/PageHeader';
+import { ChartCard } from '@/components/ChartCard';
 import { domains, type DomainSettings, type DomainSwitch } from '@/lib/api';
 
 const SWITCHES: Array<{ key: DomainSwitch; label: string; description: string; feature?: PlanFeature }> = [
@@ -71,25 +72,16 @@ export default function TrackingPage() {
     };
 
     return (
-        <div className="page-container">
-            <div className="page-header">
-                <div>
-                    <h2 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <SlidersHorizontal size={24} /> Tracking
-                    </h2>
-                    <p className="page-subtitle">
-                        Choose what is collected from <strong>{selectedDomain?.domain || 'your domain'}</strong>
-                    </p>
-                </div>
-            </div>
+        <div className="page-stack">
+            <PageHeader
+                title="Tracking"
+                subtitle={<>Choose what is collected from <strong style={{ fontWeight: 500, color: 'var(--color-text-primary)' }}>{selectedDomain?.domain || 'your site'}</strong>.</>}
+            />
 
             {selectedDomain?.paused && (
-                <div role="status" className="card" style={{
-                    marginBottom: 'var(--space-md)', padding: 'var(--space-md) var(--space-lg)',
-                    borderLeft: '3px solid var(--color-warning, #f5a623)',
-                }}>
-                    <div style={{ fontWeight: 600, marginBottom: '4px' }}>This site is paused</div>
-                    <div style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
+                <div role="status" className="card" style={{ borderColor: 'var(--color-warning)', padding: '14px 20px' }}>
+                    <div style={{ fontWeight: 600, fontSize: '0.875rem', marginBottom: 4, color: 'var(--color-warning)' }}>This site is paused</div>
+                    <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)' }}>
                         The account&apos;s plan covers fewer websites than it has, so this one isn&apos;t
                         collecting new data. Everything already collected is kept.
                         {selectedDomain.isOwner
@@ -97,7 +89,7 @@ export default function TrackingPage() {
                             : ' The site owner can renew or choose which sites keep collecting.'}
                     </div>
                     {selectedDomain.isOwner && (
-                        <div style={{ display: 'flex', gap: 'var(--space-sm)', marginTop: 'var(--space-sm)', flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
                             <button type="button" className="btn btn-primary" onClick={keepActive} disabled={keeping}>
                                 {keeping ? 'Switching…' : 'Keep collecting on this site'}
                             </button>
@@ -108,86 +100,97 @@ export default function TrackingPage() {
             )}
 
             {error && (
-                <div role="alert" style={{
-                    marginBottom: 'var(--space-md)', padding: '8px 12px', borderRadius: '6px', fontSize: '0.875rem',
-                    background: 'rgba(255,85,85,0.1)', color: '#ff5555', borderLeft: '3px solid #ff5555',
-                }}>
-                    {error}
+                <div role="alert" className="card" style={{ borderColor: 'var(--color-error)', padding: '12px 16px' }}>
+                    <p style={{ fontSize: '0.875rem', color: 'var(--color-error)', margin: 0 }}>{error}</p>
                 </div>
             )}
 
-            <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-                {!settings ? (
-                    <div className="loading" style={{ padding: '3rem' }}><div className="spinner" /></div>
-                ) : SWITCHES.map(item => {
-                    const locked = !!item.feature && !hasFeature(item.feature, selectedDomain?.features || undefined);
-                    const on = settings[item.key];
-                    const id = `setting-${item.key}`;
-                    return (
-                        <div
-                            key={item.key}
-                            style={{
-                                display: 'flex', alignItems: 'center', gap: 'var(--space-md)',
-                                padding: 'var(--space-md) var(--space-lg)',
-                                borderBottom: '1px solid var(--color-border)',
-                            }}
-                        >
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                                <label htmlFor={id} style={{ fontWeight: 600, fontSize: '0.95rem', cursor: locked ? 'default' : 'pointer' }}>
-                                    {item.label}
-                                </label>
-                                <div style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', marginTop: '2px' }}>
-                                    {item.description}
-                                    {locked && (
-                                        <> Requires the Pro plan. <Link href="/dashboard/settings" style={{ color: 'var(--color-text-primary)', textDecoration: 'underline' }}>Upgrade</Link></>
-                                    )}
+            <ChartCard
+                flush
+                title="Collected data"
+                subtitle="Page views are always collected. Changes reach visitors' browsers within about a minute."
+            >
+                <div style={{ marginTop: 10, borderTop: '1px solid var(--color-border)' }}>
+                    {!settings ? (
+                        <div className="skeleton" style={{ height: 150, margin: 20 }} />
+                    ) : SWITCHES.map(item => {
+                        const locked = !!item.feature && !hasFeature(item.feature, selectedDomain?.features || undefined);
+                        const on = settings[item.key];
+                        const id = `setting-${item.key}`;
+                        return (
+                            <div key={item.key} style={rowStyle}>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                    <label htmlFor={id} style={{ fontWeight: 500, fontSize: '0.875rem', cursor: locked ? 'default' : 'pointer' }}>
+                                        {item.label}
+                                    </label>
+                                    <div style={descriptionStyle}>
+                                        {item.description}
+                                        {locked && (
+                                            <> Requires the Pro plan. <Link href="/dashboard/settings" style={{ color: 'var(--color-text-primary)', textDecoration: 'underline' }}>Upgrade</Link></>
+                                        )}
+                                    </div>
                                 </div>
+                                <span style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', minWidth: 22, textAlign: 'right' }} aria-hidden="true">
+                                    {on && !locked ? 'On' : 'Off'}
+                                </span>
+                                <button
+                                    id={id}
+                                    type="button"
+                                    role="switch"
+                                    aria-checked={on}
+                                    disabled={locked || saving !== null}
+                                    onClick={() => toggle(item.key)}
+                                    style={{
+                                        width: '40px', height: '22px', flexShrink: 0,
+                                        borderRadius: '11px', border: '1px solid var(--color-border)',
+                                        background: on && !locked ? 'var(--color-text-primary)' : 'var(--color-bg-tertiary)',
+                                        position: 'relative', cursor: locked ? 'not-allowed' : 'pointer',
+                                        opacity: locked ? 0.5 : 1, transition: 'background 150ms ease',
+                                    }}
+                                >
+                                    <span style={{
+                                        position: 'absolute', top: '2px', left: on && !locked ? '20px' : '2px',
+                                        width: '16px', height: '16px', borderRadius: '50%',
+                                        background: on && !locked ? 'var(--color-bg-primary)' : 'var(--color-text-muted)',
+                                        transition: 'left 150ms ease',
+                                    }} />
+                                </button>
                             </div>
-                            <button
-                                id={id}
-                                type="button"
-                                role="switch"
-                                aria-checked={on}
-                                disabled={locked || saving !== null}
-                                onClick={() => toggle(item.key)}
-                                style={{
-                                    width: '44px', height: '24px', flexShrink: 0,
-                                    borderRadius: '12px', border: '1px solid var(--color-border)',
-                                    background: on && !locked ? 'var(--color-text-primary)' : 'var(--color-bg-tertiary)',
-                                    position: 'relative', cursor: locked ? 'not-allowed' : 'pointer',
-                                    opacity: locked ? 0.5 : 1, transition: 'background 150ms ease',
-                                }}
-                            >
-                                <span style={{
-                                    position: 'absolute', top: '2px', left: on && !locked ? '22px' : '2px',
-                                    width: '18px', height: '18px', borderRadius: '50%',
-                                    background: on && !locked ? 'var(--color-bg-primary)' : 'var(--color-text-muted)',
-                                    transition: 'left 150ms ease',
-                                }} />
-                            </button>
+                        );
+                    })}
+                    <div style={{ ...rowStyle, borderBottom: 'none' }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontWeight: 500, fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: 8 }}>
+                                Session recording
+                                {settings && (
+                                    <span className={settings.sessionRecording ? 'badge badge-success' : 'badge'}>
+                                        {settings.sessionRecording ? 'On' : 'Off'}
+                                    </span>
+                                )}
+                            </div>
+                            <div style={descriptionStyle}>
+                                Replays of visits, with visitor consent, a share of visits and a daily limit. Typed values are never recorded.
+                            </div>
                         </div>
-                    );
-                })}
-                <div style={{
-                    display: 'flex', alignItems: 'center', gap: 'var(--space-md)',
-                    padding: 'var(--space-md) var(--space-lg)',
-                }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>
-                            Session recording {settings && (settings.sessionRecording ? '· On' : '· Off')}
-                        </div>
-                        <div style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', marginTop: '2px' }}>
-                            Replays of visits, with visitor consent, a share of visits and a daily limit. Typed values are never recorded.
-                        </div>
+                        <Link href="/dashboard/sessions" className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '0.8125rem' }}>Manage on Sessions</Link>
                     </div>
-                    <Link href="/dashboard/sessions" className="btn btn-secondary">Manage on Sessions</Link>
                 </div>
-            </div>
+            </ChartCard>
 
-            <p style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', marginTop: 'var(--space-md)' }}>
-                Changes reach visitors&apos; browsers within about a minute; anything switched off stops being stored straight away.
+            <p style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>
+                Anything switched off stops being stored straight away.
                 If your site sets these options in <code>window.__TF_CONFIG__</code>, the browser follows that instead, but nothing switched off here is stored either way.
             </p>
         </div>
     );
 }
+
+const rowStyle: React.CSSProperties = {
+    display: 'flex', alignItems: 'center', gap: 12,
+    padding: '12px 20px',
+    borderBottom: '1px solid var(--color-border)',
+};
+
+const descriptionStyle: React.CSSProperties = {
+    fontSize: '0.8125rem', color: 'var(--color-text-secondary)', marginTop: 2,
+};

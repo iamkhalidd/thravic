@@ -4,7 +4,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { useDomain } from '@/contexts/DomainContext';
 import { useSubscription } from '@/hooks/useSubscription';
 import { UpgradeGate } from '@/components/UpgradeGate';
-import { Webhook as WebhookIcon, Plus, Trash2, KeyRound } from 'lucide-react';
+import { Plus, Trash2, KeyRound } from 'lucide-react';
+import { PageHeader } from '@/components/PageHeader';
+import { ChartCard } from '@/components/ChartCard';
 import { webhooks, WEBHOOK_EVENTS, type Webhook, type WebhookEvent } from '@/lib/api';
 
 const EVENT_LABELS: Record<WebhookEvent, string> = {
@@ -87,13 +89,8 @@ export default function WebhooksPage() {
 
     if (!subLoading && !enabled) {
         return (
-            <div className="page-container">
-                <div className="page-header">
-                    <div>
-                        <h2 className="page-title">Webhooks</h2>
-                        <p className="page-subtitle">Send tracked events to your own systems</p>
-                    </div>
-                </div>
+            <div className="page-stack">
+                <PageHeader title="Webhooks" subtitle="Send tracked events to your own systems." />
                 <UpgradeGate feature="webhooks" requiredPlan="pro"
                     message="Forward page views, clicks and custom events to your own endpoints as they happen. Upgrade to Pro to unlock webhooks." />
             </div>
@@ -101,26 +98,17 @@ export default function WebhooksPage() {
     }
 
     return (
-        <div className="page-container">
-            <div className="page-header">
-                <div>
-                    <h2 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <WebhookIcon size={24} /> Webhooks
-                    </h2>
-                    <p className="page-subtitle">
-                        Send events from <strong>{selectedDomain?.domain || 'your domain'}</strong> to your own endpoints as they are collected
-                    </p>
-                </div>
-            </div>
+        <div className="page-stack">
+            <PageHeader
+                title="Webhooks"
+                subtitle={<>Send events from <strong style={{ fontWeight: 500, color: 'var(--color-text-primary)' }}>{selectedDomain?.domain || 'your site'}</strong> to your own endpoints as they are collected.</>}
+            />
 
             {/* Add form */}
-            <div className="card" style={{ padding: 'var(--space-lg)', marginBottom: 'var(--space-lg)' }}>
-                <h3 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: 'var(--space-md)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Plus size={18} /> Add a Webhook
-                </h3>
+            <ChartCard title="Add a webhook">
                 <form onSubmit={handleCreate}>
-                    <div style={{ display: 'flex', gap: 'var(--space-sm)', flexWrap: 'wrap', marginBottom: 'var(--space-md)' }}>
-                        <div style={{ flex: '2 1 280px' }}>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+                        <div style={{ flex: '2 1 280px', minWidth: 0 }}>
                             <label style={labelStyle} htmlFor="webhook-url">Endpoint URL</label>
                             <input
                                 id="webhook-url"
@@ -132,8 +120,8 @@ export default function WebhooksPage() {
                                 required
                             />
                         </div>
-                        <div style={{ flex: '1 1 200px' }}>
-                            <label style={labelStyle} htmlFor="webhook-secret">Signing secret (optional)</label>
+                        <div style={{ flex: '1 1 200px', minWidth: 0 }}>
+                            <label style={labelStyle} htmlFor="webhook-secret">Signing secret <span style={{ color: 'var(--color-text-muted)', fontWeight: 400 }}>(optional)</span></label>
                             <input
                                 id="webhook-secret"
                                 className="input"
@@ -146,11 +134,11 @@ export default function WebhooksPage() {
                         </div>
                     </div>
 
-                    <fieldset style={{ border: 'none', padding: 0, margin: '0 0 var(--space-md)' }}>
+                    <fieldset style={{ border: 'none', padding: 0, margin: '0 0 12px' }}>
                         <legend style={labelStyle}>Events</legend>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-sm) var(--space-lg)' }}>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 20px' }}>
                             {WEBHOOK_EVENTS.map(event => (
-                                <label key={event} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.875rem', cursor: 'pointer' }}>
+                                <label key={event} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.8125rem', cursor: 'pointer' }}>
                                     <input
                                         type="checkbox"
                                         checked={events.includes(event)}
@@ -166,97 +154,93 @@ export default function WebhooksPage() {
                         type="submit"
                         className="btn btn-primary"
                         disabled={saving || !url.trim() || events.length === 0}
-                        style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
                     >
                         <Plus size={16} />
-                        {saving ? 'Adding...' : 'Add webhook'}
+                        {saving ? 'Adding…' : 'Add webhook'}
                     </button>
                 </form>
 
                 {message && (
-                    <div role="status" style={{
-                        marginTop: 'var(--space-sm)', padding: '8px 12px', borderRadius: '6px',
-                        fontSize: '0.875rem',
-                        background: message.type === 'success' ? 'rgba(0,214,143,0.1)' : 'rgba(255,85,85,0.1)',
-                        color: message.type === 'success' ? '#00d68f' : '#ff5555',
-                        borderLeft: `3px solid ${message.type === 'success' ? '#00d68f' : '#ff5555'}`,
+                    <p role={message.type === 'error' ? 'alert' : 'status'} style={{
+                        marginTop: 10, fontSize: '0.8125rem',
+                        color: message.type === 'success' ? 'var(--color-success)' : 'var(--color-error)',
                     }}>
                         {message.text}
-                    </div>
+                    </p>
                 )}
 
-                <p style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', marginTop: 'var(--space-sm)' }}>
+                <p style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginTop: 12, lineHeight: 1.5 }}>
                     Each event is sent as a JSON <code>POST</code> with <code>event</code>, <code>domainId</code>, <code>timestamp</code> and <code>data</code>.
                     With a secret, the <code>X-Thravic-Signature</code> header carries the HMAC-SHA256 of the request body. Endpoints must be publicly reachable.
                 </p>
-            </div>
+            </ChartCard>
 
             {/* List */}
-            <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-                <div style={{ padding: 'var(--space-md) var(--space-lg)', borderBottom: '1px solid var(--color-border)' }}>
-                    <h3 style={{ fontSize: '1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <WebhookIcon size={18} /> Endpoints ({list.length})
-                    </h3>
-                </div>
-
+            <ChartCard flush title="Endpoints" subtitle={loading ? undefined : `${list.length} ${list.length === 1 ? 'endpoint' : 'endpoints'}`}>
                 {loading ? (
-                    <div className="loading" style={{ padding: '3rem' }}><div className="spinner" /></div>
+                    <div className="skeleton" style={{ height: 120, margin: '0 20px 20px' }} />
                 ) : list.length === 0 ? (
-                    <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--color-text-muted)' }}>
-                        <WebhookIcon size={40} style={{ opacity: 0.3, marginBottom: '12px' }} />
-                        <p>No webhooks yet.</p>
-                        <p style={{ fontSize: '0.85rem' }}>Add an endpoint above to start receiving events.</p>
-                    </div>
+                    <div className="empty-note">No webhooks yet. Add an endpoint above to start receiving events.</div>
                 ) : (
-                    <div>
-                        {list.map(webhook => (
-                            <div
-                                key={webhook.id}
-                                style={{
-                                    display: 'flex', alignItems: 'center', gap: 'var(--space-md)',
-                                    padding: 'var(--space-md) var(--space-lg)',
-                                    borderBottom: '1px solid var(--color-border)',
-                                }}
-                            >
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                    <div style={{ fontWeight: 600, fontSize: '0.9rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                        {webhook.url}
-                                    </div>
-                                    <div style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', display: 'flex', flexWrap: 'wrap', gap: '4px 12px', marginTop: '2px' }}>
-                                        <span>{webhook.events.map(e => EVENT_LABELS[e] ?? e).join(', ')}</span>
-                                        {webhook.hasSecret && (
-                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                                <KeyRound size={12} /> Signed
+                    <div style={{ overflowX: 'auto', marginTop: 6 }}>
+                        <table className="data-table">
+                            <thead>
+                                <tr>
+                                    <th style={{ paddingLeft: 20 }}>Endpoint</th>
+                                    <th>Events</th>
+                                    <th>Status</th>
+                                    <th className="num">Added</th>
+                                    <th aria-label="Actions" style={{ width: 52, paddingRight: 20 }} />
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {list.map(webhook => (
+                                    <tr key={webhook.id}>
+                                        <td style={{ paddingLeft: 20, maxWidth: 360 }}>
+                                            <div title={webhook.url} style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>
+                                                {webhook.url}
+                                            </div>
+                                        </td>
+                                        <td className="muted" style={{ minWidth: 160 }}>
+                                            {webhook.events.map(e => EVENT_LABELS[e] ?? e).join(', ')}
+                                        </td>
+                                        <td style={{ whiteSpace: 'nowrap' }}>
+                                            <span style={{ display: 'inline-flex', gap: 6, flexWrap: 'wrap' }}>
+                                                {webhook.enabled
+                                                    ? <span className="badge badge-success">Active</span>
+                                                    : <span className="badge">Disabled</span>}
+                                                {webhook.hasSecret && (
+                                                    <span className="badge" style={{ gap: 4 }}>
+                                                        <KeyRound size={11} aria-hidden="true" /> Signed
+                                                    </span>
+                                                )}
                                             </span>
-                                        )}
-                                        {!webhook.enabled && <span>Disabled</span>}
-                                    </div>
-                                </div>
-
-                                <div style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', whiteSpace: 'nowrap' }}>
-                                    {new Date(webhook.created_at).toLocaleDateString()}
-                                </div>
-
-                                <button
-                                    className="btn btn-ghost btn-sm"
-                                    onClick={() => handleRemove(webhook.id)}
-                                    disabled={removingId === webhook.id}
-                                    title="Delete webhook"
-                                    aria-label={`Delete webhook ${webhook.url}`}
-                                    style={{ color: '#ff5555' }}
-                                >
-                                    <Trash2 size={14} />
-                                </button>
-                            </div>
-                        ))}
+                                        </td>
+                                        <td className="num muted">{new Date(webhook.created_at).toLocaleDateString()}</td>
+                                        <td style={{ paddingRight: 20, textAlign: 'right' }}>
+                                            <button
+                                                className="btn btn-ghost"
+                                                onClick={() => handleRemove(webhook.id)}
+                                                disabled={removingId === webhook.id}
+                                                title="Delete webhook"
+                                                aria-label={`Delete webhook ${webhook.url}`}
+                                                style={{ padding: 6, color: 'var(--color-text-secondary)' }}
+                                            >
+                                                <Trash2 size={14} />
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
                     </div>
                 )}
-            </div>
+            </ChartCard>
         </div>
     );
 }
 
 const labelStyle: React.CSSProperties = {
-    display: 'block', fontSize: '0.8rem', fontWeight: 500,
+    display: 'block', fontSize: '0.8125rem', fontWeight: 500,
     color: 'var(--color-text-secondary)', marginBottom: '4px',
 };

@@ -2,17 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import {
-    Target,
-    Plus,
-    ArrowRight,
-    Trash2,
-    MoreVertical,
-    TrendingDown,
-    Users,
-    ChevronRight
-} from 'lucide-react';
+import { Plus, Trash2, Users, Target, TrendingDown, Percent } from 'lucide-react';
 import { useDomain } from '@/contexts/DomainContext';
+import { PageHeader } from '@/components/PageHeader';
+import { StatCard } from '@/components/StatCard';
+import { ChartCard } from '@/components/ChartCard';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
@@ -25,6 +19,8 @@ interface Funnel {
 }
 
 interface FunnelMetrics {
+    /** Length of the window the API measured, in days (it ignores the date picker). */
+    periodDays: number | null;
     totalVisitors: number;
     completedFunnel: number;
     overallConversionRate: number;
@@ -45,7 +41,10 @@ interface FunnelMetrics {
 // `conversionRate`, plus `totalVisitors`, `completedFunnel` and `overallConversion`.
 function toMetrics(data: any): FunnelMetrics | null {
     if (!data || !Array.isArray(data.steps)) return null;
+    const start = data.period?.start ? new Date(data.period.start).getTime() : NaN;
+    const end = data.period?.end ? new Date(data.period.end).getTime() : NaN;
     return {
+        periodDays: Number.isFinite(start) && Number.isFinite(end) ? Math.round((end - start) / 86400000) : null,
         totalVisitors: data.totalVisitors ?? 0,
         completedFunnel: data.completedFunnel ?? 0,
         overallConversionRate: data.overallConversion ?? 0,
@@ -92,6 +91,9 @@ export default function FunnelsPage() {
     const [selectedFunnel, setSelectedFunnel] = useState<string | null>(null);
     const [funnelMetrics, setFunnelMetrics] = useState<FunnelMetrics | null>(null);
     const [loading, setLoading] = useState(true);
+    const [listError, setListError] = useState<string | null>(null);
+    const [detailLoading, setDetailLoading] = useState(false);
+    const [detailError, setDetailError] = useState<string | null>(null);
 
     useEffect(() => {
         if (!selectedDomainId) {
@@ -103,17 +105,37 @@ export default function FunnelsPage() {
         setSelectedFunnel(null);
         setFunnelMetrics(null);
         getFunnels(selectedDomainId).then(data => {
-            setFunnelList(data.funnels || []);
+            const list: Funnel[] = data.funnels || [];
+            setListError(data.funnels ? null : (data.error || 'Something went wrong'));
+            setFunnelList(list);
+            // Open the first funnel so the page shows a result straight away.
+            setSelectedFunnel(list[0]?.id ?? null);
+            setLoading(false);
+        }).catch(() => {
+            setListError('Something went wrong');
             setLoading(false);
         });
     }, [selectedDomainId, domainLoading]);
 
     useEffect(() => {
         if (!selectedDomainId || !selectedFunnel) return;
+        let cancelled = false;
 
+        setDetailLoading(true);
+        setDetailError(null);
         getFunnelDetails(selectedDomainId, selectedFunnel).then(data => {
-            setFunnelMetrics(toMetrics(data));
+            if (cancelled) return;
+            const metrics = toMetrics(data);
+            setFunnelMetrics(metrics);
+            setDetailError(metrics ? null : (data?.error || 'Something went wrong'));
+            setDetailLoading(false);
+        }).catch(() => {
+            if (cancelled) return;
+            setFunnelMetrics(null);
+            setDetailError('Something went wrong');
+            setDetailLoading(false);
         });
+        return () => { cancelled = true; };
     }, [selectedDomainId, selectedFunnel]);
 
     const handleDelete = async (funnelId: string) => {
@@ -127,228 +149,184 @@ export default function FunnelsPage() {
         }
     };
 
+    const createButton = (
+        <Link href="/dashboard/funnels/new" className="btn btn-primary">
+            <Plus size={16} />
+            Create funnel
+        </Link>
+    );
+
     if (loading) {
         return (
-            <div>
-                <div className="skeleton" style={{ height: '40px', width: '200px', marginBottom: 'var(--space-xl)' }} />
-                <div className="grid grid-cols-3 gap-lg">
-                    {[1, 2, 3].map(i => (
-                        <div key={i} className="card">
-                            <div className="skeleton" style={{ height: '100px' }} />
-                        </div>
-                    ))}
+            <div className="page-stack">
+                <div className="skeleton" style={{ height: '28px', width: '180px' }} />
+                <div className="stat-grid">
+                    {[1, 2, 3, 4].map(i => <StatCard key={i} label="" value="" loading />)}
+                </div>
+                <div className="split-grid">
+                    <div className="card"><div className="skeleton" style={{ height: '240px' }} /></div>
+                    <div className="card"><div className="skeleton" style={{ height: '240px' }} /></div>
                 </div>
             </div>
         );
     }
 
+    const current = funnelList.find(f => f.id === selectedFunnel);
+    const first = funnelMetrics?.steps[0]?.visitors ?? 0;
+
     return (
-        <div>
-            {/* Header */}
-            <div className="flex items-center justify-between" style={{ marginBottom: 'var(--space-xl)' }}>
-                <h1>Conversion Funnels</h1>
-                <Link href="/dashboard/funnels/new" className="btn btn-primary">
-                    <Plus size={18} />
-                    Create Funnel
-                </Link>
-            </div>
+        <div className="page-stack">
+            <PageHeader
+                title="Funnels"
+                subtitle="See where visitors drop off on the way to a goal."
+                actions={createButton}
+            />
 
-            {funnelList.length === 0 ? (
-                // Empty State
-                <div className="card" style={{ textAlign: 'center', padding: 'var(--space-2xl)' }}>
-                    <Target size={48} style={{ color: 'var(--color-text-muted)', marginBottom: 'var(--space-lg)' }} />
-                    <h3 style={{ marginBottom: 'var(--space-sm)' }}>No funnels yet</h3>
-                    <p style={{ marginBottom: 'var(--space-lg)' }}>
-                        Create your first funnel to track conversion paths
+            {listError ? (
+                <div className="card" role="alert" style={{ borderColor: 'var(--color-error)' }}>
+                    <p style={{ fontSize: '0.875rem', color: 'var(--color-error)', margin: 0 }}>
+                        Could not load funnels: {listError}
                     </p>
-                    <Link href="/dashboard/funnels/new" className="btn btn-primary">
-                        <Plus size={18} />
-                        Create Funnel
-                    </Link>
                 </div>
-            ) : (
-                <div className="grid grid-cols-3 gap-lg">
-                    {/* Funnel List */}
-                    <div style={{ gridColumn: 'span 1' }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
-                            {funnelList.map(funnel => (
-                                <div
-                                    key={funnel.id}
-                                    className="card"
-                                    onClick={() => setSelectedFunnel(funnel.id)}
-                                    style={{
-                                        cursor: 'pointer',
-                                        borderColor: selectedFunnel === funnel.id ? 'var(--color-accent-primary)' : undefined
-                                    }}
-                                >
-                                    <div className="flex items-center justify-between" style={{ marginBottom: 'var(--space-sm)' }}>
-                                        <h4>{funnel.name}</h4>
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleDelete(funnel.id);
-                                            }}
-                                            className="btn btn-ghost"
-                                            style={{ padding: 'var(--space-xs)' }}
-                                        >
-                                            <Trash2 size={16} />
-                                        </button>
-                                    </div>
-                                    <p style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-sm)' }}>
-                                        {funnel.description || 'No description'}
-                                    </p>
-                                    <div className="flex items-center gap-sm">
-                                        <span className="badge">{funnel.stepsCount} steps</span>
-                                        <ChevronRight size={16} style={{ color: 'var(--color-text-muted)', marginLeft: 'auto' }} />
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
+            ) : funnelList.length === 0 ? (
+                <ChartCard title="Your funnels">
+                    <div className="empty-note">
+                        No funnels yet. Create one to track a conversion path step by step.
                     </div>
-
-                    {/* Funnel Visualization */}
-                    <div style={{ gridColumn: 'span 2' }}>
-                        {selectedFunnel && funnelMetrics ? (
-                            <div className="card">
-                                <div className="card-header" style={{ marginBottom: 'var(--space-lg)' }}>
-                                    <h4 className="card-title">Funnel Performance</h4>
-                                    <div className="flex items-center gap-md">
-                                        <div style={{ textAlign: 'right' }}>
-                                            <div style={{ fontSize: '1.5rem', fontWeight: 700 }}>
-                                                {funnelMetrics.overallConversionRate}%
-                                            </div>
-                                            <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
-                                                Overall Conversion
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Summary Stats */}
-                                <div className="grid grid-cols-3 gap-md" style={{ marginBottom: 'var(--space-xl)' }}>
-                                    <div style={{
-                                        padding: 'var(--space-md)',
-                                        background: 'var(--color-bg-secondary)',
-                                        borderRadius: 'var(--radius-md)'
-                                    }}>
-                                        <div className="flex items-center gap-sm" style={{ marginBottom: 'var(--space-xs)' }}>
-                                            <Users size={16} style={{ color: 'var(--color-accent-primary)' }} />
-                                            <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>Entered</span>
-                                        </div>
-                                        <div style={{ fontSize: '1.25rem', fontWeight: 600 }}>{funnelMetrics.totalVisitors}</div>
-                                    </div>
-                                    <div style={{
-                                        padding: 'var(--space-md)',
-                                        background: 'var(--color-bg-secondary)',
-                                        borderRadius: 'var(--radius-md)'
-                                    }}>
-                                        <div className="flex items-center gap-sm" style={{ marginBottom: 'var(--space-xs)' }}>
-                                            <Target size={16} style={{ color: 'var(--color-success)' }} />
-                                            <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>Completed</span>
-                                        </div>
-                                        <div style={{ fontSize: '1.25rem', fontWeight: 600 }}>{funnelMetrics.completedFunnel}</div>
-                                    </div>
-                                    <div style={{
-                                        padding: 'var(--space-md)',
-                                        background: 'var(--color-bg-secondary)',
-                                        borderRadius: 'var(--radius-md)'
-                                    }}>
-                                        <div className="flex items-center gap-sm" style={{ marginBottom: 'var(--space-xs)' }}>
-                                            <TrendingDown size={16} style={{ color: 'var(--color-error)' }} />
-                                            <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>Dropped</span>
-                                        </div>
-                                        <div style={{ fontSize: '1.25rem', fontWeight: 600 }}>
-                                            {funnelMetrics.totalVisitors - funnelMetrics.completedFunnel}
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Funnel Steps Visualization */}
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
-                                    {funnelMetrics.steps.map((step, index) => {
-                                        const widthPercent = funnelMetrics.totalVisitors > 0
-                                            ? (step.visitors / funnelMetrics.totalVisitors) * 100
-                                            : 0;
-
-                                        return (
-                                            <div key={step.stepId}>
-                                                <div className="flex items-center justify-between" style={{ marginBottom: 'var(--space-xs)' }}>
-                                                    <div className="flex items-center gap-sm">
-                                                        <span style={{
-                                                            width: '24px',
-                                                            height: '24px',
-                                                            borderRadius: 'var(--radius-full)',
-                                                            background: 'var(--color-accent-gradient)',
-                                                            display: 'flex',
-                                                            alignItems: 'center',
-                                                            justifyContent: 'center',
-                                                            fontSize: '0.75rem',
-                                                            fontWeight: 600
-                                                        }}>
-                                                            {step.order}
-                                                        </span>
-                                                        <span style={{ fontWeight: 500 }}>{step.name}</span>
-                                                    </div>
-                                                    <div className="flex items-center gap-md">
-                                                        <span style={{ fontSize: '0.875rem' }}>{step.visitors} visitors</span>
-                                                        {index > 0 && (
-                                                            <span style={{
-                                                                fontSize: '0.75rem',
-                                                                color: step.dropoffRate > 50 ? 'var(--color-error)' : 'var(--color-text-muted)'
-                                                            }}>
-                                                                {step.dropoffRate.toFixed(1)}% drop
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                                <div style={{
-                                                    height: '32px',
-                                                    background: 'var(--color-bg-secondary)',
-                                                    borderRadius: 'var(--radius-md)',
-                                                    overflow: 'hidden'
-                                                }}>
-                                                    <div style={{
-                                                        height: '100%',
-                                                        width: `${Math.max(widthPercent, 2)}%`,
-                                                        background: index === funnelMetrics.steps.length - 1
-                                                            ? 'var(--color-success)'
-                                                            : 'var(--color-accent-primary)',
-                                                        borderRadius: 'var(--radius-md)',
-                                                        transition: 'width 0.5s ease'
-                                                    }} />
-                                                </div>
-                                                {index < funnelMetrics.steps.length - 1 && (
-                                                    <div style={{
-                                                        display: 'flex',
-                                                        justifyContent: 'center',
-                                                        padding: 'var(--space-xs) 0'
-                                                    }}>
-                                                        <ArrowRight size={16} style={{
-                                                            color: 'var(--color-text-muted)',
-                                                            transform: 'rotate(90deg)'
-                                                        }} />
-                                                    </div>
-                                                )}
-                                            </div>
-                                        );
-                                    })}
-                                </div>
+                </ChartCard>
+            ) : (
+                <div className="split-grid" style={{ alignItems: 'start' }}>
+                    <div className="page-stack" style={{ minWidth: 0 }}>
+                        {!selectedFunnel ? (
+                            <ChartCard title="Funnel">
+                                <div className="empty-note">Select a funnel to see its steps.</div>
+                            </ChartCard>
+                        ) : detailError ? (
+                            <div className="card" role="alert" style={{ borderColor: 'var(--color-error)' }}>
+                                <p style={{ fontSize: '0.875rem', color: 'var(--color-error)', margin: 0 }}>
+                                    Could not load this funnel: {detailError}
+                                </p>
                             </div>
                         ) : (
-                            <div className="card" style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                minHeight: '400px',
-                                color: 'var(--color-text-muted)'
-                            }}>
-                                <div style={{ textAlign: 'center' }}>
-                                    <Target size={48} style={{ marginBottom: 'var(--space-md)', opacity: 0.5 }} />
-                                    <p>Select a funnel to view details</p>
+                            <>
+                                <div className="stat-grid">
+                                    <StatCard label="Entered" icon={Users} loading={detailLoading}
+                                        value={(funnelMetrics?.totalVisitors ?? 0).toLocaleString()} />
+                                    <StatCard label="Completed" icon={Target} loading={detailLoading}
+                                        value={(funnelMetrics?.completedFunnel ?? 0).toLocaleString()} />
+                                    <StatCard label="Dropped" icon={TrendingDown} loading={detailLoading}
+                                        value={((funnelMetrics?.totalVisitors ?? 0) - (funnelMetrics?.completedFunnel ?? 0)).toLocaleString()} />
+                                    <StatCard label="Conversion" icon={Percent} loading={detailLoading}
+                                        value={`${Number(funnelMetrics?.overallConversionRate ?? 0).toFixed(1)}%`}
+                                        hint="Entered to completed" />
                                 </div>
-                            </div>
+
+                                <ChartCard
+                                    flush
+                                    loading={detailLoading}
+                                    title={current?.name ?? 'Funnel'}
+                                    subtitle={funnelMetrics?.periodDays
+                                        ? `Visitors who reached each step, last ${funnelMetrics.periodDays} days`
+                                        : 'Visitors who reached each step'}
+                                >
+                                    {funnelMetrics && funnelMetrics.steps.length > 0 ? (
+                                        <div style={{ overflowX: 'auto' }}>
+                                            <table className="data-table" style={{ marginTop: 6 }}>
+                                                <thead>
+                                                    <tr>
+                                                        <th style={{ paddingLeft: 20 }}>Step</th>
+                                                        <th className="num">Visitors</th>
+                                                        <th className="num" title="Share of the previous step's visitors who reached this one">Step conversion</th>
+                                                        <th className="num" style={{ paddingRight: 20 }}>Drop-off</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {funnelMetrics.steps.map((step, index) => {
+                                                        const width = first > 0 ? Math.max((step.visitors / first) * 100, 1.5) : 0;
+                                                        return (
+                                                            <tr key={step.stepId}>
+                                                                <td style={{ paddingLeft: 20, width: '55%', minWidth: 200 }}>
+                                                                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 8, minHeight: 26, padding: '0 8px' }}>
+                                                                        <span aria-hidden="true" style={{
+                                                                            position: 'absolute', inset: '0 auto 0 0', width: `${width}%`,
+                                                                            background: 'var(--chart-bar)', borderLeft: width > 0 ? '2px solid var(--chart-1)' : undefined,
+                                                                            borderRadius: 4,
+                                                                        }} />
+                                                                        <span style={{ position: 'relative', color: 'var(--color-text-secondary)', fontVariantNumeric: 'tabular-nums', fontSize: '0.75rem' }}>
+                                                                            {index + 1}
+                                                                        </span>
+                                                                        <span style={{ position: 'relative', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={step.name}>
+                                                                            {step.name}
+                                                                        </span>
+                                                                    </div>
+                                                                </td>
+                                                                <td className="num" style={{ fontWeight: 500 }}>{step.visitors.toLocaleString()}</td>
+                                                                <td className="num">{index === 0 ? <span className="muted">—</span> : `${step.conversionRate.toFixed(1)}%`}</td>
+                                                                <td className="num muted" style={{ paddingRight: 20 }}>
+                                                                    {index === 0 ? '—' : `${step.dropoffs.toLocaleString()} (${step.dropoffRate.toFixed(1)}%)`}
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    ) : (
+                                        <div className="empty-note">This funnel has no steps.</div>
+                                    )}
+                                </ChartCard>
+                            </>
                         )}
                     </div>
+
+                    <ChartCard flush title="Your funnels" subtitle={`${funnelList.length} ${funnelList.length === 1 ? 'funnel' : 'funnels'}`}>
+                        <ul style={{ listStyle: 'none', margin: '10px 0 0', padding: 0, borderTop: '1px solid var(--color-border)' }}>
+                            {funnelList.map(funnel => {
+                                const active = selectedFunnel === funnel.id;
+                                return (
+                                    <li
+                                        key={funnel.id}
+                                        style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            borderBottom: '1px solid var(--color-border)',
+                                            background: active ? 'var(--color-bg-hover)' : undefined,
+                                            boxShadow: active ? 'inset 2px 0 0 var(--color-accent-primary)' : undefined,
+                                        }}
+                                    >
+                                        <button
+                                            type="button"
+                                            onClick={() => setSelectedFunnel(funnel.id)}
+                                            aria-current={active ? 'true' : undefined}
+                                            style={{
+                                                flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1,
+                                                padding: '8px 4px 8px 16px', background: 'transparent', border: 'none',
+                                                cursor: 'pointer', textAlign: 'left', color: 'var(--color-text-primary)',
+                                            }}
+                                        >
+                                            <span style={{ fontSize: '0.8125rem', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                {funnel.name}
+                                            </span>
+                                            <span style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                {funnel.stepsCount} {funnel.stepsCount === 1 ? 'step' : 'steps'}
+                                                {funnel.description ? ` · ${funnel.description}` : ''}
+                                            </span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleDelete(funnel.id)}
+                                            className="btn btn-ghost"
+                                            aria-label={`Delete funnel ${funnel.name}`}
+                                            title="Delete funnel"
+                                            style={{ padding: 6, marginRight: 10, color: 'var(--color-text-secondary)' }}
+                                        >
+                                            <Trash2 size={14} />
+                                        </button>
+                                    </li>
+                                );
+                            })}
+                        </ul>
+                    </ChartCard>
                 </div>
             )}
         </div>

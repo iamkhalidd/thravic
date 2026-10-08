@@ -5,14 +5,11 @@ import { useSearchParams } from 'next/navigation';
 import { UsageMeters } from '@/components/UsageMeters';
 import { CountrySelect } from '@/components/CountrySelect';
 import { countryError, phoneError, websiteError } from '@/lib/profile';
-import { shortDate, TONE_COLORS, type BillingState, type UsageMeter as UsageMeterData } from '@/lib/usage';
+import { shortDate, type BillingState, type UsageMeter as UsageMeterData } from '@/lib/usage';
 import {
-    Settings,
-    User,
-    CreditCard,
     Shield,
     Download,
-    Bell,
+    Tag,
     Trash2,
     Save,
     Check,
@@ -20,11 +17,12 @@ import {
     Loader,
     AlertCircle,
     X,
-    Lock,
     Mail,
 } from 'lucide-react';
 import { auth, exportData, formatPlanPrice, payments, planPeriod, type ExportType } from '@/lib/api';
 import { useDomain } from '@/contexts/DomainContext';
+import { PageHeader } from '@/components/PageHeader';
+import { ChartCard } from '@/components/ChartCard';
 
 // Marketing copy for each plan. Names and prices are replaced by the API's
 // (the price checkout actually charges); these values are only the fallback.
@@ -278,16 +276,17 @@ function SettingsPageInner() {
     };
 
     const tabs = [
-        { id: 'account', label: 'Account', icon: User },
-        { id: 'subscription', label: 'Subscription', icon: CreditCard },
-        { id: 'notifications', label: 'Notifications', icon: Bell },
-        { id: 'export', label: 'Export Data', icon: Download },
-    ];
+        { id: 'account', label: 'Account' },
+        { id: 'subscription', label: 'Plan & usage' },
+        { id: 'notifications', label: 'Notifications' },
+        { id: 'export', label: 'Export data' },
+    ] as const;
 
     if (loading) {
         return (
-            <div>
-                <div className="skeleton" style={{ height: '40px', width: '200px', marginBottom: 'var(--space-xl)' }} />
+            <div className="page-stack">
+                <div className="skeleton" style={{ height: '28px', width: '180px' }} />
+                <div className="skeleton" style={{ height: '34px', width: '420px', maxWidth: '100%' }} />
                 <div className="card">
                     <div className="skeleton" style={{ height: '400px' }} />
                 </div>
@@ -302,318 +301,297 @@ function SettingsPageInner() {
         : user?.avatar_url;
 
     return (
-        <div>
-            <h1 style={{ marginBottom: 'var(--space-xl)' }}>Settings</h1>
+        <div className="page-stack">
+            <PageHeader title="Settings" subtitle="Your account, plan, notifications and data exports." />
 
-            <div className="grid grid-cols-4 gap-lg">
-                {/* Sidebar */}
-                <div>
-                    <nav style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-xs)' }}>
-                        {tabs.map(tab => (
-                            <button
-                                key={tab.id}
-                                onClick={() => setActiveTab(tab.id as any)}
-                                style={{
-                                    display: 'flex', alignItems: 'center', gap: 'var(--space-sm)',
-                                    padding: 'var(--space-sm) var(--space-md)',
-                                    background: activeTab === tab.id ? 'var(--color-bg-hover)' : 'transparent',
-                                    border: 'none', borderRadius: 'var(--radius-md)',
-                                    color: activeTab === tab.id ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
-                                    cursor: 'pointer', fontSize: '0.875rem', textAlign: 'left',
-                                }}
-                            >
-                                <tab.icon size={18} />
-                                {tab.label}
-                            </button>
-                        ))}
-                    </nav>
-                </div>
+            <div className="segmented" role="tablist" aria-label="Settings sections" style={{ alignSelf: 'flex-start', maxWidth: '100%', overflowX: 'auto' }}>
+                {tabs.map(tab => (
+                    <button
+                        key={tab.id}
+                        type="button"
+                        role="tab"
+                        id={`settings-tab-${tab.id}`}
+                        aria-selected={activeTab === tab.id}
+                        aria-controls="settings-panel"
+                        onClick={() => setActiveTab(tab.id)}
+                        style={{ whiteSpace: 'nowrap' }}
+                    >
+                        {tab.label}
+                    </button>
+                ))}
+            </div>
 
-                {/* Content */}
-                <div style={{ gridColumn: 'span 3' }}>
+            <div id="settings-panel" role="tabpanel" aria-labelledby={`settings-tab-${activeTab}`} className="page-stack">
 
-                    {/* ── Account Tab ── */}
-                    {activeTab === 'account' && (
-                        <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-xl)' }}>
-                            <h3 style={{ margin: 0 }}>Account Settings</h3>
-
-                            {/* Avatar Section */}
-                            <div>
-                                <h4 style={{ marginBottom: 'var(--space-md)', fontSize: '1rem' }}>Profile Picture</h4>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-lg)' }}>
+                {/* ── Account Tab ── */}
+                {activeTab === 'account' && (
+                    <>
+                        <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                            {/* Avatar */}
+                            <section>
+                                <h2 style={sectionTitle}>Profile picture</h2>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
                                     <div style={{ position: 'relative' }}>
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
                                         <img
                                             src={avatarSrc}
                                             alt={user?.name || 'User'}
                                             style={{
-                                                width: '80px', height: '80px', borderRadius: '50%',
+                                                width: '56px', height: '56px', borderRadius: '50%',
                                                 objectFit: 'cover', border: '1px solid var(--color-border)',
                                                 opacity: avatarUploading ? 0.5 : 1
                                             }}
                                         />
                                         {avatarUploading && (
                                             <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>
-                                                <Loader size={20} className="spin" color="var(--color-accent-primary)" />
+                                                <Loader size={18} className="spin" color="var(--color-text-primary)" />
                                             </div>
                                         )}
                                     </div>
-                                    <div style={{ display: 'flex', gap: 'var(--space-sm)' }}>
+                                    <div style={{ display: 'flex', gap: 8 }}>
                                         <div>
                                             <input type="file" id="avatarUpload" accept="image/*" onChange={handleAvatarUpload} style={{ display: 'none' }} />
                                             <label htmlFor="avatarUpload" className="btn btn-secondary" style={{ cursor: 'pointer' }}>
                                                 Change
                                             </label>
                                         </div>
-                                        <button onClick={handleAvatarRemove} className="btn" style={{ border: '1px solid var(--color-border)' }}>
+                                        <button onClick={handleAvatarRemove} className="btn btn-ghost">
                                             Remove
                                         </button>
                                     </div>
                                 </div>
-                            </div>
+                            </section>
 
-                            <hr style={{ border: 'none', borderTop: '1px solid var(--color-border)' }} />
+                            <hr style={divider} />
 
-                            {/* Connected Accounts Section */}
-                            <div>
-                                <h4 style={{ marginBottom: 'var(--space-md)', fontSize: '1rem' }}>Connected Accounts</h4>
+                            {/* Connected account */}
+                            <section>
+                                <h2 style={sectionTitle}>Sign-in method</h2>
                                 <div style={{
-                                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                                    padding: 'var(--space-md)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)'
+                                    display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+                                    padding: '10px 12px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)'
                                 }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
                                         {user?.auth_provider === 'github' ? (
-                                            <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" strokeWidth="2" fill="none"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path></svg>
+                                            <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" strokeWidth="2" fill="none" aria-hidden="true"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path></svg>
                                         ) : user?.auth_provider === 'google' ? (
-                                            <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" strokeWidth="2" fill="none"><circle cx="12" cy="12" r="10"></circle><path d="M12 8v8"></path><path d="M8 12h8"></path></svg>
+                                            <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" strokeWidth="2" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M12 8v8"></path><path d="M8 12h8"></path></svg>
                                         ) : (
-                                            <Mail size={24} color="var(--color-text-secondary)" />
+                                            <Mail size={20} color="var(--color-text-secondary)" aria-hidden="true" />
                                         )}
-                                        <div>
-                                            <div style={{ fontWeight: 500, textTransform: 'capitalize' }}>{user?.auth_provider || 'Email'}</div>
-                                            <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)' }}>{user?.email}</div>
+                                        <div style={{ minWidth: 0 }}>
+                                            <div style={{ fontWeight: 500, fontSize: '0.875rem', textTransform: 'capitalize' }}>{user?.auth_provider || 'Email'}</div>
+                                            <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user?.email}</div>
                                         </div>
                                     </div>
-                                    <span style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)', background: 'var(--color-bg-hover)', padding: '2px 8px', borderRadius: '12px' }}>Active Provider</span>
+                                    <span className="badge">Active</span>
                                 </div>
-                            </div>
+                            </section>
 
-                            <hr style={{ border: 'none', borderTop: '1px solid var(--color-border)' }} />
+                            <hr style={divider} />
 
-                            {/* Personal Information */}
-                            <div>
-                                <h4 style={{ marginBottom: 'var(--space-md)', fontSize: '1rem' }}>Personal Information</h4>
-                                <div className="grid grid-cols-2 gap-md">
+                            {/* Personal information */}
+                            <section>
+                                <h2 style={sectionTitle}>Personal information</h2>
+                                <div className="grid grid-cols-2" style={{ gap: 12 }}>
                                     <div>
-                                        <label htmlFor="pf-name" style={{ display: 'block', marginBottom: 'var(--space-xs)', fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>Full Name <span aria-hidden="true" style={{ color: '#ef4444' }}>*</span></label>
+                                        <label htmlFor="pf-name" style={fieldLabel}>Full name <span aria-hidden="true" style={{ color: 'var(--color-error)' }}>*</span></label>
                                         <input id="pf-name" type="text" className="input" value={name} onChange={e => setName(e.target.value)} required autoComplete="name" />
                                     </div>
                                     <div>
-                                        <label style={{ display: 'block', marginBottom: 'var(--space-xs)', fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>Email Address</label>
-                                        <input type="email" className="input" value={email} disabled style={{ opacity: 0.7, cursor: 'not-allowed' }} title="Change email via support" />
+                                        <label htmlFor="pf-email" style={fieldLabel}>Email address</label>
+                                        <input id="pf-email" type="email" className="input" value={email} disabled style={{ opacity: 0.7, cursor: 'not-allowed' }} title="Change email via support" />
                                     </div>
                                     <div>
-                                        <label htmlFor="pf-phone" style={{ display: 'block', marginBottom: 'var(--space-xs)', fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>Phone Number <span aria-hidden="true" style={{ color: '#ef4444' }}>*</span></label>
+                                        <label htmlFor="pf-phone" style={fieldLabel}>Phone number <span aria-hidden="true" style={{ color: 'var(--color-error)' }}>*</span></label>
                                         <input id="pf-phone" type="tel" className="input" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+234 803 123 4567" required autoComplete="tel" />
                                     </div>
                                     <div>
-                                        <label htmlFor="pf-dob" style={{ display: 'block', marginBottom: 'var(--space-xs)', fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>Date of Birth</label>
+                                        <label htmlFor="pf-dob" style={fieldLabel}>Date of birth</label>
                                         <input id="pf-dob" type="date" className="input" value={user?.date_of_birth || ''} disabled style={{ opacity: 0.7, cursor: 'not-allowed' }} title="Contact support to correct your date of birth" />
                                     </div>
                                 </div>
-                            </div>
+                            </section>
 
-                            {/* Organization & Work */}
-                            <div>
-                                <h4 style={{ marginBottom: 'var(--space-md)', fontSize: '1rem' }}>Organization & Work</h4>
-                                <div className="grid grid-cols-2 gap-md">
+                            {/* Organization & work */}
+                            <section>
+                                <h2 style={sectionTitle}>Organization and work</h2>
+                                <div className="grid grid-cols-2" style={{ gap: 12 }}>
                                     <div>
-                                        <label style={{ display: 'block', marginBottom: 'var(--space-xs)', fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>Company <span style={{ opacity: 0.5 }}>(optional)</span></label>
-                                        <input type="text" className="input" value={company} onChange={e => setCompany(e.target.value)} />
+                                        <label htmlFor="pf-company" style={fieldLabel}>Company <span style={optional}>(optional)</span></label>
+                                        <input id="pf-company" type="text" className="input" value={company} onChange={e => setCompany(e.target.value)} />
                                     </div>
                                     <div>
-                                        <label style={{ display: 'block', marginBottom: 'var(--space-xs)', fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>Job Title <span style={{ opacity: 0.5 }}>(optional)</span></label>
-                                        <input type="text" className="input" value={jobTitle} onChange={e => setJobTitle(e.target.value)} />
+                                        <label htmlFor="pf-job" style={fieldLabel}>Job title <span style={optional}>(optional)</span></label>
+                                        <input id="pf-job" type="text" className="input" value={jobTitle} onChange={e => setJobTitle(e.target.value)} />
                                     </div>
-                                    <div style={{ gridColumn: 'span 2' }}>
-                                        <label style={{ display: 'block', marginBottom: 'var(--space-xs)', fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>Website URL <span style={{ opacity: 0.5 }}>(optional)</span></label>
-                                        <input type="url" className="input" value={website} onChange={e => setWebsite(e.target.value)} placeholder="https://" />
+                                    <div style={{ gridColumn: '1 / -1' }}>
+                                        <label htmlFor="pf-website" style={fieldLabel}>Website URL <span style={optional}>(optional)</span></label>
+                                        <input id="pf-website" type="url" className="input" value={website} onChange={e => setWebsite(e.target.value)} placeholder="https://" />
                                     </div>
                                 </div>
-                            </div>
+                            </section>
 
-                            {/* Demographics */}
-                            <div>
-                                <h4 style={{ marginBottom: 'var(--space-md)', fontSize: '1rem' }}>Demographics</h4>
-                                <div className="grid grid-cols-2 gap-md">
+                            {/* Location */}
+                            <section>
+                                <h2 style={sectionTitle}>Location</h2>
+                                <div className="grid grid-cols-2" style={{ gap: 12 }}>
                                     <div>
-                                        <label htmlFor="pf-country" style={{ display: 'block', marginBottom: 'var(--space-xs)', fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>Country <span aria-hidden="true" style={{ color: '#ef4444' }}>*</span></label>
+                                        <label htmlFor="pf-country" style={fieldLabel}>Country <span aria-hidden="true" style={{ color: 'var(--color-error)' }}>*</span></label>
                                         <CountrySelect id="pf-country" value={country} onChange={setCountry} required />
                                     </div>
                                     <div>
-                                        <label style={{ display: 'block', marginBottom: 'var(--space-xs)', fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>Timezone</label>
-                                        <select className="input" value={timezone} onChange={e => setTimezone(e.target.value)}>
-                                            <option value="">Select Timezone</option>
+                                        <label htmlFor="pf-timezone" style={fieldLabel}>Timezone</label>
+                                        <select id="pf-timezone" className="input" value={timezone} onChange={e => setTimezone(e.target.value)}>
+                                            <option value="">Select timezone</option>
                                             {Intl.supportedValuesOf?.('timeZone').map(tz => (
                                                 <option key={tz} value={tz}>{tz}</option>
                                             ))}
                                         </select>
                                     </div>
                                 </div>
-                            </div>
+                            </section>
 
-                            <div>
-                                {profileError && (
-                                    <p role="alert" style={{ color: '#ef4444', fontSize: '0.875rem', marginBottom: 'var(--space-sm)' }}>{profileError}</p>
-                                )}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                                 <button onClick={handleSaveProfile} className="btn btn-primary" disabled={saving}>
-                                    {saved ? <Check size={18} /> : <Save size={18} />}
-                                    {saving ? 'Saving...' : saved ? 'Saved!' : 'Save Profile'}
+                                    {saved ? <Check size={16} /> : <Save size={16} />}
+                                    {saving ? 'Saving…' : saved ? 'Saved' : 'Save profile'}
                                 </button>
-                            </div>
-
-                            <hr style={{ border: 'none', borderTop: '1px solid var(--color-border)' }} />
-
-                            <div>
-                                <h4 style={{ color: 'var(--color-error)' }}>Danger Zone</h4>
-                                <p style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-md)' }}>
-                                    Permanently delete your account and all associated traffic data. This action cannot be undone.
-                                </p>
-                                <button className="btn" style={{ background: 'rgba(239, 68, 68, 0.1)', color: 'var(--color-error)', border: '1px solid var(--color-error)' }}>
-                                    <Trash2 size={18} />
-                                    Delete Account
-                                </button>
+                                {profileError && (
+                                    <p role="alert" style={{ color: 'var(--color-error)', fontSize: '0.8125rem', margin: 0 }}>{profileError}</p>
+                                )}
                             </div>
                         </div>
-                    )}
 
-                    {/* ── Subscription Tab ── */}
-                    {activeTab === 'subscription' && (
-                        <div>
-                            {/* Payment success banner */}
-                            {paymentSuccess && (
-                                <div style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 'var(--space-sm)',
-                                    padding: 'var(--space-md) var(--space-lg)',
-                                    background: 'rgba(34, 197, 94, 0.12)',
-                                    border: '1px solid rgba(34, 197, 94, 0.4)',
-                                    borderRadius: 'var(--radius-md)',
-                                    marginBottom: 'var(--space-lg)',
-                                    color: '#22c55e',
-                                    fontWeight: 500,
-                                }}>
-                                    <Check size={18} />
-                                    <span>
-                                        Payment successful! Your account has been upgraded to the{' '}
-                                        <strong style={{ textTransform: 'capitalize' }}>{paymentSuccess}</strong> plan.
-                                    </span>
-                                    <button
-                                        onClick={() => setPaymentSuccess(null)}
-                                        style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'inherit' }}
-                                    >
-                                        <X size={16} />
-                                    </button>
-                                </div>
-                            )}
+                        <div className="card" style={{ borderColor: 'var(--color-error)' }}>
+                            <h2 className="card-title" style={{ color: 'var(--color-error)' }}>Delete account</h2>
+                            <p className="card-subtitle" style={{ marginBottom: 12 }}>
+                                Permanently delete your account and all associated traffic data. This action cannot be undone.
+                            </p>
+                            <button className="btn" style={{ background: 'transparent', color: 'var(--color-error)', border: '1px solid var(--color-error)' }}>
+                                <Trash2 size={16} />
+                                Delete account
+                            </button>
+                        </div>
+                    </>
+                )}
 
-                            {/* Error banner */}
-                            {upgradeError && (
-                                <div style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 'var(--space-sm)',
-                                    padding: 'var(--space-md) var(--space-lg)',
-                                    background: 'rgba(239, 68, 68, 0.1)',
-                                    border: '1px solid rgba(239, 68, 68, 0.35)',
-                                    borderRadius: 'var(--radius-md)',
-                                    marginBottom: 'var(--space-lg)',
-                                    color: 'var(--color-error)',
-                                    fontWeight: 500,
-                                }}>
-                                    <AlertCircle size={18} />
-                                    <span style={{ flex: 1 }}>{upgradeError}</span>
-                                    <button
-                                        onClick={() => setUpgradeError(null)}
-                                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit' }}
-                                    >
-                                        <X size={16} />
-                                    </button>
-                                </div>
-                            )}
-
-                            {/* Current Plan */}
-                            <div className="card" style={{ marginBottom: 'var(--space-lg)' }}>
-                                <div className="flex items-center justify-between" style={{ marginBottom: 'var(--space-md)' }}>
-                                    <h3>Current Plan</h3>
-                                    <span className="badge">
-                                        <Crown size={12} style={{ marginRight: '4px' }} />
-                                        {currentPlan.charAt(0).toUpperCase() + currentPlan.slice(1)}
-                                    </span>
-                                </div>
-                                <p style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
-                                    {currentPlan === 'free'
-                                        ? 'You are on the Free plan. Upgrade to unlock more features.'
-                                        : `You have access to all ${currentPlan} features.`}
-                                </p>
-                                <p style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', marginTop: 'var(--space-xs)' }}>
-                                    Payments are securely processed by <strong>Paystack</strong> in NGN.
-                                </p>
-
-                                {current?.currentPeriodEnd && current.state === 'active' && (
-                                    <p style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)', marginTop: 'var(--space-xs)' }}>
-                                        Active until {shortDate(current.currentPeriodEnd)}. Plans don&apos;t renew automatically;
-                                        we email you a week before. Renewing early adds a month to this date.
-                                    </p>
-                                )}
-                                {current?.state === 'grace' && current.currentPeriodEnd && current.graceEndsAt && (
-                                    <p style={{ fontSize: '0.8rem', color: TONE_COLORS.warn, marginTop: 'var(--space-xs)' }}>
-                                        Your {current.paidPlanName} plan ended on {shortDate(current.currentPeriodEnd)}.
-                                        Renew by {shortDate(current.graceEndsAt)} to keep its features.
-                                    </p>
-                                )}
-
-                                {meters && <UsageMeters meters={meters} />}
-                            </div>
-
-                            {/* Promo code input */}
-                            <div style={{ marginBottom: 'var(--space-md)' }}>
+                {/* ── Subscription Tab ── */}
+                {activeTab === 'subscription' && (
+                    <>
+                        {/* Payment success banner */}
+                        {paymentSuccess && (
+                            <div role="status" className="card" style={{
+                                display: 'flex', alignItems: 'center', gap: 8, padding: '12px 16px',
+                                borderColor: 'var(--color-success)', color: 'var(--color-success)', fontSize: '0.875rem', fontWeight: 500,
+                            }}>
+                                <Check size={16} aria-hidden="true" />
+                                <span>
+                                    Payment successful. Your account has been upgraded to the{' '}
+                                    <strong style={{ textTransform: 'capitalize' }}>{paymentSuccess}</strong> plan.
+                                </span>
                                 <button
-                                    className="btn btn-ghost btn-sm"
-                                    onClick={() => setShowPromoInput(!showPromoInput)}
-                                    style={{ fontSize: '0.85rem', padding: '4px 0' }}
+                                    onClick={() => setPaymentSuccess(null)}
+                                    aria-label="Dismiss"
+                                    style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'inherit' }}
                                 >
-                                    {showPromoInput ? '✕ Close' : '🏷️ Have a promo code?'}
+                                    <X size={16} />
                                 </button>
-                                {showPromoInput && (
-                                    <div style={{ display: 'flex', gap: '8px', marginTop: '8px', alignItems: 'center' }}>
-                                        <input
-                                            className="input"
-                                            value={promoCode}
-                                            placeholder="Enter promo code"
-                                            style={{ maxWidth: '200px', textTransform: 'uppercase' }}
-                                            onChange={e => { setPromoCode(e.target.value.toUpperCase()); setPromoResult(null); }}
-                                        />
-                                        <button
-                                            className="btn btn-secondary btn-sm"
-                                            disabled={!promoCode.trim() || validatingPromo}
-                                            onClick={() => validatePromo('pro')}
-                                        >
-                                            {validatingPromo ? 'Checking...' : 'Apply'}
-                                        </button>
-                                        {promoResult && (
-                                            <span style={{ fontSize: '0.85rem', color: promoResult.valid ? '#00d68f' : '#ff5555' }}>
-                                                {promoResult.valid
-                                                    ? `✓ ${promoResult.discount_type === 'percentage' ? `${promoResult.discount_value}% off` : `₦${promoResult.discount_value?.toLocaleString()} off`}`
-                                                    : promoResult.error}
-                                            </span>
-                                        )}
-                                    </div>
-                                )}
                             </div>
+                        )}
 
-                            {/* Plan Cards */}
-                            <div className="gap-md" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+                        {/* Error banner */}
+                        {upgradeError && (
+                            <div role="alert" className="card" style={{
+                                display: 'flex', alignItems: 'center', gap: 8, padding: '12px 16px',
+                                borderColor: 'var(--color-error)', color: 'var(--color-error)', fontSize: '0.875rem', fontWeight: 500,
+                            }}>
+                                <AlertCircle size={16} aria-hidden="true" />
+                                <span style={{ flex: 1 }}>{upgradeError}</span>
+                                <button
+                                    onClick={() => setUpgradeError(null)}
+                                    aria-label="Dismiss"
+                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit' }}
+                                >
+                                    <X size={16} />
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Current plan and usage */}
+                        <ChartCard
+                            title="Current plan"
+                            subtitle={currentPlan === 'free'
+                                ? 'You are on the Free plan. Upgrade to unlock more features.'
+                                : `You have access to all ${currentPlan} features.`}
+                            action={
+                                <span className="badge" style={{ gap: 4 }}>
+                                    <Crown size={12} aria-hidden="true" />
+                                    {currentPlan.charAt(0).toUpperCase() + currentPlan.slice(1)}
+                                </span>
+                            }
+                        >
+                            {current?.currentPeriodEnd && current.state === 'active' && (
+                                <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)' }}>
+                                    Active until {shortDate(current.currentPeriodEnd)}. Plans don&apos;t renew automatically;
+                                    we email you a week before. Renewing early adds a month to this date.
+                                </p>
+                            )}
+                            {current?.state === 'grace' && current.currentPeriodEnd && current.graceEndsAt && (
+                                <p style={{ fontSize: '0.8125rem', color: 'var(--color-warning)' }}>
+                                    Your {current.paidPlanName} plan ended on {shortDate(current.currentPeriodEnd)}.
+                                    Renew by {shortDate(current.graceEndsAt)} to keep its features.
+                                </p>
+                            )}
+
+                            {meters && <UsageMeters meters={meters} />}
+                        </ChartCard>
+
+                        {/* Plans */}
+                        <ChartCard
+                            title="Plans"
+                            subtitle="Payments are securely processed by Paystack in NGN."
+                            action={
+                                <button
+                                    className="btn btn-ghost"
+                                    onClick={() => setShowPromoInput(!showPromoInput)}
+                                    aria-expanded={showPromoInput}
+                                    style={{ fontSize: '0.8125rem', padding: '4px 8px' }}
+                                >
+                                    {showPromoInput ? <X size={14} /> : <Tag size={14} />}
+                                    {showPromoInput ? 'Close' : 'Promo code'}
+                                </button>
+                            }
+                        >
+                            {showPromoInput && (
+                                <div style={{ display: 'flex', gap: 8, marginBottom: 14, alignItems: 'center', flexWrap: 'wrap' }}>
+                                    <input
+                                        className="input"
+                                        value={promoCode}
+                                        aria-label="Promo code"
+                                        placeholder="Enter promo code"
+                                        style={{ maxWidth: '200px', textTransform: 'uppercase' }}
+                                        onChange={e => { setPromoCode(e.target.value.toUpperCase()); setPromoResult(null); }}
+                                    />
+                                    <button
+                                        className="btn btn-secondary"
+                                        disabled={!promoCode.trim() || validatingPromo}
+                                        onClick={() => validatePromo('pro')}
+                                    >
+                                        {validatingPromo ? 'Checking…' : 'Apply'}
+                                    </button>
+                                    {promoResult && (
+                                        <span role="status" style={{ fontSize: '0.8125rem', display: 'inline-flex', alignItems: 'center', gap: 4, color: promoResult.valid ? 'var(--color-success)' : 'var(--color-error)' }}>
+                                            {promoResult.valid ? <Check size={14} aria-hidden="true" /> : <AlertCircle size={14} aria-hidden="true" />}
+                                            {promoResult.valid
+                                                ? (promoResult.discount_type === 'percentage' ? `${promoResult.discount_value}% off` : `₦${promoResult.discount_value?.toLocaleString()} off`)
+                                                : promoResult.error}
+                                        </span>
+                                    )}
+                                </div>
+                            )}
+
+                            <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
                                 {plans.map(plan => {
                                     const isCurrent = plan.id === currentPlan;
                                     const isFree = plan.price <= 0;
@@ -622,20 +600,25 @@ function SettingsPageInner() {
                                     return (
                                         <div
                                             key={plan.id}
-                                            className="card"
                                             style={{
-                                                borderColor: isCurrent ? 'var(--color-text-primary)' : undefined,
-                                                position: 'relative',
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                padding: 16,
+                                                border: `1px solid ${isCurrent ? 'var(--color-text-primary)' : 'var(--color-border)'}`,
+                                                borderRadius: 'var(--radius-md)',
                                                 opacity: upgradingPlan && !isLoading ? 0.7 : 1,
                                                 transition: 'opacity 0.2s',
                                             }}
                                         >
-                                            <h4 style={{ marginBottom: 'var(--space-sm)' }}>{plan.name}</h4>
-                                            <div style={{ marginBottom: 'var(--space-md)' }}>
-                                                <span style={{ fontSize: '2rem', fontWeight: 700 }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 4, minHeight: 22 }}>
+                                                <h3 style={{ fontSize: '0.875rem', fontWeight: 600 }}>{plan.name}</h3>
+                                                {isCurrent && <span className="badge">Current</span>}
+                                            </div>
+                                            <div style={{ marginBottom: 12 }}>
+                                                <span style={{ fontSize: '1.5rem', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
                                                     {formatPlanPrice(plan.price, plan.currency)}
                                                 </span>
-                                                <span style={{ color: 'var(--color-text-muted)' }}>
+                                                <span style={{ color: 'var(--color-text-secondary)', fontSize: '0.8125rem' }}>
                                                     {planPeriod({ price: plan.price, interval: plan.interval as 'monthly' | 'yearly' })}
                                                 </span>
                                             </div>
@@ -643,14 +626,15 @@ function SettingsPageInner() {
                                             <ul style={{
                                                 listStyle: 'none',
                                                 padding: 0,
-                                                marginBottom: 'var(--space-lg)',
+                                                margin: '0 0 16px',
                                                 display: 'flex',
                                                 flexDirection: 'column',
-                                                gap: 'var(--space-sm)',
+                                                gap: 6,
+                                                flex: 1,
                                             }}>
                                                 {plan.features.map((feature, i) => (
-                                                    <li key={i} className="flex items-center gap-sm" style={{ fontSize: '0.875rem' }}>
-                                                        <Check size={14} style={{ color: 'var(--color-success)', flexShrink: 0 }} />
+                                                    <li key={i} className="flex items-center gap-sm" style={{ fontSize: '0.8125rem' }}>
+                                                        <Check size={14} aria-hidden="true" style={{ color: 'var(--color-success)', flexShrink: 0 }} />
                                                         {feature}
                                                     </li>
                                                 ))}
@@ -658,19 +642,19 @@ function SettingsPageInner() {
 
                                             <button
                                                 className={`btn ${isCurrent || isFree ? 'btn-secondary' : 'btn-primary'}`}
-                                                style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
+                                                style={{ width: '100%', justifyContent: 'center' }}
                                                 disabled={isCurrent || isFree || !!upgradingPlan}
                                                 onClick={() => !isCurrent && !isFree && handleUpgrade(plan.id)}
                                             >
                                                 {isLoading ? (
                                                     <>
                                                         <Loader size={16} style={{ animation: 'spin 1s linear infinite' }} />
-                                                        Redirecting...
+                                                        Redirecting…
                                                     </>
                                                 ) : isCurrent ? (
-                                                    'Current Plan'
+                                                    'Current plan'
                                                 ) : isFree ? (
-                                                    'Free Forever'
+                                                    'Free forever'
                                                 ) : (
                                                     `Upgrade — ${formatPlanPrice(plan.price, plan.currency)}${planPeriod({ price: plan.price, interval: plan.interval as 'monthly' | 'yearly' })}`
                                                 )}
@@ -679,52 +663,40 @@ function SettingsPageInner() {
                                     );
                                 })}
                             </div>
+                        </ChartCard>
+                    </>
+                )}
 
-                            {/* Paystack badge */}
-                            <p style={{
-                                marginTop: 'var(--space-lg)',
-                                fontSize: '0.8rem',
-                                color: 'var(--color-text-muted)',
-                                textAlign: 'center',
-                            }}>
-                                Payments are securely processed by <strong>Paystack</strong> in NGN.
-                            </p>
-                        </div>
-                    )}
-
-                    {/* ── Notifications Tab ── */}
-                    {activeTab === 'notifications' && (
-                        <div className="card">
-                            <h3 style={{ marginBottom: 'var(--space-lg)' }}>Notification Preferences</h3>
-
-                            {Object.entries(notifications).map(([key, value]) => (
+                {/* ── Notifications Tab ── */}
+                {activeTab === 'notifications' && (
+                    <ChartCard flush title="Email notifications" subtitle="Choose which emails you receive.">
+                        <div style={{ marginTop: 10, borderTop: '1px solid var(--color-border)' }}>
+                            {Object.entries(notifications).map(([key, value], index, all) => (
                                 <div
                                     key={key}
                                     className="flex items-center justify-between"
-                                    style={{ padding: 'var(--space-md) 0', borderBottom: '1px solid var(--color-border)' }}
+                                    style={{ gap: 12, padding: '12px 20px', borderBottom: index < all.length - 1 ? '1px solid var(--color-border)' : undefined }}
                                 >
-                                    <div>
-                                        <div style={{ fontWeight: 500 }}>
-                                            {key === 'weeklyReport' && 'Weekly Report'}
-                                            {key === 'trafficAlerts' && 'Traffic Alerts'}
-                                            {key === 'insightAlerts' && 'AI Insight Alerts'}
-                                            {key === 'productUpdates' && 'Product Updates'}
+                                    <div style={{ minWidth: 0 }}>
+                                        <div id={`notif-${key}`} style={{ fontWeight: 500, fontSize: '0.875rem' }}>
+                                            {NOTIFICATION_COPY[key]?.label ?? key}
                                         </div>
-                                        <div style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>
-                                            {key === 'weeklyReport' && 'Receive a summary of your analytics every week'}
-                                            {key === 'trafficAlerts' && 'Get notified of significant traffic changes'}
-                                            {key === 'insightAlerts' && 'Receive high-priority AI insights via email'}
-                                            {key === 'productUpdates' && 'Stay updated on new features and improvements'}
+                                        <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)', marginTop: 2 }}>
+                                            {NOTIFICATION_COPY[key]?.description}
                                         </div>
                                     </div>
                                     <button
+                                        type="button"
+                                        role="switch"
+                                        aria-checked={value}
+                                        aria-labelledby={`notif-${key}`}
                                         onClick={() => setNotifications(prev => ({ ...prev, [key]: !value }))}
                                         style={{
-                                            width: '48px',
-                                            height: '24px',
+                                            width: '40px',
+                                            height: '22px',
                                             borderRadius: 'var(--radius-full)',
                                             background: value ? 'var(--color-text-primary)' : 'var(--color-bg-tertiary)',
-                                            border: 'none',
+                                            border: '1px solid var(--color-border)',
                                             cursor: 'pointer',
                                             position: 'relative',
                                             transition: 'background var(--transition-fast)',
@@ -734,71 +706,62 @@ function SettingsPageInner() {
                                         <span style={{
                                             position: 'absolute',
                                             top: '2px',
-                                            left: value ? '26px' : '2px',
-                                            width: '20px',
-                                            height: '20px',
+                                            left: value ? '20px' : '2px',
+                                            width: '16px',
+                                            height: '16px',
                                             borderRadius: 'var(--radius-full)',
-                                            background: value ? '#000' : 'white',
+                                            background: value ? 'var(--color-bg-primary)' : 'var(--color-text-muted)',
                                             transition: 'left var(--transition-fast)',
                                         }} />
                                     </button>
                                 </div>
                             ))}
                         </div>
-                    )}
+                    </ChartCard>
+                )}
 
-                    {/* ── Export Tab ── */}
-                    {activeTab === 'export' && (
-                        <div className="card">
-                            <h3 style={{ marginBottom: 'var(--space-md)' }}>Export Your Data</h3>
-                            <p style={{ marginBottom: 'var(--space-lg)', color: 'var(--color-text-secondary)' }}>
-                                Download the selected domain&apos;s 10,000 most recent sessions or events as CSV.
+                {/* ── Export Tab ── */}
+                {activeTab === 'export' && (
+                    <ChartCard
+                        flush
+                        title="Export your data"
+                        subtitle="Download the selected site's 10,000 most recent sessions or events as CSV."
+                    >
+                        <ul style={{ listStyle: 'none', margin: '10px 0 0', padding: 0, borderTop: '1px solid var(--color-border)' }}>
+                            {([
+                                { type: 'sessions', label: 'Sessions', description: 'One row per visit' },
+                                { type: 'events', label: 'Events', description: 'One row per tracked event' },
+                            ] as const).map((item, index) => (
+                                <li key={item.type} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 20px', borderTop: index ? '1px solid var(--color-border)' : undefined }}>
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                        <div style={{ fontWeight: 500, fontSize: '0.875rem' }}>{item.label}</div>
+                                        <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)', marginTop: 2 }}>{item.description}</div>
+                                    </div>
+                                    <button
+                                        onClick={() => handleExport(item.type)}
+                                        disabled={!selectedDomainId}
+                                        className="btn btn-secondary"
+                                        style={{ padding: '6px 12px', fontSize: '0.8125rem' }}
+                                    >
+                                        <Download size={14} />
+                                        Download CSV
+                                    </button>
+                                </li>
+                            ))}
+                        </ul>
+                        {exportError && (
+                            <p role="alert" style={{ padding: '0 20px 12px', fontSize: '0.8125rem', color: 'var(--color-error)' }}>
+                                {exportError}
                             </p>
-
-                            <div className="grid grid-cols-2 gap-md" style={{ marginBottom: 'var(--space-xl)' }}>
-                                <button
-                                    onClick={() => handleExport('sessions')}
-                                    disabled={!selectedDomainId}
-                                    className="btn btn-secondary"
-                                    style={{ padding: 'var(--space-lg)', flexDirection: 'column', height: 'auto' }}
-                                >
-                                    <Download size={24} style={{ marginBottom: 'var(--space-sm)' }} />
-                                    <span style={{ fontWeight: 600 }}>Sessions CSV</span>
-                                    <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>One row per visit</span>
-                                </button>
-
-                                <button
-                                    onClick={() => handleExport('events')}
-                                    disabled={!selectedDomainId}
-                                    className="btn btn-secondary"
-                                    style={{ padding: 'var(--space-lg)', flexDirection: 'column', height: 'auto' }}
-                                >
-                                    <Download size={24} style={{ marginBottom: 'var(--space-sm)' }} />
-                                    <span style={{ fontWeight: 600 }}>Events CSV</span>
-                                    <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>One row per tracked event</span>
-                                </button>
-                            </div>
-
-                            {exportError && (
-                                <p style={{ marginTop: 'calc(-1 * var(--space-md))', marginBottom: 'var(--space-lg)', fontSize: '0.85rem', color: '#ff5555' }}>
-                                    {exportError}
-                                </p>
-                            )}
-
-                            <div style={{
-                                padding: 'var(--space-md)',
-                                background: 'var(--color-bg-secondary)',
-                                borderRadius: 'var(--radius-md)',
-                                borderLeft: '3px solid var(--color-text-primary)',
-                            }}>
-                                <Shield size={18} style={{ marginBottom: 'var(--space-sm)', color: 'var(--color-text-primary)' }} />
-                                <p style={{ fontSize: '0.875rem', margin: 0 }}>
-                                    Exports are available on the Pro plan and above. Only the domain owner can export its data.
-                                </p>
-                            </div>
+                        )}
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '12px 20px', borderTop: '1px solid var(--color-border)', background: 'var(--color-bg-tertiary)' }}>
+                            <Shield size={14} aria-hidden="true" style={{ color: 'var(--color-text-secondary)', flexShrink: 0, marginTop: 2 }} />
+                            <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)', margin: 0 }}>
+                                Exports are available on the Pro plan and above. Only the site owner can export its data.
+                            </p>
                         </div>
-                    )}
-                </div>
+                    </ChartCard>
+                )}
             </div>
 
             {/* Spinner keyframe */}
@@ -810,6 +773,32 @@ function SettingsPageInner() {
         </div>
     );
 }
+
+const NOTIFICATION_COPY: Record<string, { label: string; description: string }> = {
+    weeklyReport: { label: 'Weekly report', description: 'A summary of your analytics every week' },
+    trafficAlerts: { label: 'Traffic alerts', description: 'Significant changes in traffic' },
+    insightAlerts: { label: 'AI insight alerts', description: 'High-priority AI insights by email' },
+    productUpdates: { label: 'Product updates', description: 'New features and improvements' },
+};
+
+const sectionTitle: React.CSSProperties = {
+    fontSize: '0.875rem',
+    fontWeight: 600,
+    color: 'var(--color-text-primary)',
+    marginBottom: 10,
+};
+
+const fieldLabel: React.CSSProperties = {
+    display: 'block',
+    marginBottom: 6,
+    fontSize: '0.8125rem',
+    fontWeight: 500,
+    color: 'var(--color-text-secondary)',
+};
+
+const optional: React.CSSProperties = { color: 'var(--color-text-muted)', fontWeight: 400 };
+
+const divider: React.CSSProperties = { border: 'none', borderTop: '1px solid var(--color-border)', margin: 0 };
 
 export default function SettingsPage() {
     return (
