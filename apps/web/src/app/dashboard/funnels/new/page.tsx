@@ -23,18 +23,18 @@ interface FunnelStep {
 
 const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-// The API matches a step with `matchType` (exact | contains | regex) and
-// `matchValue`; this form's richer operators are expressed in those terms.
-// Sending the form's `condition` object instead made every create fail.
+// The API matches a step's `matchField` with `matchType` (exact | contains |
+// regex) and `matchValue`; this form's richer operators are expressed in those
+// terms. Sending the form's `condition` object instead made every create fail.
 function toApiStep(step: FunnelStep) {
-    const { operator, value } = step.condition;
+    const { field, operator, value } = step.condition;
     const match =
         operator === 'equals' ? { matchType: 'exact', matchValue: value }
         : operator === 'contains' ? { matchType: 'contains', matchValue: value }
         : operator === 'startsWith' ? { matchType: 'regex', matchValue: `^${escapeRegex(value)}` }
         : operator === 'endsWith' ? { matchType: 'regex', matchValue: `${escapeRegex(value)}$` }
         : { matchType: 'regex', matchValue: value };
-    return { name: step.name, type: step.type, ...match };
+    return { name: step.name, type: step.type, matchField: field, ...match };
 }
 
 const stepTypes = [
@@ -55,6 +55,15 @@ const fieldsByType: Record<string, string[]> = {
     pageview: ['url', 'path', 'referrer'],
     click: ['url', 'path', 'elementId', 'elementClass'],
     custom: ['eventName', 'url', 'path']
+};
+
+const fieldLabels: Record<string, string> = {
+    url: 'Full URL',
+    path: 'Path',
+    referrer: 'Referrer',
+    elementId: 'Element id',
+    elementClass: 'Element class',
+    eventName: 'Event name',
 };
 
 export default function NewFunnelPage() {
@@ -291,7 +300,7 @@ export default function NewFunnelPage() {
                                         })}
                                     >
                                         {fieldsByType[step.type].map(f => (
-                                            <option key={f} value={f}>{f}</option>
+                                            <option key={f} value={f}>{fieldLabels[f] ?? f}</option>
                                         ))}
                                     </select>
                                 </div>

@@ -10,6 +10,7 @@ import {
     Loader2
 } from 'lucide-react';
 import { useDomain } from '@/contexts/DomainContext';
+import { useApiRange } from '@/contexts/DateRangeContext';
 import { PageHeader } from '@/components/PageHeader';
 import { ChartCard } from '@/components/ChartCard';
 
@@ -34,9 +35,12 @@ interface HeatmapData {
     uniqueVisitors: number;
 }
 
-async function getPages(domainId: string) {
+type ApiRange = { start: string; end: string };
+
+async function getPages(domainId: string, range: ApiRange) {
     const token = localStorage.getItem('accessToken');
-    const res = await fetch(`${API_URL}/api/heatmaps/${domainId}/pages`, {
+    const params = new URLSearchParams({ startDate: range.start, endDate: range.end });
+    const res = await fetch(`${API_URL}/api/heatmaps/${domainId}/pages?${params}`, {
         headers: { Authorization: `Bearer ${token}` }
     });
     return res.json();
@@ -44,9 +48,9 @@ async function getPages(domainId: string) {
 
 // The API serves one endpoint for both heatmap types, selected with ?type=click|scroll.
 // `viewport` limits it to sessions of that device class (by screen width).
-async function getHeatmap(domainId: string, type: 'click' | 'scroll', page: string, viewport: string) {
+async function getHeatmap(domainId: string, type: 'click' | 'scroll', page: string, viewport: string, range: ApiRange) {
     const token = localStorage.getItem('accessToken');
-    const params = new URLSearchParams({ type, page, viewport });
+    const params = new URLSearchParams({ type, page, viewport, startDate: range.start, endDate: range.end });
     const res = await fetch(`${API_URL}/api/heatmaps/${domainId}?${params}`, {
         headers: { Authorization: `Bearer ${token}` }
     });
@@ -78,6 +82,7 @@ const segmentButton = { display: 'inline-flex', alignItems: 'center', gap: 6 } a
 
 export default function HeatmapsPage() {
     const { selectedDomainId, loading: domainLoading } = useDomain();
+    const range = useApiRange();
     const [pages, setPages] = useState<PageWithHeatmap[]>([]);
     const [selectedPage, setSelectedPage] = useState<string | null>(null);
     const [heatmapType, setHeatmapType] = useState<'click' | 'scroll'>('click');
@@ -87,7 +92,7 @@ export default function HeatmapsPage() {
     const [loadingHeatmap, setLoadingHeatmap] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    // The heatmap API always covers its own fixed 30-day window; it takes no date range.
+    // Both requests follow the dashboard's date range.
     useEffect(() => {
         if (!selectedDomainId) {
             if (!domainLoading) setLoading(false);
@@ -96,18 +101,22 @@ export default function HeatmapsPage() {
 
         let cancelled = false;
         setLoading(true);
-        getPages(selectedDomainId)
+        getPages(selectedDomainId, range)
             .then(data => {
                 if (cancelled) return;
                 setError(data.error ? String(data.error) : null);
                 setPages(data.pages || []);
-                // Reset on every domain switch so a page from the previous domain is not kept.
-                setSelectedPage(data.pages?.length ? data.pages[0].path : null);
+                // Keep the chosen page when it still has data (a new date range); otherwise
+                // (another domain, or no clicks in the range) start from the busiest page.
+                const list: PageWithHeatmap[] = data.pages || [];
+                setSelectedPage(prev =>
+                    prev && list.some(p => p.path === prev) ? prev : (list[0]?.path ?? null)
+                );
             })
             .catch(() => { if (!cancelled) setError('Network error'); })
             .finally(() => { if (!cancelled) setLoading(false); });
         return () => { cancelled = true; };
-    }, [selectedDomainId, domainLoading]);
+    }, [selectedDomainId, domainLoading, range]);
 
     useEffect(() => {
         if (!selectedDomainId || !selectedPage) return;
@@ -116,7 +125,7 @@ export default function HeatmapsPage() {
         const loadHeatmap = async () => {
             setLoadingHeatmap(true);
 
-            const data = await getHeatmap(selectedDomainId, heatmapType, selectedPage, viewport).catch(() => ({}));
+            const data = await getHeatmap(selectedDomainId, heatmapType, selectedPage, viewport, range).catch(() => ({}));
             if (cancelled) return;
 
             setHeatmapData({
@@ -131,7 +140,7 @@ export default function HeatmapsPage() {
 
         loadHeatmap();
         return () => { cancelled = true; };
-    }, [selectedDomainId, selectedPage, heatmapType, viewport]);
+    }, [selectedDomainId, selectedPage, heatmapType, viewport, range]);
 
     const maxCount = Math.max(...(heatmapData?.points.map(p => p.count) || [1]));
     const busy = loading || domainLoading;

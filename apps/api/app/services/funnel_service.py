@@ -11,7 +11,7 @@ async def create(
     domain_id: str,
     name: str,
     description: str,
-    steps: list[dict[str, str]],
+    steps: list[dict[str, str | None]],
 ) -> dict[str, Any] | None:
     """Insert the funnel and its steps inside one transaction.
 
@@ -37,8 +37,8 @@ async def create(
             row = await conn.fetchrow(
                 """
                 INSERT INTO funnel_steps
-                    (funnel_id, step_order, name, type, match_type, match_value)
-                VALUES ($1, $2, $3, $4, $5, $6)
+                    (funnel_id, step_order, name, type, match_type, match_value, match_field)
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
                 RETURNING *
                 """,
                 funnel["id"],
@@ -47,6 +47,7 @@ async def create(
                 step["type"],
                 step["matchType"],
                 step["matchValue"],
+                step.get("matchField"),
             )
             inserted_steps.append(dict(row))
 
@@ -84,7 +85,7 @@ async def update(
     funnel_id: str,
     name: str,
     description: str,
-    steps: list[dict[str, str]],
+    steps: list[dict[str, str | None]],
 ) -> dict[str, Any] | None:
     """Replace the funnel row and fully rebuild its steps, in one transaction."""
 
@@ -110,8 +111,8 @@ async def update(
             row = await conn.fetchrow(
                 """
                 INSERT INTO funnel_steps
-                    (funnel_id, step_order, name, type, match_type, match_value)
-                VALUES ($1, $2, $3, $4, $5, $6)
+                    (funnel_id, step_order, name, type, match_type, match_value, match_field)
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
                 RETURNING *
                 """,
                 funnel_id,
@@ -120,6 +121,7 @@ async def update(
                 step["type"],
                 step["matchType"],
                 step["matchValue"],
+                step.get("matchField"),
             )
             inserted_steps.append(dict(row))
 

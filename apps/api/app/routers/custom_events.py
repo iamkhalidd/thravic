@@ -101,18 +101,28 @@ async def errors(
         rows = await query(
             """
             SELECT
-                data->>'message' as message,
-                data->>'source' as source,
+                message,
+                source,
                 COUNT(*)::int as count,
                 MIN(created_at)::text as first_seen,
                 MAX(created_at)::text as last_seen
-             FROM events
-             WHERE domain_id = $1
-               AND type = 'custom'
-               AND data->>'event' = 'error'
-               AND created_at >= $2
-               AND created_at <= $3
-             GROUP BY data->>'message', data->>'source'
+             FROM (
+                -- One error whatever the query string or fragment: a script loaded
+                -- as `app.js?v=2` and `app.js?v=3`, or a message quoting a URL with
+                -- a cache-buster, was listed once per variant.
+                SELECT created_at,
+                       regexp_replace(
+                           data->>'message', '(https?://[^\\s?#''"]*)[?#][^\\s''"]*', '\\1', 'g'
+                       ) as message,
+                       regexp_replace(data->>'source', '[?#].*$', '') as source
+                  FROM events
+                 WHERE domain_id = $1
+                   AND type = 'custom'
+                   AND data->>'event' = 'error'
+                   AND created_at >= $2
+                   AND created_at <= $3
+             ) e
+             GROUP BY message, source
              ORDER BY count DESC
              LIMIT 100
             """,
@@ -250,19 +260,29 @@ async def forms(
         rows = await query(
             """
             SELECT
-                data->>'formId' as form_id,
-                data->>'formName' as form_name,
-                data->>'action' as action,
-                data->>'method' as method,
+                form_id, form_name, action, method,
                 COUNT(*)::int as submissions,
                 ROUND(AVG((data->>'fieldCount')::numeric))::int as avg_fields,
                 COUNT(DISTINCT url)::int as pages
-             FROM events
-             WHERE domain_id = $1
-               AND type = 'form'
-               AND created_at >= $2
-               AND created_at <= $3
-             GROUP BY data->>'formId', data->>'formName', data->>'action', data->>'method'
+             FROM (
+                -- Rows stored before collect cleaned form data can hold objects
+                -- (shown as `{}`); only text values count as a name.
+                SELECT url, data,
+                       CASE WHEN jsonb_typeof(data->'formId') = 'string'
+                            THEN NULLIF(data->>'formId', '') END as form_id,
+                       CASE WHEN jsonb_typeof(data->'formName') = 'string'
+                            THEN NULLIF(data->>'formName', '') END as form_name,
+                       CASE WHEN jsonb_typeof(data->'action') = 'string'
+                            THEN data->>'action' END as action,
+                       CASE WHEN jsonb_typeof(data->'method') = 'string'
+                            THEN data->>'method' END as method
+                  FROM events
+                 WHERE domain_id = $1
+                   AND type = 'form'
+                   AND created_at >= $2
+                   AND created_at <= $3
+             ) f
+             GROUP BY form_id, form_name, action, method
              ORDER BY submissions DESC
              LIMIT 50
             """,

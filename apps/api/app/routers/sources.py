@@ -114,7 +114,8 @@ async def referrers(domainId: str, request: Request, user: AuthUser = Depends(re
         )
 
         top = await session_service.get_top_referrers(
-            domain["id"], start_date, end_date, REFERRER_LIMIT, domain.get("domain")
+            domain["id"], start_date, end_date, REFERRER_LIMIT, domain.get("domain"),
+            referrals_only=True,
         )
 
         return jsjson(
@@ -337,7 +338,8 @@ async def overview(domainId: str, request: Request, user: AuthUser = Depends(req
             domain["id"], start_date, end_date
         )
         top_referrers = await session_service.get_top_referrers(
-            domain["id"], start_date, end_date, OVERVIEW_REFERRER_LIMIT, domain.get("domain")
+            domain["id"], start_date, end_date, OVERVIEW_REFERRER_LIMIT, domain.get("domain"),
+            referrals_only=True,
         )
         sessions = await session_service.query_by_domain(
             domain["id"], start_date, end_date

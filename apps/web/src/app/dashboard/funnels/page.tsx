@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Plus, Trash2, Users, Target, TrendingDown, Percent } from 'lucide-react';
 import { useDomain } from '@/contexts/DomainContext';
+import { useApiRange } from '@/contexts/DateRangeContext';
 import { PageHeader } from '@/components/PageHeader';
 import { StatCard } from '@/components/StatCard';
 import { ChartCard } from '@/components/ChartCard';
@@ -19,8 +20,6 @@ interface Funnel {
 }
 
 interface FunnelMetrics {
-    /** Length of the window the API measured, in days (it ignores the date picker). */
-    periodDays: number | null;
     totalVisitors: number;
     completedFunnel: number;
     overallConversionRate: number;
@@ -41,10 +40,7 @@ interface FunnelMetrics {
 // `conversionRate`, plus `totalVisitors`, `completedFunnel` and `overallConversion`.
 function toMetrics(data: any): FunnelMetrics | null {
     if (!data || !Array.isArray(data.steps)) return null;
-    const start = data.period?.start ? new Date(data.period.start).getTime() : NaN;
-    const end = data.period?.end ? new Date(data.period.end).getTime() : NaN;
     return {
-        periodDays: Number.isFinite(start) && Number.isFinite(end) ? Math.round((end - start) / 86400000) : null,
         totalVisitors: data.totalVisitors ?? 0,
         completedFunnel: data.completedFunnel ?? 0,
         overallConversionRate: data.overallConversion ?? 0,
@@ -69,9 +65,10 @@ async function getFunnels(domainId: string) {
     return res.json();
 }
 
-async function getFunnelDetails(domainId: string, funnelId: string) {
+async function getFunnelDetails(domainId: string, funnelId: string, start: string, end: string) {
     const token = localStorage.getItem('accessToken');
-    const res = await fetch(`${API_URL}/api/funnels/${domainId}/${funnelId}`, {
+    const params = new URLSearchParams({ startDate: start, endDate: end });
+    const res = await fetch(`${API_URL}/api/funnels/${domainId}/${funnelId}?${params}`, {
         headers: { Authorization: `Bearer ${token}` }
     });
     return res.json();
@@ -87,6 +84,7 @@ async function deleteFunnel(domainId: string, funnelId: string) {
 
 export default function FunnelsPage() {
     const { selectedDomainId, loading: domainLoading } = useDomain();
+    const range = useApiRange();
     const [funnelList, setFunnelList] = useState<Funnel[]>([]);
     const [selectedFunnel, setSelectedFunnel] = useState<string | null>(null);
     const [funnelMetrics, setFunnelMetrics] = useState<FunnelMetrics | null>(null);
@@ -123,7 +121,7 @@ export default function FunnelsPage() {
 
         setDetailLoading(true);
         setDetailError(null);
-        getFunnelDetails(selectedDomainId, selectedFunnel).then(data => {
+        getFunnelDetails(selectedDomainId, selectedFunnel, range.start, range.end).then(data => {
             if (cancelled) return;
             const metrics = toMetrics(data);
             setFunnelMetrics(metrics);
@@ -136,7 +134,7 @@ export default function FunnelsPage() {
             setDetailLoading(false);
         });
         return () => { cancelled = true; };
-    }, [selectedDomainId, selectedFunnel]);
+    }, [selectedDomainId, selectedFunnel, range]);
 
     const handleDelete = async (funnelId: string) => {
         if (!selectedDomainId || !confirm('Delete this funnel?')) return;
@@ -225,9 +223,7 @@ export default function FunnelsPage() {
                                     flush
                                     loading={detailLoading}
                                     title={current?.name ?? 'Funnel'}
-                                    subtitle={funnelMetrics?.periodDays
-                                        ? `Visitors who reached each step, last ${funnelMetrics.periodDays} days`
-                                        : 'Visitors who reached each step'}
+                                    subtitle="Visitors who reached each step in the selected period"
                                 >
                                     {funnelMetrics && funnelMetrics.steps.length > 0 ? (
                                         <div style={{ overflowX: 'auto' }}>

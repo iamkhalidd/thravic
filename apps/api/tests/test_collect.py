@@ -160,6 +160,21 @@ def test_custom_event_data_is_persisted(client, domain, writes):
     assert writes.events[0][0]["data"] == {"plan": "pro", "seats": 3}
 
 
+def test_form_fields_that_are_not_text_are_dropped(client, domain, writes):
+    # Old tracker builds read `form.name`, which is a child input when the form has a
+    # field called "name"; it arrived as an object and showed as `{}`.
+    response = client.post(
+        f"/api/collect/{TRACKING_ID}",
+        json=_pageview(type="form", data={
+            "formId": "signup", "formName": {}, "action": "/join", "method": {},
+            "fieldCount": 4,
+        }),
+    )
+
+    assert response.status_code == 202
+    assert writes.events[0][0]["data"] == {"formId": "signup", "action": "/join", "fieldCount": 4}
+
+
 def test_the_batch_route_persists_every_event(client, domain, writes):
     response = client.post(
         f"/api/collect/{TRACKING_ID}/batch",

@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import { Monitor, Smartphone, Tablet, Trash2 } from 'lucide-react';
 import { recordings, type RecordingDevice, type RecordingDuration } from '@/lib/api';
 import { useDomain } from '@/contexts/DomainContext';
+import { useApiRange } from '@/contexts/DateRangeContext';
 import { useSubscription } from '@/hooks/useSubscription';
 import RecordingControls from '@/components/RecordingControls';
 import { PageHeader } from '@/components/PageHeader';
@@ -99,6 +100,7 @@ function shortTime(date: Date): string {
 export default function SessionsPage() {
     const { selectedDomainId, selectedDomain, loading: domainLoading } = useDomain();
     const { hasFeature } = useSubscription();
+    const range = useApiRange();
     const [startedToday, setStartedToday] = useState<number | null>(null);
     const [recordingsList, setRecordingsList] = useState<Recording[]>([]);
     const [total, setTotal] = useState<number | null>(null);
@@ -121,6 +123,8 @@ export default function SessionsPage() {
         recordings.list(selectedDomainId, {
             device: deviceFilter || undefined,
             duration: durationFilter || undefined,
+            startDate: range.start,
+            endDate: range.end,
         }).then(({ data, error }) => {
             setListError(data ? null : (error || 'Something went wrong'));
             setRecordingsList(data?.recordings || []);
@@ -129,7 +133,7 @@ export default function SessionsPage() {
             setPage(1);
             setLoading(false);
         });
-    }, [selectedDomainId, domainLoading, deviceFilter, durationFilter]);
+    }, [selectedDomainId, domainLoading, deviceFilter, durationFilter, range]);
 
     // A recording from the previous domain must not stay open.
     useEffect(() => {
@@ -151,6 +155,8 @@ export default function SessionsPage() {
         const { data } = await recordings.list(selectedDomainId, {
             device: deviceFilter || undefined,
             duration: durationFilter || undefined,
+            startDate: range.start,
+            endDate: range.end,
             page: page + 1,
         });
         if (data) {

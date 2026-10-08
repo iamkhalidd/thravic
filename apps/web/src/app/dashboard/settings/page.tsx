@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { UsageMeters } from '@/components/UsageMeters';
 import { CountrySelect } from '@/components/CountrySelect';
 import { countryError, phoneError, websiteError } from '@/lib/profile';
@@ -59,6 +59,7 @@ interface UserData {
     email: string;
     subscription: string;
     auth_provider?: string;
+    hasPassword?: boolean;
     avatar_url?: string;
     company?: string | null;
     job_title?: string | null;
@@ -68,10 +69,20 @@ interface UserData {
     country?: string | null;
     timezone?: string | null;
     createdAt?: string;
+    preferences?: Record<string, any>;
 }
+
+const DEFAULT_NOTIFICATIONS = {
+    weeklyReport: true,
+    trafficAlerts: true,
+    insightAlerts: true,
+    productUpdates: false,
+};
+type NotificationKey = keyof typeof DEFAULT_NOTIFICATIONS;
 
 function SettingsPageInner() {
     const searchParams = useSearchParams();
+    const router = useRouter();
 
     const [user, setUser] = useState<UserData | null>(null);
     const [activeTab, setActiveTab] = useState<'account' | 'subscription' | 'notifications' | 'export'>('account');
@@ -86,13 +97,15 @@ function SettingsPageInner() {
     const [profileError, setProfileError] = useState<string | null>(null);
     const [avatarUploading, setAvatarUploading] = useState(false);
 
-    // Notifications state
-    const [notifications, setNotifications] = useState({
-        weeklyReport: true,
-        trafficAlerts: true,
-        insightAlerts: true,
-        productUpdates: false,
-    });
+    // Notifications state (saved to the account's preferences as each switch changes)
+    const [notifications, setNotifications] = useState(DEFAULT_NOTIFICATIONS);
+    const [notificationError, setNotificationError] = useState<string | null>(null);
+
+    // Delete account state
+    const [confirmingDelete, setConfirmingDelete] = useState(false);
+    const [deleteConfirmation, setDeleteConfirmation] = useState('');
+    const [deleting, setDeleting] = useState(false);
+    const [deleteError, setDeleteError] = useState<string | null>(null);
 
     // Form states
     const [name, setName] = useState('');
@@ -131,6 +144,16 @@ function SettingsPageInner() {
             setPhone(userRes.data.phone || '');
             setCountry(userRes.data.country || '');
             setTimezone(userRes.data.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || '');
+            const saved = userRes.data.preferences?.notifications;
+            if (saved && typeof saved === 'object') {
+                setNotifications(prev => {
+                    const next = { ...prev };
+                    (Object.keys(prev) as NotificationKey[]).forEach(key => {
+                        if (typeof saved[key] === 'boolean') next[key] = saved[key];
+                    });
+                    return next;
+                });
+            }
         }
         setLoading(false);
     }, []);
@@ -266,6 +289,36 @@ function SettingsPageInner() {
             setUser(prev => prev ? { ...prev, avatar_url: result.data!.avatar_url } : null);
         }
         setAvatarUploading(false);
+    };
+
+    const toggleNotification = async (key: NotificationKey) => {
+        const previous = notifications;
+        const next = { ...notifications, [key]: !notifications[key] };
+        setNotifications(next);
+        setNotificationError(null);
+        const res = await auth.updateProfile({ preferences: { notifications: next } });
+        if (res.error) {
+            setNotifications(previous);
+            setNotificationError(res.error === 'Request failed' ? 'Could not save your choice. Try again.' : res.error);
+        }
+    };
+
+    // Older API responses lack `hasPassword`; email sign-ups always have one.
+    const hasPassword = user?.hasPassword ?? (!user?.auth_provider || user.auth_provider === 'email');
+
+    const handleDeleteAccount = async () => {
+        if (!deleteConfirmation.trim()) return;
+        setDeleting(true);
+        setDeleteError(null);
+        const res = await auth.deleteAccount(
+            hasPassword ? { password: deleteConfirmation } : { confirm: deleteConfirmation }
+        );
+        if (res.error) {
+            setDeleteError(res.error);
+            setDeleting(false);
+            return;
+        }
+        router.replace('/');
     };
 
     const handleExport = async (type: ExportType) => {
@@ -468,10 +521,56 @@ function SettingsPageInner() {
                             <p className="card-subtitle" style={{ marginBottom: 12 }}>
                                 Permanently delete your account and all associated traffic data. This action cannot be undone.
                             </p>
-                            <button className="btn" style={{ background: 'transparent', color: 'var(--color-error)', border: '1px solid var(--color-error)' }}>
-                                <Trash2 size={16} />
-                                Delete account
-                            </button>
+                            {!confirmingDelete ? (
+                                <button
+                                    type="button"
+                                    className="btn"
+                                    onClick={() => { setConfirmingDelete(true); setDeleteConfirmation(''); setDeleteError(null); }}
+                                    style={{ background: 'transparent', color: 'var(--color-error)', border: '1px solid var(--color-error)' }}
+                                >
+                                    <Trash2 size={16} />
+                                    Delete account
+                                </button>
+                            ) : (
+                                <form
+                                    onSubmit={e => { e.preventDefault(); handleDeleteAccount(); }}
+                                    style={{ display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 360 }}
+                                >
+                                    <label htmlFor="delete-confirm" style={fieldLabel}>
+                                        {hasPassword
+                                            ? 'Enter your password to confirm'
+                                            : <>Type <strong>{user?.email}</strong> to confirm</>}
+                                    </label>
+                                    <input
+                                        id="delete-confirm"
+                                        className="input"
+                                        type={hasPassword ? 'password' : 'email'}
+                                        autoComplete={hasPassword ? 'current-password' : 'off'}
+                                        value={deleteConfirmation}
+                                        onChange={e => setDeleteConfirmation(e.target.value)}
+                                        aria-invalid={!!deleteError}
+                                        aria-describedby={deleteError ? 'delete-error' : undefined}
+                                        autoFocus
+                                    />
+                                    {deleteError && (
+                                        <p id="delete-error" role="alert" style={{ color: 'var(--color-error)', fontSize: '0.8125rem', margin: 0 }}>{deleteError}</p>
+                                    )}
+                                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                        <button
+                                            type="submit"
+                                            className="btn"
+                                            disabled={deleting || !deleteConfirmation.trim()}
+                                            style={{ background: 'var(--color-error)', color: '#fff', border: '1px solid var(--color-error)' }}
+                                        >
+                                            {deleting ? <Loader size={16} className="spin" /> : <Trash2 size={16} />}
+                                            {deleting ? 'Deleting…' : 'Delete my account'}
+                                        </button>
+                                        <button type="button" className="btn btn-ghost" onClick={() => setConfirmingDelete(false)} disabled={deleting}>
+                                            Cancel
+                                        </button>
+                                    </div>
+                                </form>
+                            )}
                         </div>
                     </>
                 )}
@@ -669,9 +768,14 @@ function SettingsPageInner() {
 
                 {/* ── Notifications Tab ── */}
                 {activeTab === 'notifications' && (
-                    <ChartCard flush title="Email notifications" subtitle="Choose which emails you receive.">
+                    <ChartCard flush title="Email notifications" subtitle="Choose which emails you receive. Changes save as you make them.">
+                        {notificationError && (
+                            <p role="alert" style={{ padding: '0 20px', margin: '8px 0 0', fontSize: '0.8125rem', color: 'var(--color-error)' }}>
+                                {notificationError}
+                            </p>
+                        )}
                         <div style={{ marginTop: 10, borderTop: '1px solid var(--color-border)' }}>
-                            {Object.entries(notifications).map(([key, value], index, all) => (
+                            {(Object.entries(notifications) as [NotificationKey, boolean][]).map(([key, value], index, all) => (
                                 <div
                                     key={key}
                                     className="flex items-center justify-between"
@@ -690,7 +794,7 @@ function SettingsPageInner() {
                                         role="switch"
                                         aria-checked={value}
                                         aria-labelledby={`notif-${key}`}
-                                        onClick={() => setNotifications(prev => ({ ...prev, [key]: !value }))}
+                                        onClick={() => toggleNotification(key)}
                                         style={{
                                             width: '40px',
                                             height: '22px',

@@ -50,7 +50,9 @@ FROM domains d
 JOIN users u ON d.user_id = u.id
 LEFT JOIN current_hour curr ON d.id = curr.domain_id
 LEFT JOIN previous_hour prev ON d.id = prev.domain_id
-WHERE COALESCE(curr.count, 0) > 10 OR COALESCE(prev.count, 0) > 10
+WHERE (COALESCE(curr.count, 0) > 10 OR COALESCE(prev.count, 0) > 10)
+  -- Settings → Notifications → Traffic alerts (on unless turned off)
+  AND COALESCE((u.preferences->'notifications'->>'trafficAlerts')::boolean, true)
 """
 
 

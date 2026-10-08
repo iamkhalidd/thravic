@@ -10,7 +10,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from app.routers.funnels import _funnel_progress
+from app.routers.funnels import _funnel_progress, _step_candidates
 from app.services import event_service, session_service
 from app.services.session_service import classify_source
 from tests.conftest import requires_test_db
@@ -108,3 +108,37 @@ async def test_timeseries_fills_empty_days_with_iso_dates(seeded_domain, db_pool
     assert rows[-1]["pageviews"] == 1 and rows[0]["pageviews"] == 0
     datetime.fromisoformat(rows[0]["bucket"].replace("Z", "+00:00"))  # parseable everywhere
     assert rows[0]["bucket"].endswith("Z")
+
+
+@pytest.mark.parametrize(
+    ("field", "event", "expected"),
+    [
+        (None, {"type": "pageview", "url": "https://s.example/pricing?x=1"},
+         ["https://s.example/pricing?x=1", "/pricing"]),
+        (None, {"type": "custom", "data": {"event": "signup"}}, ["signup"]),
+        ("path", {"type": "pageview", "url": "https://s.example/pricing"}, ["/pricing"]),
+        ("referrer", {"type": "pageview", "referrer": "https://news.example/"},
+         ["https://news.example/"]),
+        ("elementId", {"type": "click", "data": {"id": "buy"}}, ["buy"]),
+        ("elementClass", {"type": "click", "data": {"className": "btn btn-primary"}},
+         ["btn btn-primary", "btn", "btn-primary"]),
+        ("eventName", {"type": "custom", "data": {"event": "signup"}}, ["signup"]),
+    ],
+)
+def test_funnel_step_matches_the_chosen_field(field, event, expected):
+    assert _step_candidates(field, event) == expected
+
+
+@requires_test_db
+async def test_referrers_can_leave_out_search_and_social(seeded_domain, db_pool):
+    await _visit(seeded_domain, "https://www.google.com/search?q=a")
+    await _visit(seeded_domain, "https://www.facebook.com/")
+    await _visit(seeded_domain, "https://news.ycombinator.com/")
+    end = datetime.now(UTC) + timedelta(minutes=1)
+
+    rows = await session_service.get_top_referrers(
+        seeded_domain, end - timedelta(days=1), end, 10, "ingest.example.invalid",
+        referrals_only=True,
+    )
+
+    assert [r["site"] for r in rows] == ["news.ycombinator.com"]

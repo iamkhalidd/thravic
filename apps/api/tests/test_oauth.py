@@ -20,11 +20,11 @@ def client():
         yield test_client
 
 
-def test_all_fourteen_auth_handlers_are_registered():
-    """`routes/auth.ts` exposes exactly 14 handlers; the port must match.
+def test_all_fifteen_auth_handlers_are_registered():
+    """The 14 handlers ported from `routes/auth.ts`, plus `DELETE /me` (account deletion).
 
     Counted as (path, method) pairs rather than unique paths, because `/me` and
-    `/avatar` each carry two methods.
+    `/avatar` carry several methods.
     """
     from app.routers import auth as auth_router
 
@@ -34,7 +34,7 @@ def test_all_fourteen_auth_handlers_are_registered():
             if method not in ("HEAD", "OPTIONS"):
                 operations.add((route.path, method))
 
-    assert len(operations) == 14
+    assert len(operations) == 15
 
     for expected in (
         ("/register", "POST"),
@@ -45,6 +45,7 @@ def test_all_fourteen_auth_handlers_are_registered():
         ("/reset-password", "POST"),
         ("/me", "GET"),
         ("/me", "PATCH"),
+        ("/me", "DELETE"),
         ("/avatar", "POST"),
         ("/avatar", "DELETE"),
         ("/github", "GET"),

@@ -3,7 +3,8 @@
 Both handlers are gated by `requireFeature('heatmaps')`, which runs *before* the
 domain lookup, so a free-plan caller gets 403 rather than 404.
 
-`?viewport=desktop|tablet|mobile` limits the heatmap to sessions of that device
+`?startDate=&endDate=` is the dashboard's date range (the last 30 days without
+it). `?viewport=desktop|tablet|mobile` limits the heatmap to sessions of that device
 class (by screen width, as in the analytics devices breakdown). Omitted means all.
 
 Click points are whole percentages of the page (x of the viewport width, y of the
@@ -13,11 +14,11 @@ Scroll points are the number of page visitors reaching each 25% depth milestone.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
 from urllib.parse import urlparse
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 
+from ..date_range import date_range
 from ..errors import SimpleError
 from ..js_compat import js_round, url_path
 from ..json_response import jsjson
@@ -43,12 +44,6 @@ async def _require_owned_domain(domain_id: str, user_id: str) -> dict:
     if not domain_service.is_owner(domain, user_id):
         raise SimpleError("Domain not found", 404)
     return domain
-
-
-def _lookback_range() -> tuple[datetime, datetime]:
-    """Heatmaps always use a fixed 30-day lookback; the query string is ignored."""
-    end_date = datetime.now(UTC)
-    return end_date - timedelta(days=LOOKBACK_DAYS), end_date
 
 
 def _absolute_path(url: str) -> str | None:
@@ -147,7 +142,11 @@ async def heatmap(
         if viewport is not None and viewport not in session_service.DEVICE_WIDTHS:
             raise SimpleError("viewport must be one of: desktop, tablet, mobile", 400)
 
-        start_date, end_date = _lookback_range()
+        start_date, end_date = date_range(
+            request.query_params.get("startDate"),
+            request.query_params.get("endDate"),
+            LOOKBACK_DAYS,
+        )
 
         async def page_events(kind: str) -> list[dict]:
             events = await event_service.query_for_heatmap(
@@ -192,12 +191,14 @@ async def heatmap(
 @router.get("/{domainId}/pages")
 async def heatmap_pages(
     domainId: str,
+    startDate: str | None = Query(None),
+    endDate: str | None = Query(None),
     user: AuthUser = Depends(require_auth),
     _feature: None = Depends(require_feature("heatmaps")),
 ):
     try:
         domain = await _require_owned_domain(domainId, user.user_id)
-        start_date, end_date = _lookback_range()
+        start_date, end_date = date_range(startDate, endDate, LOOKBACK_DAYS)
 
         events = await event_service.query_by_domain(
             domain["id"], start_date, end_date, "click"

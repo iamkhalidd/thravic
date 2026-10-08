@@ -130,8 +130,11 @@ async def generate_tokens(user_id: str, email: str) -> dict[str, str]:
     # Every sign-in path (password, refresh, OAuth) issues tokens here, so this is
     # where suspension is enforced. Access tokens are not re-checked, so a session
     # that is already open ends when its access token expires (JWT_EXPIRES_IN).
+    # A deleted account's refresh token stops working here too.
     account = await user_service.find_by_id(user_id)
-    if account and account.get("role") == SUSPENDED_ROLE:
+    if not account:
+        raise SimpleError("Account not found", 401)
+    if account.get("role") == SUSPENDED_ROLE:
         raise SimpleError(ACCOUNT_SUSPENDED, 403)
 
     access_token = jwt.encode(
@@ -405,6 +408,9 @@ def _me_payload(row: dict[str, Any]) -> dict[str, Any]:
         "subscription": row["subscription"],
         "preferences": row["preferences"] or {},
         "auth_provider": row["auth_provider"] or "email",
+        # Whether deleting the account is confirmed with a password (a GitHub/Google
+        # account may have set one through "forgot password") or with the email.
+        "hasPassword": bool(row.get("password")),
         "avatar_url": row["avatar_url"] or _avatar_fallback(row["name"]),
         "company": row["company"] or None,
         "job_title": row["job_title"] or None,
@@ -479,6 +485,60 @@ async def update_me(body: dict[str, Any], user: AuthUser = Depends(require_auth)
     except Exception as exc:
         log.error(f"Update profile error: {exc}")
         raise SimpleError("Failed to update profile", 500) from None
+
+
+@router.delete("/me")
+async def delete_me(request: Request, user: AuthUser = Depends(require_auth)):
+    """Delete the signed-in account and everything it owns.
+
+    Confirmed with the password, or, for an account without one (GitHub/Google
+    sign-in), by typing the account's email. Sites and their data go with the
+    user through the FK cascades; records that only point at the user keep
+    their data (0018). Other sessions end too: `generate_tokens` refuses an
+    account that no longer exists.
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+
+    row = await user_service.find_by_id(user.user_id)
+    if not row:
+        raise SimpleError("User not found", 404)
+
+    if row.get("password"):
+        password = body.get("password")
+        if not isinstance(password, str) or not verify_password(password, row["password"]):
+            raise PayloadError({"error": "Incorrect password", "field": "password"}, 400)
+    else:
+        typed = body.get("confirm")
+        if not isinstance(typed, str) or typed.strip().lower() != str(row["email"]).lower():
+            raise PayloadError(
+                {"error": "Type your email address to confirm", "field": "confirm"}, 400
+            )
+
+    user_id = str(row["id"])
+    try:
+        await query("DELETE FROM users WHERE id = $1", user_id)
+    except Exception as exc:
+        log.error(f"Account delete error for {user_id}: {exc}")
+        raise SimpleError("Failed to delete account", 500) from None
+
+    profile_gate.forget(user_id)
+    refresh_token = body.get("refreshToken")
+    if isinstance(refresh_token, str) and refresh_token:
+        await token_store.remove_refresh_token(refresh_token)
+    token = bearer_token(request)
+    if token:
+        await cache.set(f"bl:{token}", "1", get_settings().access_token_seconds)
+    avatar = row.get("avatar_url") or ""
+    if avatar.startswith("/uploads/avatars/"):
+        (Path.cwd() / avatar.lstrip("/")).unlink(missing_ok=True)
+
+    log.info(f"User {user_id} deleted their account")
+    return jsjson({"message": "Account deleted"})
 
 
 async def _refuse_underage(row: dict[str, Any], born: date):

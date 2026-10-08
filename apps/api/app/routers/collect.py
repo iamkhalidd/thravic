@@ -147,6 +147,24 @@ def _event_issues(body: dict) -> list[dict]:
     return issues
 
 
+# Form fields that must be text. Older tracker builds read `form.name` etc.,
+# which returns a child input when the form has a field with that name, so the
+# value arrived as an object and showed as `{}` on the forms page.
+FORM_TEXT_FIELDS = ("formId", "formName", "action", "method")
+
+
+def _clean_data(event_type: str, data: Any) -> dict:
+    """The event's `data` as stored: form fields that are not text are dropped."""
+    data = data if isinstance(data, dict) else {}
+    if event_type != "form":
+        return data
+    return {
+        key: value
+        for key, value in data.items()
+        if key not in FORM_TEXT_FIELDS or (isinstance(value, str) and value.strip())
+    }
+
+
 def _batch_issues(body: dict) -> list[dict]:
     """`batchSchema.parse` — bounds first, then every issue from every element.
 
@@ -281,7 +299,7 @@ async def collect_event(trackingId: str, request: Request):
                         "utmSource": body.get("utmSource") or None,
                         "utmMedium": body.get("utmMedium") or None,
                         "utmCampaign": body.get("utmCampaign") or None,
-                        "data": data or {},
+                        "data": _clean_data(body["type"], data),
                     }
                 ]
             ),
@@ -357,7 +375,7 @@ async def collect_batch(trackingId: str, request: Request):
                     "utmSource": event.get("utmSource") or None,
                     "utmMedium": event.get("utmMedium") or None,
                     "utmCampaign": event.get("utmCampaign") or None,
-                    "data": event.get("data") or {},
+                    "data": _clean_data(event["type"], event.get("data")),
                 }
             )
 

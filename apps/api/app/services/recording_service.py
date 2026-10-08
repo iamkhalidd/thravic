@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import gzip
 import json
+from datetime import datetime
 from typing import Any
 
 from ..db import query, query_one
@@ -215,11 +216,25 @@ _SESSION_JOIN = """
 
 
 def _filter_sql(
-    device: str | None, duration: str | None, first_param: int
+    device: str | None,
+    duration: str | None,
+    first_param: int,
+    start: datetime | None = None,
+    end: datetime | None = None,
 ) -> tuple[str, list[Any]]:
-    """Extra `AND ...` conditions for the list and count queries, plus their params."""
+    """Extra `AND ...` conditions for the list and count queries, plus their params.
+
+    `start` / `end` bound when the recording started (the dashboard's date range).
+    """
     clauses: list[str] = []
     params: list[Any] = []
+
+    if start is not None:
+        clauses.append(f"r.started_at >= ${first_param + len(params)}")
+        params.append(start)
+    if end is not None:
+        clauses.append(f"r.started_at <= ${first_param + len(params)}")
+        params.append(end)
 
     if device is not None:
         sql, device_params = session_service.device_width_sql(
@@ -245,12 +260,14 @@ async def list_by_domain(
     offset: int = 0,
     device: str | None = None,
     duration: str | None = None,
+    start: datetime | None = None,
+    end: datetime | None = None,
 ) -> list[dict[str, Any]]:
     """List view deliberately omits the `recording_data` blob (returned NULL).
 
     `device` is the session's device class (`unknown` without a linked session).
     """
-    filters, params = _filter_sql(device, duration, 4)
+    filters, params = _filter_sql(device, duration, 4, start, end)
     return await query(
         f"""
         SELECT r.id, r.domain_id, r.session_id, r.url, r.duration, r.events_count,
@@ -292,10 +309,14 @@ async def remove(recording_id: str) -> None:
 
 
 async def count_by_domain(
-    domain_id: str, device: str | None = None, duration: str | None = None
+    domain_id: str,
+    device: str | None = None,
+    duration: str | None = None,
+    start: datetime | None = None,
+    end: datetime | None = None,
 ) -> int:
     """Counts with the same filters as `list_by_domain`, so pagination agrees."""
-    filters, params = _filter_sql(device, duration, 2)
+    filters, params = _filter_sql(device, duration, 2, start, end)
     row = await query_one(
         f"""
         SELECT COUNT(*)::text as count

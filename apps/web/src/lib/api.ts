@@ -162,6 +162,7 @@ export const auth = {
             name: string;
             subscription: string;
             auth_provider: string;
+            hasPassword: boolean;
             avatar_url: string;
             company: string | null;
             job_title: string | null;
@@ -173,7 +174,19 @@ export const auth = {
             profile_complete: boolean;
             missing_fields: string[];
             restricted: string | null;
+            preferences: Record<string, any>;
         }>('/api/auth/me');
+    },
+
+    /** Delete the account for good. Confirmed with the password, or the email for GitHub/Google accounts. */
+    async deleteAccount(confirmation: { password: string } | { confirm: string }) {
+        const { refreshToken: token } = getTokens();
+        const result = await apiRequest<{ message: string }>('/api/auth/me', {
+            method: 'DELETE',
+            body: JSON.stringify({ ...confirmation, refreshToken: token })
+        });
+        if (result.data) clearTokens();
+        return result;
     },
 
     async updateProfile(data: {
@@ -617,9 +630,18 @@ export type RecordingDuration = 'short' | 'medium' | 'long';
 export const recordings = {
     async list(
         domainId: string,
-        filters?: { device?: RecordingDevice; duration?: RecordingDuration; page?: number }
+        filters?: {
+            device?: RecordingDevice;
+            duration?: RecordingDuration;
+            page?: number;
+            /** ISO timestamps bounding when the recording started. */
+            startDate?: string;
+            endDate?: string;
+        }
     ) {
         const params = new URLSearchParams();
+        if (filters?.startDate) params.set('startDate', filters.startDate);
+        if (filters?.endDate) params.set('endDate', filters.endDate);
         if (filters?.device) params.set('device', filters.device);
         if (filters?.duration) params.set('duration', filters.duration);
         if (filters?.page) params.set('page', String(filters.page));

@@ -153,7 +153,7 @@ export default function TrafficSourcesPage() {
                     label="Referring sites"
                     icon={Globe}
                     value={data.referrers.length.toLocaleString()}
-                    hint={data.referrers.length ? 'Including search and social sites' : 'None in this period'}
+                    hint={data.referrers.length ? 'Search and social are counted in their own channels' : 'None in this period'}
                 />
             </div>
 
@@ -161,7 +161,7 @@ export default function TrafficSourcesPage() {
                 <ChartCard title="Channels" subtitle="Sessions by channel">
                     <BarList items={data.channels} labelHeader="Channel" valueHeader="Sessions" emptyText="No sessions in this period." />
                 </ChartCard>
-                <ChartCard title="Top referrers" subtitle="Every external site that sent visitors">
+                <ChartCard title="Top referrers" subtitle="Other sites that linked visitors here">
                     <BarList
                         items={data.referrers}
                         labelHeader="Site"

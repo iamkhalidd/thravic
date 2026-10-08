@@ -247,10 +247,16 @@ async def get_top_referrers(
     end_date: datetime,
     limit: int = DEFAULT_TOP_REFERRERS_LIMIT,
     own_host: str | None = None,
+    referrals_only: bool = False,
 ) -> list[dict[str, Any]]:
     """Top referring sites: one row per hostname (not per full URL, which split one
-    site across many rows), excluding the tracked site itself."""
+    site across many rows), excluding the tracked site itself.
+
+    With `referrals_only`, only sessions of the referral channel count, so search
+    engines and social networks (their own channels) are left out.
+    """
     own = (own_host or "").lower().removeprefix("www.")
+    channel = "AND source_type = 'referral'" if referrals_only else ""
     return await query(
         f"""
         SELECT {_REFERRER_HOST_SQL} AS site,
@@ -262,6 +268,7 @@ async def get_top_referrers(
           AND referrer IS NOT NULL AND referrer != ''
           AND {_REFERRER_HOST_SQL} IS NOT NULL
           AND NOT ({_REFERRER_HOST_SQL} = $5 OR {_REFERRER_HOST_SQL} LIKE '%.' || $5)
+          {channel}
         GROUP BY 1
         ORDER BY sessions DESC
         LIMIT $4

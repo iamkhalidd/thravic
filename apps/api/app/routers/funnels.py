@@ -8,11 +8,11 @@ excluded here, unlike `domainService.hasAccess`.
 from __future__ import annotations
 
 import re
-from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 
+from ..date_range import date_range
 from ..errors import SimpleError
 from ..js_compat import js_round, url_path
 from ..json_response import jsjson
@@ -36,6 +36,14 @@ router = APIRouter()
 METRICS_LOOKBACK_DAYS = 30
 STEP_TYPES = ("pageview", "click", "custom")
 MATCH_TYPES = ("exact", "contains", "regex")
+# Which part of an event a step can match, per step type (the builder's "Field").
+# A step saved without one matches the URL or its path (page steps) or the event
+# name (custom event steps).
+MATCH_FIELDS = {
+    "pageview": ("url", "path", "referrer"),
+    "click": ("url", "path", "elementId", "elementClass"),
+    "custom": ("eventName", "url", "path"),
+}
 
 FAILED_LIST = "Failed to list funnels"
 FAILED_CREATE = "Failed to create funnel"
@@ -92,12 +100,19 @@ def _validate_steps(raw: Any, *, optional: bool) -> tuple[list[dict] | None, dic
         if issue:
             return None, {**issue, "path": ["steps", index, "matchValue"]}
 
+        match_field = None
+        if step.get("matchField") is not None:
+            match_field, issue = _nested_enum(step, "matchField", MATCH_FIELDS[step_type])
+            if issue:
+                return None, {**issue, "path": ["steps", index, "matchField"]}
+
         validated.append(
             {
                 "name": name,
                 "type": step_type,
                 "matchType": match_type,
                 "matchValue": match_value,
+                "matchField": match_field,
             }
         )
 
@@ -175,26 +190,50 @@ def _step_payload(step: dict) -> dict:
         "type": step["type"],
         "matchType": step["match_type"],
         "matchValue": step["match_value"],
+        "matchField": step.get("match_field"),
         "order": step["step_order"],
     }
 
 
-def _matches_step(step: dict, event: dict) -> bool:
-    """Whether `event` satisfies `step`.
+def _step_candidates(field: str | None, event: dict) -> list[str]:
+    """The values of `event` a step's match is tried against.
 
-    Pageview-style steps match the page: "exact" accepts the full URL or its path
-    (a step of `/pricing` never matched `https://site.com/pricing` before). Custom
-    event steps match the event's name, which is what a person types for them.
+    With no field (steps saved before the builder's choice was stored), page
+    steps match the full URL or its path — so "exact" `/pricing` matches
+    `https://site.com/pricing` — and custom event steps match the event name.
     """
+    data = event.get("data")
+    data = data if isinstance(data, dict) else {}
+    url = event.get("url") or ""
+
+    if field is None:
+        if event["type"] == "custom":
+            return [str(data.get("event") or "")]
+        return [url, url_path(url)]
+    if field == "url":
+        return [url]
+    if field == "path":
+        return [url_path(url)]
+    if field == "referrer":
+        return [event.get("referrer") or ""]
+    if field == "elementId":
+        return [str(data.get("id") or "")]
+    if field == "elementClass":
+        # The whole class attribute, or any one class ("exact" `btn-primary`
+        # matches `btn btn-primary`).
+        classes = str(data.get("className") or "")
+        return [classes, *classes.split()]
+    if field == "eventName":
+        return [str(data.get("event") or "")]
+    return []
+
+
+def _matches_step(step: dict, event: dict) -> bool:
+    """Whether `event` satisfies `step`, on the step's field (see `_step_candidates`)."""
     if step["type"] != event["type"]:
         return False
 
-    if event["type"] == "custom":
-        data = event.get("data") or {}
-        candidates = [str(data.get("event") or "")] if isinstance(data, dict) else [""]
-    else:
-        url = event.get("url") or ""
-        candidates = [url, url_path(url)]
+    candidates = _step_candidates(step.get("match_field"), event)
 
     expected = step["match_value"]
     match_type = step["match_type"]
@@ -309,6 +348,8 @@ async def create_funnel(
 async def get_funnel(
     domainId: str,
     funnelId: str,
+    startDate: str | None = Query(None),
+    endDate: str | None = Query(None),
     user: AuthUser = Depends(require_auth),
     _feature: None = Depends(require_feature("funnels")),
 ):
@@ -319,8 +360,7 @@ async def get_funnel(
         if not funnel or funnel["domain_id"] != domain["id"]:
             raise SimpleError("Funnel not found", 404)
 
-        end_date = datetime.now(UTC)
-        start_date = end_date - timedelta(days=METRICS_LOOKBACK_DAYS)
+        start_date, end_date = date_range(startDate, endDate, METRICS_LOOKBACK_DAYS)
         events = await event_service.query_by_domain(domain["id"], start_date, end_date)
 
         reached = _funnel_progress(funnel["steps"], events)
@@ -336,6 +376,7 @@ async def get_funnel(
                     "type": step["type"],
                     "matchType": step["match_type"],
                     "matchValue": step["match_value"],
+                    "matchField": step.get("match_field"),
                     "order": step["step_order"],
                     "visitors": visitors,
                     # Of the previous step's visitors, the share that reached this one.
@@ -410,6 +451,7 @@ async def update_funnel(
                 "type": s["type"],
                 "matchType": s["match_type"],
                 "matchValue": s["match_value"],
+                "matchField": s.get("match_field"),
             }
             for s in existing["steps"]
         ]

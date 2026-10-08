@@ -10,8 +10,9 @@ rather than the underlying message.
 `GET /:domainId/:recordingId` returns the events of either format (see
 `recording_service`); `format` tells the player which it got.
 
-The list takes `?device=desktop|tablet|mobile` (the linked session's screen width)
-and `?duration=short|medium|long` (under 30s, 30s-3min, over 3min); the
+The list takes `?device=desktop|tablet|mobile` (the linked session's screen width),
+`?duration=short|medium|long` (under 30s, 30s-3min, over 3min) and
+`?startDate=&endDate=` (when the recording started; all time without them); the
 pagination total applies the same filters.
 """
 
@@ -22,6 +23,7 @@ import math
 from fastapi import APIRouter, Depends, Request
 from starlette.responses import Response
 
+from ..date_range import parse_date
 from ..errors import SimpleError
 from ..js_compat import js_parse_int
 from ..json_response import JSON_CONTENT_TYPE, js_json_dumps, jsjson
@@ -211,10 +213,17 @@ async def list_recordings(
         if duration is not None and duration not in recording_service.DURATIONS:
             raise SimpleError("duration must be one of: short, medium, long", 400)
 
+        start = parse_date(request.query_params.get("startDate"))
+        end = parse_date(request.query_params.get("endDate"))
+        if start and end and start > end:
+            raise SimpleError("startDate must be before endDate", 400)
+
         recordings = await recording_service.list_by_domain(
-            domain["id"], limit, offset, device, duration
+            domain["id"], limit, offset, device, duration, start, end
         )
-        total = await recording_service.count_by_domain(domain["id"], device, duration)
+        total = await recording_service.count_by_domain(
+            domain["id"], device, duration, start, end
+        )
         started_today = await recording_service.count_started_today(domain["id"])
 
         return jsjson(

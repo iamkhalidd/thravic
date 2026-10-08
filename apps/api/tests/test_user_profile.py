@@ -361,3 +361,72 @@ async def test_restricted_accounts_are_deleted_after_the_grace_period(db_pool):
         left = {r["id"] for r in await conn.fetch("SELECT id FROM users WHERE id = ANY($1)", ids)}
         await conn.execute("DELETE FROM users WHERE id = ANY($1)", ids)
     assert left == {ids[1]}  # only the one past the grace period went
+
+
+# ── Settings: notification choices and deleting the account ─────────────────
+
+
+@requires_test_db
+async def test_saving_one_preference_keeps_the_others(db_pool, legacy_user):
+    async with db_pool.acquire() as conn:
+        await conn.execute(
+            """UPDATE users SET preferences = '{"theme": "dark"}'::jsonb WHERE id = $1""",
+            legacy_user["id"],
+        )
+    async with _client() as client:
+        response = await client.patch(
+            "/api/auth/me",
+            json={"preferences": {"notifications": {"trafficAlerts": False}}},
+            headers=legacy_user["headers"],
+        )
+        me = (await client.get("/api/auth/me", headers=legacy_user["headers"])).json()
+
+    assert response.status_code == 200, response.json()
+    assert me["preferences"] == {"theme": "dark", "notifications": {"trafficAlerts": False}}
+
+
+@requires_test_db
+async def test_an_account_without_a_password_is_deleted_by_typing_its_email(db_pool, legacy_user):
+    async with db_pool.acquire() as conn:
+        email = await conn.fetchval("SELECT email FROM users WHERE id = $1", legacy_user["id"])
+
+    async with _client() as client:
+        me = (await client.get("/api/auth/me", headers=legacy_user["headers"])).json()
+        wrong = await client.request(
+            "DELETE", "/api/auth/me", json={"confirm": "someone@else.invalid"},
+            headers=legacy_user["headers"],
+        )
+        right = await client.request(
+            "DELETE", "/api/auth/me", json={"confirm": email.upper()},
+            headers=legacy_user["headers"],
+        )
+        after = await client.get("/api/auth/me", headers=legacy_user["headers"])
+
+    assert me["hasPassword"] is False
+    assert (wrong.status_code, wrong.json()["field"]) == (400, "confirm")
+    assert right.status_code == 200, right.json()
+    assert after.status_code == 401  # the access token is revoked with the account
+    async with db_pool.acquire() as conn:
+        assert await conn.fetchval("SELECT 1 FROM users WHERE id = $1", legacy_user["id"]) is None
+
+
+@requires_test_db
+async def test_an_account_with_a_password_needs_it_to_be_deleted(db_pool, legacy_user):
+    async with db_pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE users SET password = $2 WHERE id = $1",
+            legacy_user["id"],
+            auth_routes.hash_password("correct horse battery"),
+        )
+
+    async with _client() as client:
+        wrong = await client.request(
+            "DELETE", "/api/auth/me", json={"password": "nope"}, headers=legacy_user["headers"]
+        )
+        right = await client.request(
+            "DELETE", "/api/auth/me", json={"password": "correct horse battery"},
+            headers=legacy_user["headers"],
+        )
+
+    assert (wrong.status_code, wrong.json()["field"]) == (400, "password")
+    assert right.status_code == 200, right.json()

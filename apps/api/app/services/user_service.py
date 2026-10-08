@@ -165,11 +165,12 @@ async def update_subscription(
 async def update_preferences(
     user_id: str, preferences: dict[str, Any]
 ) -> dict[str, Any] | None:
-    # `preferences` is passed as a dict — the jsonb codec serializes it.
+    # `preferences` is passed as a dict — the jsonb codec serializes it. Merged
+    # into what is stored, so saving one group (e.g. notifications) keeps the rest.
     return await query_one(
         """
         UPDATE users
-        SET preferences = $2,
+        SET preferences = COALESCE(preferences, '{}'::jsonb) || $2::jsonb,
             updated_at = NOW()
         WHERE id = $1
         RETURNING *
