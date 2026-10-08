@@ -34,10 +34,15 @@ export function TimeSeriesChart({
 }: Props) {
     const colors = useChartColors();
     const gradientId = useId().replace(/:/g, '');
+    // Comparison series share the neutral grey, so each gets its own dash
+    // pattern to stay distinguishable where they overlap.
+    const DASHES = ['4 4', '1 3', '8 3 2 3'];
     let slot = 0;
+    let mutedSlot = 0;
     const styled = series.map(s => ({
         ...s,
         color: s.muted ? colors.muted : colors.series[slot++ % colors.series.length],
+        dash: s.muted ? DASHES[mutedSlot++ % DASHES.length] : undefined,
     }));
     const [lead, ...rest] = styled;
     const empty = data.length === 0 || data.every(row => styled.every(s => !Number(row[s.key])));
@@ -49,7 +54,7 @@ export function TimeSeriesChart({
                     {styled.map(s => (
                         <li key={s.key} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>
                             <svg width="14" height="8" aria-hidden="true">
-                                <line x1="0" y1="4" x2="14" y2="4" stroke={s.color} strokeWidth="2" strokeDasharray={s.muted ? '3 3' : undefined} />
+                                <line x1="0" y1="4" x2="14" y2="4" stroke={s.color} strokeWidth="2" strokeDasharray={s.dash} />
                             </svg>
                             {s.label}
                         </li>
@@ -116,7 +121,7 @@ export function TimeSeriesChart({
                                 name={lead.label}
                                 stroke={lead.color}
                                 strokeWidth={2}
-                                strokeDasharray={lead.muted ? '4 4' : undefined}
+                                strokeDasharray={lead.dash}
                                 fill={lead.muted ? 'transparent' : `url(#${gradientId})`}
                                 activeDot={{ r: 4, strokeWidth: 2, stroke: 'var(--color-bg-card)' }}
                                 dot={false}
@@ -131,7 +136,7 @@ export function TimeSeriesChart({
                                 name={s.label}
                                 stroke={s.color}
                                 strokeWidth={s.muted ? 1.5 : 2}
-                                strokeDasharray={s.muted ? '4 4' : undefined}
+                                strokeDasharray={s.dash}
                                 dot={false}
                                 activeDot={{ r: 4, strokeWidth: 2, stroke: 'var(--color-bg-card)' }}
                                 isAnimationActive={false}

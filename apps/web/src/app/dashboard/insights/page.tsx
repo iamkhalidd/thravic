@@ -6,7 +6,6 @@ import {
     Sparkles,
     TrendingUp,
     TrendingDown,
-    AlertTriangle,
     Target,
     Zap,
     ArrowRight,
@@ -15,8 +14,10 @@ import {
     FileText,
     Filter,
 } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { useDomain } from '@/contexts/DomainContext';
+import { PageHeader } from '@/components/PageHeader';
+import { ChartCard } from '@/components/ChartCard';
+import { TimeSeriesChart } from '@/components/charts/TimeSeriesChart';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
@@ -86,10 +87,13 @@ const insightIcons: Record<string, React.ElementType> = {
     opportunity: Target,
 };
 
-const priorityColors: Record<string, string> = {
-    high: 'var(--color-error)',
-    medium: 'var(--color-warning)',
-    low: 'var(--color-success)'
+// Priority is always shown as a text badge; the colour only reinforces it.
+const PRIORITIES = ['high', 'medium', 'low'] as const;
+const PRIORITY_LABEL: Record<Insight['priority'], string> = { high: 'High', medium: 'Medium', low: 'Low' };
+const PRIORITY_BADGE: Record<Insight['priority'], string> = {
+    high: 'badge badge-error',
+    medium: 'badge badge-warning',
+    low: 'badge badge-success',
 };
 
 async function getInsights(domainId: string, refresh = false) {
@@ -155,58 +159,41 @@ export default function InsightsPage() {
         setRefreshing(false);
     };
 
-    // Combine historical and forecast for chart
-    const chartData = trends ? [
-        ...trends.historical.map(h => ({
+    // Actual pageviews (headline), the moving-average trend and the forecast on one
+    // axis. The forecast starts at today's actual value so the line continues.
+    const historical = trends?.historical ?? [];
+    const forecast = trends?.forecast ?? [];
+    const lastActual = historical[historical.length - 1];
+    const chartData: Record<string, unknown>[] = [
+        ...historical.map((h, i) => ({
             date: h.date,
-            pageviews: h.pageviews,
-            trendLine: h.pageviewsMA,
-            type: 'historical'
+            actual: Number(h.pageviews),
+            trend: Number(h.pageviewsMA),
+            ...(i === historical.length - 1 && forecast.length > 0 ? { forecast: Number(h.pageviews) } : {}),
         })),
-        ...trends.forecast.map(f => ({
-            date: f.date,
-            forecast: f.predicted,
-            confidence: f.confidence,
-            type: 'forecast'
-        }))
-    ] : [];
+        ...forecast.map(f => ({ date: f.date, forecast: Number(f.predicted) })),
+    ];
 
-    if (loading) {
-        return (
-            <div>
-                <div className="skeleton" style={{ height: '40px', width: '200px', marginBottom: 'var(--space-xl)' }} />
-                <div className="grid grid-cols-3 gap-lg">
-                    <div style={{ gridColumn: 'span 2' }} className="card">
-                        <div className="skeleton" style={{ height: '300px' }} />
-                    </div>
-                    <div className="card">
-                        <div className="skeleton" style={{ height: '300px' }} />
-                    </div>
-                </div>
-            </div>
-        );
-    }
+    const counts = {
+        high: insights.filter(i => i.priority === 'high').length,
+        medium: insights.filter(i => i.priority === 'medium').length,
+        low: insights.filter(i => i.priority === 'low').length,
+    };
 
-    return (
-        <div>
-            {/* Header */}
-            <div className="flex items-center justify-between" style={{ marginBottom: 'var(--space-xl)' }}>
-                <div className="flex items-center gap-md">
-                    <h1>AI Insights</h1>
-                    <span className="badge" style={{ background: 'var(--color-accent-gradient)' }}>
-                        <Sparkles size={12} style={{ marginRight: '4px' }} />
-                        {insights.length} insights
-                    </span>
-                    {report && report.status === 'ok' && (
-                        <span className="badge" title={report.aiGenerated ? 'Written by AI from your numbers' : 'AI unavailable: written by rules from the same numbers'}>
-                            {report.aiGenerated ? 'AI' : 'Rule-based'}
-                        </span>
-                    )}
-                </div>
-                <div className="flex items-center gap-md">
+    const header = (
+        <PageHeader
+            title="AI insights"
+            subtitle="A daily report on what changed on your site and what to do about it"
+            badge={report && report.status === 'ok' ? (
+                <span className="badge" title={report.aiGenerated ? 'Written by AI from your numbers' : 'AI unavailable: written by rules from the same numbers'}>
+                    {report.aiGenerated ? 'AI' : 'Rule-based'}
+                </span>
+            ) : undefined}
+            actions={
+                <>
                     {report && (
-                        <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>
-                            Updated {new Date(report.generatedAt).toLocaleString()} · {report.refreshesLeft} refresh{report.refreshesLeft === 1 ? '' : 'es'} left today
+                        <span style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>
+                            Updated {new Date(report.generatedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })} · {report.refreshesLeft} refresh{report.refreshesLeft === 1 ? '' : 'es'} left today
                         </span>
                     )}
                     <button
@@ -217,303 +204,187 @@ export default function InsightsPage() {
                         <RefreshCw size={16} className={refreshing ? 'spin' : undefined} />
                         {refreshing ? 'Analysing…' : 'Refresh'}
                     </button>
+                </>
+            }
+        />
+    );
+
+    if (loading) {
+        return (
+            <div className="page-stack">
+                <div className="skeleton" style={{ height: '28px', width: '180px' }} />
+                <div className="split-grid">
+                    <ChartCard title="Traffic forecast" loading height={260}><div /></ChartCard>
+                    <ChartCard title="Insight summary" loading height={260}><div /></ChartCard>
                 </div>
+                <ChartCard title="All insights" loading height={200}><div /></ChartCard>
             </div>
+        );
+    }
+
+    if (!selectedDomainId) {
+        return (
+            <div className="page-stack">
+                {header}
+                <div className="card empty-note">Select a website to see its insights.</div>
+            </div>
+        );
+    }
+
+    const direction = trends?.trend?.direction;
+    const TrendIcon = direction === 'up' ? TrendingUp : direction === 'down' ? TrendingDown : ArrowRight;
+
+    return (
+        <div className="page-stack">
+            {header}
 
             {error && (
-                <div role="alert" className="card" style={{ marginBottom: 'var(--space-lg)', color: 'var(--color-error)' }}>
+                <div role="alert" className="card" style={{ color: 'var(--color-error)', fontSize: '0.875rem' }}>
                     {error}
                 </div>
             )}
 
-            <div className="grid grid-cols-3 gap-lg" style={{ marginBottom: 'var(--space-xl)' }}>
-                {/* Traffic Forecast Chart */}
-                <div style={{ gridColumn: 'span 2' }} className="card">
-                    <div className="card-header" style={{ marginBottom: 'var(--space-md)' }}>
-                        <h4 className="card-title">Traffic Forecast</h4>
-                        {trends?.trend && (
-                            <div className="flex items-center gap-sm">
-                                {trends.trend.direction === 'up' ? (
-                                    <TrendingUp size={18} style={{ color: 'var(--color-success)' }} />
-                                ) : trends.trend.direction === 'down' ? (
-                                    <TrendingDown size={18} style={{ color: 'var(--color-error)' }} />
-                                ) : (
-                                    <ArrowRight size={18} style={{ color: 'var(--color-text-muted)' }} />
-                                )}
-                                <span style={{ fontSize: '0.875rem', textTransform: 'capitalize' }}>
-                                    {trends.trend.direction} trend
-                                </span>
-                            </div>
-                        )}
-                    </div>
+            <div className="split-grid">
+                <ChartCard
+                    title="Traffic forecast"
+                    subtitle="Pageviews per day, with the trend and a 7-day forecast"
+                    action={direction ? (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.8125rem', color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
+                            <TrendIcon size={16} aria-hidden="true" style={{
+                                color: direction === 'up' ? 'var(--color-success)' : direction === 'down' ? 'var(--color-error)' : 'var(--color-text-muted)',
+                            }} />
+                            {direction === 'up' ? 'Trending up' : direction === 'down' ? 'Trending down' : 'Stable'}
+                        </span>
+                    ) : undefined}
+                >
+                    <TimeSeriesChart
+                        data={chartData}
+                        xKey="date"
+                        height={340}
+                        series={[
+                            { key: 'actual', label: 'Pageviews' },
+                            { key: 'trend', label: '7-day average', muted: true },
+                            { key: 'forecast', label: 'Forecast', muted: true },
+                        ]}
+                    />
+                </ChartCard>
 
-                    <div style={{ height: '300px' }}>
-                        <ResponsiveContainer width="100%" height="100%">
-                            <LineChart data={chartData}>
-                                <XAxis
-                                    dataKey="date"
-                                    stroke="var(--color-text-muted)"
-                                    fontSize={12}
-                                    tickFormatter={(value) => {
-                                        const date = new Date(value);
-                                        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                                    }}
-                                />
-                                <YAxis
-                                    stroke="var(--color-text-muted)"
-                                    fontSize={12}
-                                />
-                                <Tooltip
-                                    contentStyle={{
-                                        background: 'var(--color-bg-card)',
-                                        border: '1px solid var(--color-border)',
-                                        borderRadius: 'var(--radius-md)'
-                                    }}
-                                />
-                                {/* Today marker */}
-                                {trends?.historical.length && (
-                                    <ReferenceLine
-                                        x={trends.historical[trends.historical.length - 1].date}
-                                        stroke="var(--color-text-muted)"
-                                        strokeDasharray="3 3"
-                                        label={{ value: 'Today', position: 'top', fontSize: 10 }}
-                                    />
-                                )}
-                                <Line
-                                    type="monotone"
-                                    dataKey="pageviews"
-                                    stroke="var(--color-accent-primary)"
-                                    strokeWidth={2}
-                                    dot={false}
-                                />
-                                <Line
-                                    type="monotone"
-                                    dataKey="trendLine"
-                                    stroke="var(--color-accent-secondary)"
-                                    strokeWidth={2}
-                                    strokeDasharray="5 5"
-                                    dot={false}
-                                />
-                                <Line
-                                    type="monotone"
-                                    dataKey="forecast"
-                                    stroke="var(--color-success)"
-                                    strokeWidth={2}
-                                    strokeDasharray="3 3"
-                                    dot={{ fill: 'var(--color-success)', r: 3 }}
-                                />
-                            </LineChart>
-                        </ResponsiveContainer>
-                    </div>
+                <div className="page-stack" style={{ minWidth: 0 }}>
+                    <ChartCard title="Insight summary" subtitle="Today's report by priority">
+                        <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                            {PRIORITIES.map(p => (
+                                <li key={p} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.875rem' }}>
+                                    <span className={PRIORITY_BADGE[p]}>{PRIORITY_LABEL[p]} priority</span>
+                                    <span style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{counts[p]}</span>
+                                </li>
+                            ))}
+                        </ul>
+                    </ChartCard>
 
-                    <div className="flex items-center justify-center gap-lg" style={{ marginTop: 'var(--space-md)' }}>
-                        <div className="flex items-center gap-xs">
-                            <span style={{ width: '20px', height: '3px', background: 'var(--color-accent-primary)' }} />
-                            <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>Actual</span>
-                        </div>
-                        <div className="flex items-center gap-xs">
-                            <span style={{ width: '20px', height: '3px', background: 'var(--color-accent-secondary)', borderStyle: 'dashed' }} />
-                            <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>Trend</span>
-                        </div>
-                        <div className="flex items-center gap-xs">
-                            <span style={{ width: '20px', height: '3px', background: 'var(--color-success)', borderStyle: 'dashed' }} />
-                            <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>Forecast</span>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Quick Stats */}
-                <div>
-                    <div className="card" style={{ marginBottom: 'var(--space-md)' }}>
-                        <h5 style={{ marginBottom: 'var(--space-md)' }}>Insight Summary</h5>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
-                            <div className="flex items-center justify-between">
-                                <span style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>High Priority</span>
-                                <span style={{
-                                    padding: '2px 8px',
-                                    borderRadius: 'var(--radius-full)',
-                                    background: 'rgba(239, 68, 68, 0.2)',
-                                    color: 'var(--color-error)',
-                                    fontSize: '0.875rem',
-                                    fontWeight: 600
-                                }}>
-                                    {insights.filter(i => i.priority === 'high').length}
-                                </span>
-                            </div>
-                            <div className="flex items-center justify-between">
-                                <span style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>Medium Priority</span>
-                                <span style={{
-                                    padding: '2px 8px',
-                                    borderRadius: 'var(--radius-full)',
-                                    background: 'rgba(245, 158, 11, 0.2)',
-                                    color: 'var(--color-warning)',
-                                    fontSize: '0.875rem',
-                                    fontWeight: 600
-                                }}>
-                                    {insights.filter(i => i.priority === 'medium').length}
-                                </span>
-                            </div>
-                            <div className="flex items-center justify-between">
-                                <span style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>Low Priority</span>
-                                <span style={{
-                                    padding: '2px 8px',
-                                    borderRadius: 'var(--radius-full)',
-                                    background: 'rgba(16, 185, 129, 0.2)',
-                                    color: 'var(--color-success)',
-                                    fontSize: '0.875rem',
-                                    fontWeight: 600
-                                }}>
-                                    {insights.filter(i => i.priority === 'low').length}
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* 7-Day Forecast */}
-                    {trends?.forecast && trends.forecast.length > 0 && (
-                        <div className="card">
-                            <h5 style={{ marginBottom: 'var(--space-md)' }}>7-Day Forecast</h5>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-xs)' }}>
-                                {trends.forecast.slice(0, 5).map((f, i) => (
-                                    <div key={i} className="flex items-center justify-between" style={{ fontSize: '0.875rem' }}>
-                                        <span style={{ color: 'var(--color-text-secondary)' }}>
-                                            {new Date(f.date).toLocaleDateString('en-US', { weekday: 'short' })}
-                                        </span>
-                                        <span>{f.predicted} views</span>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
+                    {forecast.length > 0 && (
+                        <ChartCard title="Forecast" subtitle="Predicted pageviews, next 5 days" flush>
+                            <table className="data-table">
+                                <tbody>
+                                    {forecast.slice(0, 5).map(f => (
+                                        <tr key={f.date}>
+                                            <td className="muted" style={{ paddingLeft: 20 }}>
+                                                {new Date(`${f.date}T00:00:00Z`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })}
+                                            </td>
+                                            <td className="num" style={{ paddingRight: 20 }}>{Number(f.predicted).toLocaleString()}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </ChartCard>
                     )}
                 </div>
             </div>
 
-            {/* Insights List */}
-            <div className="card">
-                <div className="card-header" style={{ marginBottom: 'var(--space-lg)' }}>
-                    <h4 className="card-title">All Insights</h4>
-                </div>
-
+            <ChartCard title="All insights" subtitle={insights.length ? `${insights.length} from today's report` : undefined} flush>
                 {insights.length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: 'var(--space-xl)', color: 'var(--color-text-muted)' }}>
-                        <Sparkles size={48} style={{ marginBottom: 'var(--space-md)', opacity: 0.5 }} />
-                        <p>
-                            {report?.status === 'insufficient_data'
-                                ? `Not enough data yet: insights need at least ${report.minSessions} sessions in the last 7 days.`
-                                : 'No insights yet.'}
-                        </p>
-                    </div>
+                    <p className="empty-note">
+                        {report?.status === 'insufficient_data'
+                            ? `Not enough data yet: insights need at least ${report.minSessions} sessions in the last 7 days.`
+                            : error ? 'Insights could not be loaded.' : 'No insights yet.'}
+                    </p>
                 ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
+                    <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
                         {insights.map(insight => {
                             const Icon = insightIcons[insight.type] || Sparkles;
-
+                            const open = selectedInsight?.id === insight.id;
                             return (
-                                <div
-                                    key={insight.id}
-                                    onClick={() => setSelectedInsight(selectedInsight?.id === insight.id ? null : insight)}
-                                    style={{
-                                        padding: 'var(--space-md)',
-                                        background: 'var(--color-bg-secondary)',
-                                        borderRadius: 'var(--radius-md)',
-                                        border: '1px solid var(--color-border)',
-                                        cursor: 'pointer',
-                                        transition: 'border-color var(--transition-fast)'
-                                    }}
-                                >
-                                    <div className="flex items-start gap-md">
-                                        <div style={{
-                                            width: '40px',
-                                            height: '40px',
-                                            borderRadius: 'var(--radius-md)',
-                                            background: `${priorityColors[insight.priority]}20`,
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            flexShrink: 0
-                                        }}>
-                                            <Icon size={20} style={{ color: priorityColors[insight.priority] }} />
-                                        </div>
-
-                                        <div style={{ flex: 1 }}>
-                                            <div className="flex items-center gap-sm" style={{ marginBottom: 'var(--space-xs)' }}>
-                                                <h5 style={{ margin: 0 }}>{insight.title}</h5>
-                                                <span className="badge" style={{
-                                                    textTransform: 'capitalize',
-                                                    background: `${priorityColors[insight.priority]}20`,
-                                                    color: priorityColors[insight.priority]
-                                                }}>
-                                                    {insight.priority}
-                                                </span>
-                                            </div>
-                                            <p style={{
-                                                fontSize: '0.875rem',
-                                                color: 'var(--color-text-secondary)',
-                                                marginBottom: selectedInsight?.id === insight.id ? 'var(--space-md)' : 0
-                                            }}>
+                                <li key={insight.id} style={{ borderTop: '1px solid var(--color-border)' }}>
+                                    <button
+                                        type="button"
+                                        aria-expanded={open}
+                                        onClick={() => setSelectedInsight(open ? null : insight)}
+                                        style={{
+                                            display: 'flex', alignItems: 'flex-start', gap: 12, width: '100%',
+                                            padding: '12px 20px', background: 'transparent', border: 'none',
+                                            textAlign: 'left', cursor: 'pointer', color: 'inherit', font: 'inherit',
+                                        }}
+                                    >
+                                        <Icon size={16} aria-hidden="true" style={{ color: 'var(--color-text-muted)', flexShrink: 0, marginTop: 2 }} />
+                                        <span style={{ flex: 1, minWidth: 0 }}>
+                                            <span style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                                                <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--color-text-primary)' }}>{insight.title}</span>
+                                                <span className={PRIORITY_BADGE[insight.priority]}>{PRIORITY_LABEL[insight.priority]}</span>
+                                            </span>
+                                            <span style={{ display: 'block', marginTop: 2, fontSize: '0.8125rem', color: 'var(--color-text-secondary)' }}>
                                                 {insight.description}
-                                            </p>
+                                            </span>
+                                        </span>
+                                        <ChevronRight size={16} aria-hidden="true" style={{
+                                            color: 'var(--color-text-muted)', flexShrink: 0, marginTop: 2,
+                                            transform: open ? 'rotate(90deg)' : 'none',
+                                            transition: 'transform var(--transition-fast)',
+                                        }} />
+                                    </button>
 
-                                            {selectedInsight?.id === insight.id && (
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
-                                                    {insight.recommendation && (
-                                                        <div style={{
-                                                            padding: 'var(--space-sm) var(--space-md)',
-                                                            background: 'var(--color-bg-tertiary)',
-                                                            borderRadius: 'var(--radius-md)',
-                                                            borderLeft: '3px solid var(--color-accent-primary)'
-                                                        }}>
-                                                            <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
-                                                                Recommendation
-                                                            </span>
-                                                            <p style={{ fontSize: '0.875rem', margin: 'var(--space-xs) 0 0' }}>
-                                                                {insight.recommendation}
-                                                            </p>
-                                                        </div>
-                                                    )}
-                                                    {insight.evidence.map(item => (
-                                                        <div key={item.subject} style={{ fontSize: '0.8rem' }}>
-                                                            <div style={{ color: 'var(--color-text-muted)', marginBottom: 4 }}>
-                                                                Based on: {item.subject}
-                                                            </div>
-                                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-xs) var(--space-md)' }}>
-                                                                {Object.entries(item.numbers).map(([key, value]) => {
-                                                                    const [label, shown] = formatEvidence(key, value);
-                                                                    return (
-                                                                        <span key={key}>
-                                                                            <span style={{ color: 'var(--color-text-muted)' }}>{label}:</span> {shown}
-                                                                        </span>
-                                                                    );
-                                                                })}
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                    <Link
-                                                        href={insight.link}
-                                                        onClick={(e) => e.stopPropagation()}
-                                                        style={{ fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                                                    >
-                                                        See the data <ArrowRight size={14} />
-                                                    </Link>
+                                    {open && (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '0 20px 14px 48px' }}>
+                                            {insight.recommendation && (
+                                                <div style={{
+                                                    padding: '8px 12px',
+                                                    background: 'var(--color-bg-tertiary)',
+                                                    borderRadius: 'var(--radius-md)',
+                                                    borderLeft: '3px solid var(--color-accent-primary)',
+                                                }}>
+                                                    <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>Recommendation</span>
+                                                    <p style={{ fontSize: '0.8125rem', margin: '2px 0 0' }}>{insight.recommendation}</p>
                                                 </div>
                                             )}
+                                            {insight.evidence.map(item => (
+                                                <div key={item.subject} style={{ fontSize: '0.8125rem' }}>
+                                                    <div style={{ color: 'var(--color-text-muted)', marginBottom: 4 }}>
+                                                        Based on: {item.subject}
+                                                    </div>
+                                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 16px', fontVariantNumeric: 'tabular-nums' }}>
+                                                        {Object.entries(item.numbers).map(([key, value]) => {
+                                                            const [label, shown] = formatEvidence(key, value);
+                                                            return (
+                                                                <span key={key}>
+                                                                    <span style={{ color: 'var(--color-text-muted)' }}>{label}:</span> {shown}
+                                                                </span>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                            <Link
+                                                href={insight.link}
+                                                style={{ fontSize: '0.8125rem', display: 'inline-flex', alignItems: 'center', gap: 4, alignSelf: 'flex-start' }}
+                                            >
+                                                See the data <ArrowRight size={14} aria-hidden="true" />
+                                            </Link>
                                         </div>
-
-                                        <ChevronRight
-                                            size={18}
-                                            style={{
-                                                color: 'var(--color-text-muted)',
-                                                transform: selectedInsight?.id === insight.id ? 'rotate(90deg)' : 'none',
-                                                transition: 'transform var(--transition-fast)'
-                                            }}
-                                        />
-                                    </div>
-                                </div>
+                                    )}
+                                </li>
                             );
                         })}
-                    </div>
+                    </ul>
                 )}
-            </div>
+            </ChartCard>
         </div>
     );
 }

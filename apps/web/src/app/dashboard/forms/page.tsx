@@ -1,173 +1,165 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FileInput, Hash, Send, Search } from 'lucide-react';
+import { Hash, Search, Send } from 'lucide-react';
 import { customEvents } from '@/lib/api';
 import { useDomain } from '@/contexts/DomainContext';
+import { useApiRange } from '@/contexts/DateRangeContext';
+import { PageHeader } from '@/components/PageHeader';
+import { StatCard } from '@/components/StatCard';
+import { ChartCard } from '@/components/ChartCard';
+
+type FormRow = {
+    form_id: string | null;
+    form_name: string | null;
+    action: string | null;
+    method: string | null;
+    submissions: number;
+    avg_fields: number;
+    pages: number;
+};
+
+/** The tracker sometimes sends an empty object as the name ("{}"); treat it as missing. */
+function cleanName(name: string | null): string | null {
+    if (!name) return null;
+    const trimmed = name.trim();
+    return trimmed && trimmed !== '{}' && trimmed !== '[object Object]' ? trimmed : null;
+}
 
 export default function FormsPage() {
     const { selectedDomainId, loading: domainLoading } = useDomain();
-    const [data, setData] = useState<any>(null);
+    const range = useApiRange();
+    const [data, setData] = useState<{ totalSubmissions: number; forms: FormRow[] } | null>(null);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
 
     useEffect(() => {
+        if (!selectedDomainId) {
+            if (!domainLoading) setLoading(false);
+            return;
+        }
+        let cancelled = false;
         const load = async () => {
-            if (!selectedDomainId) return;
             setLoading(true);
-            const result = await customEvents.getForms(selectedDomainId);
-            if (result.data) setData(result.data);
+            const result = await customEvents.getForms(selectedDomainId, range.start, range.end);
+            if (cancelled) return;
+            setData(result.data ?? null);
+            setLoadError(result.data ? null : result.error || 'Could not load form submissions');
             setLoading(false);
         };
-        if (selectedDomainId) load();
-    }, [selectedDomainId]);
+        load();
+        return () => { cancelled = true; };
+    }, [selectedDomainId, range, domainLoading]);
+
+    const header = (
+        <PageHeader title="Forms" subtitle="Form submissions across your site" />
+    );
 
     if (!selectedDomainId && !domainLoading) {
         return (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-xl)', color: 'var(--color-text-secondary)' }}>
-                <p>Please select a domain to view form analytics</p>
+            <div className="page-stack">
+                {header}
+                <div className="card empty-note">Select a website to see its forms.</div>
             </div>
         );
     }
 
-    if (domainLoading || loading) {
-        return (
-            <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-xl)' }}>
-                <div className="loading-spinner" />
-            </div>
-        );
-    }
-
-    if (!selectedDomainId) {
-        return (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-xl)', color: 'var(--color-text-secondary)' }}>
-                <p>Please select a domain to view form analytics</p>
-            </div>
-        );
-    }
-
-    const forms = data?.forms || [];
-    const filtered = forms.filter((f: any) =>
-        (f.form_name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (f.form_id || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (f.action || '').toLowerCase().includes(searchQuery.toLowerCase())
+    const busy = loading || domainLoading;
+    const forms = data?.forms ?? [];
+    const query = searchQuery.trim().toLowerCase();
+    const filtered = forms.filter(f =>
+        (cleanName(f.form_name) || '').toLowerCase().includes(query) ||
+        (f.form_id || '').toLowerCase().includes(query) ||
+        (f.action || '').toLowerCase().includes(query)
     );
 
     return (
-        <div>
-            {/* Header */}
-            <div style={{ marginBottom: 'var(--space-xl)' }}>
-                <h1 style={{ fontSize: '1.5rem', fontWeight: 600, color: 'var(--color-text-primary)', marginBottom: 'var(--space-xs)' }}>
-                    Form Analytics
-                </h1>
-                <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>
-                    Track form submissions across your website
-                </p>
-            </div>
+        <div className="page-stack">
+            {header}
 
-            {/* Stats Cards */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--space-md)', marginBottom: 'var(--space-xl)' }}>
-                <div style={{
-                    background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-lg)',
-                    border: '1px solid var(--color-border)', padding: 'var(--space-lg)'
-                }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)', marginBottom: 'var(--space-sm)' }}>
-                        <Send size={16} style={{ color: 'var(--color-accent-primary)' }} />
-                        <span style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Submissions</span>
-                    </div>
-                    <div style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--color-text-primary)' }}>
-                        {(data?.totalSubmissions || 0).toLocaleString()}
-                    </div>
+            {loadError && !busy && (
+                <div role="alert" className="card" style={{ color: 'var(--color-error)', fontSize: '0.875rem' }}>
+                    {loadError}
                 </div>
-                <div style={{
-                    background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-lg)',
-                    border: '1px solid var(--color-border)', padding: 'var(--space-lg)'
-                }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)', marginBottom: 'var(--space-sm)' }}>
-                        <Hash size={16} style={{ color: '#8b5cf6' }} />
-                        <span style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Unique Forms</span>
-                    </div>
-                    <div style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--color-text-primary)' }}>
-                        {forms.length}
-                    </div>
-                </div>
+            )}
+
+            <div className="stat-grid">
+                <StatCard label="Submissions" icon={Send} loading={busy}
+                    value={(data?.totalSubmissions ?? 0).toLocaleString()} />
+                <StatCard label="Forms" icon={Hash} loading={busy}
+                    value={forms.length.toLocaleString()} hint="With at least one submission" />
             </div>
 
-            {/* Search */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)', padding: 'var(--space-xs) var(--space-sm)', background: 'var(--color-bg-tertiary)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', marginBottom: 'var(--space-lg)', maxWidth: '400px' }}>
-                <Search size={14} style={{ color: 'var(--color-text-tertiary)' }} />
-                <input
-                    type="text"
-                    placeholder="Search forms..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    style={{ background: 'transparent', border: 'none', outline: 'none', fontSize: '0.8125rem', color: 'var(--color-text-primary)', width: '100%' }}
-                />
-            </div>
-
-            {/* Table */}
-            <div className="dash-table-wrap" style={{ background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', overflow: 'hidden' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8125rem' }}>
-                    <thead>
-                        <tr style={{ background: 'var(--color-bg-tertiary)' }}>
-                            <th style={{ textAlign: 'left', padding: 'var(--space-md)', fontWeight: 500, color: 'var(--color-text-secondary)' }}>Form</th>
-                            <th style={{ textAlign: 'left', padding: 'var(--space-md)', fontWeight: 500, color: 'var(--color-text-secondary)' }}>Action</th>
-                            <th style={{ textAlign: 'center', padding: 'var(--space-md)', fontWeight: 500, color: 'var(--color-text-secondary)' }}>Method</th>
-                            <th style={{ textAlign: 'right', padding: 'var(--space-md)', fontWeight: 500, color: 'var(--color-text-secondary)' }}>Fields</th>
-                            <th style={{ textAlign: 'right', padding: 'var(--space-md)', fontWeight: 500, color: 'var(--color-text-secondary)' }}>Submissions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {filtered.length === 0 ? (
-                            <tr>
-                                <td colSpan={5} style={{ padding: 'var(--space-xl)', textAlign: 'center', color: 'var(--color-text-secondary)' }}>
-                                    {forms.length === 0 ? (
-                                        <div>
-                                            <FileInput size={32} style={{ margin: '0 auto var(--space-sm)', display: 'block', opacity: 0.5 }} />
-                                            <p style={{ fontWeight: 500 }}>No form submissions yet</p>
-                                            <p style={{ fontSize: '0.8125rem', marginTop: 'var(--space-xs)' }}>
-                                                Form submissions will appear here once visitors start using forms on your website.
-                                            </p>
-                                        </div>
-                                    ) : 'No forms match your search'}
-                                </td>
-                            </tr>
-                        ) : filtered.map((form: any, idx: number) => (
-                            <tr key={idx} style={{ borderTop: '1px solid var(--color-border)' }}>
-                                <td style={{ padding: 'var(--space-md)', color: 'var(--color-text-primary)' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)' }}>
-                                        <FileInput size={14} style={{ color: 'var(--color-text-tertiary)', flexShrink: 0 }} />
-                                        <div>
-                                            <div style={{ fontWeight: 500 }}>{form.form_name || form.form_id || 'Unnamed Form'}</div>
-                                            {form.form_id && form.form_name && (
-                                                <div style={{ fontSize: '0.6875rem', color: 'var(--color-text-muted)' }}>#{form.form_id}</div>
-                                            )}
-                                        </div>
-                                    </div>
-                                </td>
-                                <td style={{ padding: 'var(--space-md)', color: 'var(--color-text-secondary)', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                    {form.action || '—'}
-                                </td>
-                                <td style={{ textAlign: 'center', padding: 'var(--space-md)' }}>
-                                    <span style={{
-                                        padding: '2px 8px', borderRadius: '4px', fontSize: '0.6875rem', fontWeight: 600,
-                                        background: form.method === 'POST' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(59, 130, 246, 0.1)',
-                                        color: form.method === 'POST' ? '#22c55e' : '#3b82f6',
-                                    }}>
-                                        {form.method || 'GET'}
-                                    </span>
-                                </td>
-                                <td style={{ textAlign: 'right', padding: 'var(--space-md)', color: 'var(--color-text-secondary)' }}>
-                                    {form.avg_fields || 0}
-                                </td>
-                                <td style={{ textAlign: 'right', padding: 'var(--space-md)', fontWeight: 600, color: 'var(--color-text-primary)' }}>
-                                    {form.submissions.toLocaleString()}
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
+            <ChartCard
+                title="All forms"
+                subtitle="By submissions"
+                flush
+                loading={busy}
+                action={
+                    <label style={{ position: 'relative', flex: '0 1 240px', minWidth: 140 }}>
+                        <Search size={14} aria-hidden="true" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-muted)' }} />
+                        <input
+                            type="search"
+                            className="input"
+                            aria-label="Search forms"
+                            placeholder="Search forms…"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            style={{ padding: '6px 10px 6px 30px', fontSize: '0.8125rem' }}
+                        />
+                    </label>
+                }
+            >
+                {loadError ? (
+                    <p className="empty-note">Form submissions could not be loaded.</p>
+                ) : filtered.length === 0 ? (
+                    <p className="empty-note">
+                        {forms.length === 0
+                            ? 'No form submissions in this period. They appear once visitors submit a form on your site.'
+                            : 'No forms match your search.'}
+                    </p>
+                ) : (
+                    <div style={{ overflowX: 'auto' }}>
+                        <table className="data-table">
+                            <thead>
+                                <tr>
+                                    <th style={{ paddingLeft: 20 }}>Form</th>
+                                    <th>Action</th>
+                                    <th>Method</th>
+                                    <th className="num">Fields</th>
+                                    <th className="num" style={{ paddingRight: 20 }}>Submissions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {filtered.map((form, idx) => {
+                                    const name = cleanName(form.form_name);
+                                    return (
+                                        <tr key={idx}>
+                                            <td style={{ paddingLeft: 20 }}>
+                                                <span style={{ fontWeight: 500 }}>{name || (form.form_id ? `#${form.form_id}` : 'Unnamed form')}</span>
+                                                {name && form.form_id && (
+                                                    <span className="muted" style={{ marginLeft: 6, fontSize: '0.75rem' }}>#{form.form_id}</span>
+                                                )}
+                                            </td>
+                                            <td className="muted" style={{ maxWidth: 260 }}>
+                                                <div title={form.action || undefined} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>
+                                                    {form.action || '—'}
+                                                </div>
+                                            </td>
+                                            <td><span className="badge">{(form.method || 'GET').toUpperCase()}</span></td>
+                                            <td className="num muted">{Number(form.avg_fields || 0).toLocaleString()}</td>
+                                            <td className="num" style={{ paddingRight: 20, fontWeight: 500 }}>
+                                                {Number(form.submissions).toLocaleString()}
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </ChartCard>
         </div>
     );
 }

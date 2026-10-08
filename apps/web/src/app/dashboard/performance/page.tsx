@@ -1,27 +1,39 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Gauge, Zap, Clock, Eye, LayoutList } from 'lucide-react';
+import { Gauge, Zap, Clock, Eye, LayoutList, Timer } from 'lucide-react';
 import { customEvents } from '@/lib/api';
 import { useDomain } from '@/contexts/DomainContext';
+import { useApiRange } from '@/contexts/DateRangeContext';
+import { PageHeader } from '@/components/PageHeader';
+import { StatCard } from '@/components/StatCard';
+import { ChartCard } from '@/components/ChartCard';
 
 // Web Vitals thresholds (Google's official ranges)
 const THRESHOLDS: Record<string, { good: number; poor: number; unit: string; label: string }> = {
-    lcp: { good: 2500, poor: 4000, unit: 'ms', label: 'Largest Contentful Paint' },
-    fid: { good: 100, poor: 300, unit: 'ms', label: 'First Input Delay' },
-    cls: { good: 0.1, poor: 0.25, unit: '', label: 'Cumulative Layout Shift' },
-    ttfb: { good: 800, poor: 1800, unit: 'ms', label: 'Time to First Byte' },
-    fcp: { good: 1800, poor: 3000, unit: 'ms', label: 'First Contentful Paint' },
+    lcp: { good: 2500, poor: 4000, unit: 'ms', label: 'Largest contentful paint (LCP)' },
+    fid: { good: 100, poor: 300, unit: 'ms', label: 'First input delay (FID)' },
+    cls: { good: 0.1, poor: 0.25, unit: '', label: 'Cumulative layout shift (CLS)' },
+    ttfb: { good: 800, poor: 1800, unit: 'ms', label: 'Time to first byte (TTFB)' },
+    fcp: { good: 1800, poor: 3000, unit: 'ms', label: 'First contentful paint (FCP)' },
 };
 
-function getScore(key: string, raw: number | string | null): { color: string; label: string } {
+type Status = { rank: number; label: string; badge: string };
+
+const NO_DATA: Status = { rank: -1, label: 'No data', badge: 'badge' };
+const STATUSES: Status[] = [
+    { rank: 0, label: 'Good', badge: 'badge badge-success' },
+    { rank: 1, label: 'Needs improvement', badge: 'badge badge-warning' },
+    { rank: 2, label: 'Poor', badge: 'badge badge-error' },
+];
+
+function getStatus(key: string, raw: number | string | null): Status {
     const value = raw === null || raw === undefined ? NaN : Number(raw);
-    if (Number.isNaN(value)) return { color: 'var(--color-text-muted)', label: 'No data' };
     const t = THRESHOLDS[key];
-    if (!t) return { color: 'var(--color-text-primary)', label: '' };
-    if (value <= t.good) return { color: '#22c55e', label: 'Good' };
-    if (value <= t.poor) return { color: '#f59e0b', label: 'Needs Work' };
-    return { color: '#ef4444', label: 'Poor' };
+    if (Number.isNaN(value) || !t) return NO_DATA;
+    if (value <= t.good) return STATUSES[0];
+    if (value <= t.poor) return STATUSES[1];
+    return STATUSES[2];
 }
 
 function formatValue(key: string, raw: number | string | null): string {
@@ -30,7 +42,7 @@ function formatValue(key: string, raw: number | string | null): string {
     if (Number.isNaN(value)) return '—';
     const t = THRESHOLDS[key];
     if (key === 'cls') return value.toFixed(3);
-    if (t?.unit === 'ms') {
+    if (t?.unit === 'ms' || key === 'load') {
         if (value >= 1000) return `${(value / 1000).toFixed(1)}s`;
         return `${Math.round(value)}ms`;
     }
@@ -47,48 +59,48 @@ function pathOf(url: string | null): string {
     }
 }
 
+function StatusBadge({ status }: { status: Status }) {
+    return <span className={status.badge} style={{ whiteSpace: 'nowrap' }}>{status.label}</span>;
+}
+
 export default function PerformancePage() {
     const { selectedDomainId, loading: domainLoading } = useDomain();
+    const range = useApiRange();
     const [data, setData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState<string | null>(null);
 
     useEffect(() => {
+        if (!selectedDomainId) {
+            if (!domainLoading) setLoading(false);
+            return;
+        }
+        let cancelled = false;
         const load = async () => {
-            if (!selectedDomainId) return;
             setLoading(true);
-            const result = await customEvents.getPerformance(selectedDomainId);
-            if (result.data) setData(result.data);
+            const result = await customEvents.getPerformance(selectedDomainId, range.start, range.end);
+            if (cancelled) return;
+            setData(result.data ?? null);
+            setLoadError(result.data ? null : result.error || 'Could not load performance data');
             setLoading(false);
         };
-        if (selectedDomainId) load();
-    }, [selectedDomainId]);
+        load();
+        return () => { cancelled = true; };
+    }, [selectedDomainId, range, domainLoading]);
 
     if (!selectedDomainId && !domainLoading) {
         return (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-xl)', color: 'var(--color-text-secondary)' }}>
-                <p>Please select a domain to view performance metrics</p>
+            <div className="page-stack">
+                <PageHeader title="Performance" subtitle="Core Web Vitals and page load times from real visitors" />
+                <div className="card empty-note">Select a website to see its performance.</div>
             </div>
         );
     }
 
-    if (domainLoading || loading) {
-        return (
-            <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-xl)' }}>
-                <div className="loading-spinner" />
-            </div>
-        );
-    }
-
-    if (!selectedDomainId) {
-        return (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-xl)', color: 'var(--color-text-secondary)' }}>
-                <p>Please select a domain to view performance metrics</p>
-            </div>
-        );
-    }
-
+    const busy = loading || domainLoading;
     const m = data?.metrics || {};
-    const byPage = data?.byPage || [];
+    const byPage: Array<{ url: string; avg_lcp: number; avg_fcp: number; count: number }> = data?.byPage || [];
+    const samples = Number(m.sample_count || 0);
     const vitals = [
         { key: 'lcp', icon: Eye, value: m.avg_lcp },
         { key: 'fid', icon: Zap, value: m.avg_fid },
@@ -98,123 +110,90 @@ export default function PerformancePage() {
     ];
 
     return (
-        <div>
-            {/* Header */}
-            <div style={{ marginBottom: 'var(--space-xl)' }}>
-                <h1 style={{ fontSize: '1.5rem', fontWeight: 600, color: 'var(--color-text-primary)', marginBottom: 'var(--space-xs)' }}>
-                    Performance
-                </h1>
-                <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>
-                    Core Web Vitals and page load metrics &middot; {m.sample_count || 0} samples
-                </p>
-            </div>
+        <div className="page-stack">
+            <PageHeader
+                title="Performance"
+                subtitle={busy || loadError
+                    ? 'Core Web Vitals and page load times from real visitors'
+                    : `Core Web Vitals and page load times from ${samples.toLocaleString()} visitor sample${samples === 1 ? '' : 's'}`}
+            />
 
-            {/* Vitals Cards */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 'var(--space-md)', marginBottom: 'var(--space-xl)' }}>
-                {vitals.map(({ key, icon: Icon, value }) => {
-                    const score = getScore(key, value);
+            {loadError && !busy && (
+                <div role="alert" className="card" style={{ color: 'var(--color-error)', fontSize: '0.875rem' }}>
+                    {loadError}
+                </div>
+            )}
+
+            {/* Six tiles: at most three per row so they read as 3 + 3, never 5 + 1. */}
+            <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(max(260px, calc((100% - 24px) / 3)), 1fr))' }}>
+                {vitals.map(({ key, icon, value }) => {
                     const t = THRESHOLDS[key];
+                    const status = getStatus(key, value);
                     return (
-                        <div key={key} style={{
-                            background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-lg)',
-                            border: '1px solid var(--color-border)', padding: 'var(--space-lg)',
-                            position: 'relative', overflow: 'hidden',
-                        }}>
-                            {/* Score indicator bar */}
-                            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '3px', background: score.color }} />
-
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)', marginBottom: 'var(--space-sm)' }}>
-                                <Icon size={16} style={{ color: score.color }} />
-                                <span style={{ fontSize: '0.6875rem', color: 'var(--color-text-secondary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                    {key.toUpperCase()}
-                                </span>
-                            </div>
-
-                            <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--color-text-primary)', marginBottom: '2px' }}>
-                                {formatValue(key, value)}
-                            </div>
-
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <span style={{ fontSize: '0.6875rem', color: score.color, fontWeight: 600 }}>{score.label}</span>
-                                <span style={{ fontSize: '0.625rem', color: 'var(--color-text-muted)' }}>
-                                    {t ? `Good: <${formatValue(key, t.good)}` : ''}
-                                </span>
-                            </div>
-
-                            <div style={{ fontSize: '0.6875rem', color: 'var(--color-text-muted)', marginTop: 'var(--space-xs)' }}>
-                                {t.label}
-                            </div>
-                        </div>
+                        <StatCard
+                            key={key}
+                            label={t.label}
+                            icon={icon}
+                            loading={busy}
+                            value={formatValue(key, value)}
+                            hint={<><StatusBadge status={status} /><span>Good ≤ {key === 'cls' ? t.good : formatValue(key, t.good)}</span></>}
+                        />
                     );
                 })}
+                <StatCard
+                    label="Average page load"
+                    icon={Timer}
+                    loading={busy}
+                    value={formatValue('load', m.avg_load_time)}
+                    hint="Until the load event"
+                />
             </div>
 
-            {/* Page Load Time */}
-            {m.avg_load_time != null && (
-                <div style={{
-                    background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-lg)',
-                    border: '1px solid var(--color-border)', padding: 'var(--space-lg)',
-                    marginBottom: 'var(--space-xl)',
-                }}>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 'var(--space-xs)' }}>
-                        Average Page Load Time
-                    </div>
-                    <div style={{ fontSize: '2rem', fontWeight: 700, color: 'var(--color-text-primary)' }}>
-                        {m.avg_load_time >= 1000 ? `${(m.avg_load_time / 1000).toFixed(1)}s` : `${m.avg_load_time}ms`}
-                    </div>
-                </div>
-            )}
-
-            {/* Performance by Page */}
-            {byPage.length > 0 && (
-                <div className="dash-table-wrap" style={{ background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', overflow: 'hidden' }}>
-                    <div style={{ padding: 'var(--space-md)', borderBottom: '1px solid var(--color-border)' }}>
-                        <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--color-text-primary)' }}>Performance by Page</span>
-                    </div>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8125rem' }}>
-                        <thead>
-                            <tr style={{ background: 'var(--color-bg-tertiary)' }}>
-                                <th style={{ textAlign: 'left', padding: 'var(--space-md)', fontWeight: 500, color: 'var(--color-text-secondary)' }}>Page</th>
-                                <th style={{ textAlign: 'right', padding: 'var(--space-md)', fontWeight: 500, color: 'var(--color-text-secondary)' }}>LCP</th>
-                                <th style={{ textAlign: 'right', padding: 'var(--space-md)', fontWeight: 500, color: 'var(--color-text-secondary)' }}>FCP</th>
-                                <th style={{ textAlign: 'right', padding: 'var(--space-md)', fontWeight: 500, color: 'var(--color-text-secondary)' }}>Samples</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {byPage.map((page: any, idx: number) => (
-                                <tr key={idx} style={{ borderTop: '1px solid var(--color-border)' }}>
-                                    <td style={{ padding: 'var(--space-md)', color: 'var(--color-text-primary)', maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                        {pathOf(page.url)}
-                                    </td>
-                                    <td style={{ textAlign: 'right', padding: 'var(--space-md)', color: getScore('lcp', page.avg_lcp).color, fontWeight: 500 }}>
-                                        {formatValue('lcp', page.avg_lcp)}
-                                    </td>
-                                    <td style={{ textAlign: 'right', padding: 'var(--space-md)', color: getScore('fcp', page.avg_fcp).color, fontWeight: 500 }}>
-                                        {formatValue('fcp', page.avg_fcp)}
-                                    </td>
-                                    <td style={{ textAlign: 'right', padding: 'var(--space-md)', color: 'var(--color-text-secondary)' }}>
-                                        {page.count}
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            )}
-
-            {m.sample_count === 0 && (
-                <div style={{
-                    background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-lg)',
-                    border: '1px solid var(--color-border)', padding: 'var(--space-xl)',
-                    textAlign: 'center', color: 'var(--color-text-secondary)',
-                }}>
-                    <Gauge size={32} style={{ marginBottom: 'var(--space-sm)', opacity: 0.5 }} />
-                    <p style={{ fontWeight: 500 }}>No performance data yet</p>
-                    <p style={{ fontSize: '0.8125rem', marginTop: 'var(--space-xs)' }}>
-                        Performance metrics will appear once the tracking script captures Web Vitals from visitors.
+            <ChartCard title="By page" subtitle="Status from the slower of LCP and FCP" flush loading={busy}>
+                {loadError ? (
+                    <p className="empty-note">Performance data could not be loaded.</p>
+                ) : byPage.length === 0 ? (
+                    <p className="empty-note">
+                        No performance data in this period. It appears once the tracking script captures Web Vitals from visitors.
                     </p>
-                </div>
-            )}
+                ) : (
+                    <div style={{ overflowX: 'auto' }}>
+                        <table className="data-table">
+                            <thead>
+                                <tr>
+                                    <th style={{ paddingLeft: 20 }}>Page</th>
+                                    <th className="num">LCP</th>
+                                    <th className="num">FCP</th>
+                                    <th>Status</th>
+                                    <th className="num" style={{ paddingRight: 20 }}>Samples</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {byPage.map((page, idx) => {
+                                    const lcp = getStatus('lcp', page.avg_lcp);
+                                    const fcp = getStatus('fcp', page.avg_fcp);
+                                    const worst = lcp.rank >= fcp.rank ? lcp : fcp;
+                                    return (
+                                        <tr key={idx}>
+                                            <td style={{ paddingLeft: 20, maxWidth: 360 }}>
+                                                <div title={page.url} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                    {pathOf(page.url)}
+                                                </div>
+                                            </td>
+                                            <td className="num">{formatValue('lcp', page.avg_lcp)}</td>
+                                            <td className="num">{formatValue('fcp', page.avg_fcp)}</td>
+                                            <td><StatusBadge status={worst} /></td>
+                                            <td className="num muted" style={{ paddingRight: 20 }}>
+                                                {Number(page.count || 0).toLocaleString()}
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </ChartCard>
         </div>
     );
 }

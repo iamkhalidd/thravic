@@ -1,353 +1,180 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Link from 'next/link';
+import type { ReactNode } from 'react';
 import {
+    Activity,
+    ExternalLink,
+    Mail,
+    MousePointer2,
+    Search,
+    Smartphone,
+    Target,
+    Trophy,
     Globe,
-    PieChart,
-    BarChart3,
-    ExternalLink
 } from 'lucide-react';
 import { sources } from '@/lib/api';
 import { useDomain } from '@/contexts/DomainContext';
+import { useApiRange } from '@/contexts/DateRangeContext';
+import { PageHeader } from '@/components/PageHeader';
+import { StatCard } from '@/components/StatCard';
+import { ChartCard } from '@/components/ChartCard';
+import { BarList } from '@/components/charts/BarList';
+import type { BarListItem } from '@/components/charts/BarList';
 
-// Channel icons and colors
-const channels = {
-    direct: { label: 'Direct', color: 'var(--color-accent-primary)' },
-    organic: { label: 'Organic Search', color: '#22c55e' },
-    paid: { label: 'Paid Search', color: '#f59e0b' },
-    social: { label: 'Social', color: '#34B1AA' },
-    referral: { label: 'Referral', color: '#3B8FF3' },
-    email: { label: 'Email', color: '#E0B50F' }
-};
+type ChannelKey = 'direct' | 'organic' | 'paid' | 'social' | 'referral' | 'email';
+
+const CHANNELS: Array<{ key: ChannelKey; label: string; icon: ReactNode }> = [
+    { key: 'direct', label: 'Direct', icon: <MousePointer2 size={14} /> },
+    { key: 'organic', label: 'Organic search', icon: <Search size={14} /> },
+    { key: 'paid', label: 'Paid', icon: <Target size={14} /> },
+    { key: 'social', label: 'Social', icon: <Smartphone size={14} /> },
+    { key: 'referral', label: 'Referral', icon: <ExternalLink size={14} /> },
+    { key: 'email', label: 'Email', icon: <Mail size={14} /> },
+];
+
+interface SourcesData {
+    totalSessions: number;
+    channels: BarListItem[];
+    referrers: BarListItem[];
+    social: BarListItem[];
+    search: BarListItem[];
+}
 
 export default function TrafficSourcesPage() {
     const { selectedDomainId, loading: domainLoading } = useDomain();
-    const [data, setData] = useState<any>(null);
+    const range = useApiRange();
+    const [data, setData] = useState<SourcesData | null>(null);
+    const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
-    const [viewMode, setViewMode] = useState<'pie' | 'bar'>('pie');
 
     useEffect(() => {
+        if (!selectedDomainId) {
+            if (!domainLoading) setLoading(false);
+            return;
+        }
+        let cancelled = false;
+
         const loadData = async () => {
-            if (!selectedDomainId) return;
             setLoading(true);
-            const result = await sources.getOverview(selectedDomainId);
-            if (result.data) {
-                setData(result.data);
+            setError(null);
+            const { start, end } = range;
+            const [overviewRes, referrersRes, socialRes, searchRes] = await Promise.all([
+                sources.getOverview(selectedDomainId, start, end),
+                sources.getReferrers(selectedDomainId, start, end),
+                sources.getSocial(selectedDomainId, start, end),
+                sources.getSearch(selectedDomainId, start, end),
+            ]);
+            if (cancelled) return;
+
+            if (!overviewRes.data) {
+                setError(overviewRes.error || 'Could not load traffic sources.');
+                setData(null);
+                setLoading(false);
+                return;
             }
+
+            const byType = overviewRes.data.summary?.byType;
+            setData({
+                totalSessions: overviewRes.data.summary?.totalSessions ?? 0,
+                channels: CHANNELS.map(c => ({ label: c.label, value: byType?.[c.key]?.count ?? 0, icon: c.icon })),
+                // The referrers endpoint has the full list; the overview's top list is the fallback.
+                referrers: (referrersRes.data?.referrers ?? overviewRes.data.topReferrers ?? [])
+                    .map(r => ({ label: r.site, value: r.sessions ?? 0, icon: <Globe size={14} /> })),
+                social: (socialRes.data?.platforms ?? overviewRes.data.topSocial ?? [])
+                    .map(p => ({ label: p.platform, value: p.sessions ?? 0 })),
+                search: (searchRes.data?.engines ?? []).map(e => ({ label: e.engine, value: e.sessions ?? 0 })),
+            });
             setLoading(false);
         };
 
-        if (selectedDomainId) {
-            loadData();
-        }
-    }, [selectedDomainId]);
+        loadData();
+        return () => { cancelled = true; };
+    }, [selectedDomainId, range, domainLoading]);
 
-    if (domainLoading || loading) {
+    const header = <PageHeader title="Sources" subtitle="Where your visitors come from." />;
+
+    if (loading || domainLoading) {
         return (
-            <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-xl)' }}>
-                <div className="loading-spinner" />
+            <div className="page-stack">
+                {header}
+                <div className="stat-grid">
+                    {[1, 2, 3, 4].map(i => <StatCard key={i} label="" value="" loading />)}
+                </div>
+                <div className="dash-grid-2">
+                    {[1, 2, 3, 4].map(i => <ChartCard key={i} title="" loading><span /></ChartCard>)}
+                </div>
             </div>
         );
     }
 
     if (!selectedDomainId) {
         return (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-xl)', color: 'var(--color-text-secondary)' }}>
-                <p>Please select a domain to view traffic sources</p>
+            <div className="page-stack">
+                {header}
+                <div className="card"><p className="empty-note">Select a website to see its traffic sources.</p></div>
             </div>
         );
     }
 
-    // GET /api/sources/{id}/overview: sessions per channel in `summary.byType`,
-    // and referring sites in `topReferrers`.
-    const channelData = Object.entries(data?.summary?.byType || {}).map(
-        ([type, value]: [string, any]) => ({ type, sessions: value?.count || 0 })
-    );
-    const totalSessions = channelData.reduce((sum: number, ch: any) => sum + ch.sessions, 0);
-    const topSources: Array<{ site: string; sessions: number }> = data?.topReferrers || [];
+    if (error || !data) {
+        return (
+            <div className="page-stack">
+                {header}
+                <div className="card" role="alert">
+                    <p className="empty-note" style={{ color: 'var(--color-error)' }}>{error || 'Could not load traffic sources.'}</p>
+                </div>
+            </div>
+        );
+    }
+
+    const topChannel = [...data.channels].sort((a, b) => b.value - a.value)[0];
+    const share = (n: number) => (data.totalSessions > 0 ? `${Math.round((n / data.totalSessions) * 100)}% of sessions` : undefined);
 
     return (
-        <div>
-            {/* Page Header */}
-            <div style={{ marginBottom: 'var(--space-xl)' }}>
-                <h1 style={{
-                    fontSize: '1.5rem',
-                    fontWeight: 600,
-                    color: 'var(--color-text-primary)',
-                    marginBottom: 'var(--space-xs)'
-                }}>
-                    Traffic Sources
-                </h1>
-                <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>
-                    See where your visitors are coming from
-                </p>
+        <div className="page-stack">
+            {header}
+
+            <div className="stat-grid">
+                <StatCard label="Sessions" icon={Activity} value={data.totalSessions.toLocaleString()} hint="All channels" />
+                <StatCard
+                    label="Top channel"
+                    icon={Trophy}
+                    value={topChannel && topChannel.value > 0 ? topChannel.label : '—'}
+                    hint={topChannel && topChannel.value > 0 ? share(topChannel.value) : 'No sessions yet'}
+                />
+                <StatCard
+                    label="Direct sessions"
+                    icon={MousePointer2}
+                    value={(data.channels.find(c => c.label === 'Direct')?.value ?? 0).toLocaleString()}
+                    hint="Typed in or bookmarked"
+                />
+                <StatCard
+                    label="Referring sites"
+                    icon={Globe}
+                    value={data.referrers.length.toLocaleString()}
+                    hint={data.referrers.length ? 'Including search and social sites' : 'None in this period'}
+                />
             </div>
 
-            {/* Channel Breakdown Cards */}
-            <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-                gap: 'var(--space-md)',
-                marginBottom: 'var(--space-xl)'
-            }}>
-                {Object.entries(channels).map(([key, config]) => {
-                    const channel = channelData.find((ch: any) => ch.type === key);
-                    const sessions = channel?.sessions || 0;
-                    const percentage = totalSessions > 0 ? ((sessions / totalSessions) * 100).toFixed(1) : 0;
-
-                    return (
-                        <div
-                            key={key}
-                            style={{
-                                padding: 'var(--space-lg)',
-                                background: 'var(--color-bg-secondary)',
-                                borderRadius: 'var(--radius-lg)',
-                                border: '1px solid var(--color-border)',
-                                textDecoration: 'none',
-                                transition: 'all var(--transition-fast)'
-                            }}
-                        >
-                            <div style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: 'var(--space-sm)',
-                                marginBottom: 'var(--space-md)'
-                            }}>
-                                <div style={{
-                                    width: '10px',
-                                    height: '10px',
-                                    borderRadius: '50%',
-                                    background: config.color
-                                }} />
-                                <span style={{
-                                    fontSize: '0.8125rem',
-                                    color: 'var(--color-text-secondary)'
-                                }}>
-                                    {config.label}
-                                </span>
-                            </div>
-                            <div style={{
-                                fontSize: '1.5rem',
-                                fontWeight: 600,
-                                color: 'var(--color-text-primary)',
-                                marginBottom: 'var(--space-xs)'
-                            }}>
-                                {sessions.toLocaleString()}
-                            </div>
-                            <div style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between'
-                            }}>
-                                <span style={{
-                                    fontSize: '0.75rem',
-                                    color: 'var(--color-text-tertiary)'
-                                }}>
-                                    {percentage}% of total
-                                </span>
-                            </div>
-                        </div>
-                    );
-                })}
-            </div>
-
-            {/* Chart Section */}
-            <div className="dash-grid-2" style={{
-                gap: 'var(--space-lg)',
-                marginBottom: 'var(--space-xl)'
-            }}>
-                {/* Pie Chart */}
-                <div style={{
-                    padding: 'var(--space-lg)',
-                    background: 'var(--color-bg-secondary)',
-                    borderRadius: 'var(--radius-lg)',
-                    border: '1px solid var(--color-border)'
-                }}>
-                    <h3 style={{
-                        fontSize: '0.9375rem',
-                        fontWeight: 500,
-                        marginBottom: 'var(--space-lg)',
-                        color: 'var(--color-text-primary)'
-                    }}>
-                        Channel Distribution
-                    </h3>
-                    <div style={{
-                        display: 'flex',
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                        height: '200px'
-                    }}>
-                        {/* Simple pie chart visualization */}
-                        <svg viewBox="0 0 100 100" style={{ width: '180px', height: '180px' }}>
-                            {(() => {
-                                let cumulativePercent = 0;
-                                return channelData.map((ch: any, idx: number) => {
-                                    const percent = totalSessions > 0 ? (ch.sessions / totalSessions) * 100 : 0;
-                                    const startAngle = cumulativePercent * 3.6;
-                                    cumulativePercent += percent;
-                                    const endAngle = cumulativePercent * 3.6;
-
-                                    const startX = 50 + 40 * Math.cos((startAngle - 90) * Math.PI / 180);
-                                    const startY = 50 + 40 * Math.sin((startAngle - 90) * Math.PI / 180);
-                                    const endX = 50 + 40 * Math.cos((endAngle - 90) * Math.PI / 180);
-                                    const endY = 50 + 40 * Math.sin((endAngle - 90) * Math.PI / 180);
-                                    const largeArc = percent > 50 ? 1 : 0;
-
-                                    const color = channels[ch.type as keyof typeof channels]?.color || '#888';
-
-                                    return (
-                                        <path
-                                            key={idx}
-                                            d={`M 50 50 L ${startX} ${startY} A 40 40 0 ${largeArc} 1 ${endX} ${endY} Z`}
-                                            fill={color}
-                                            stroke="var(--color-bg-secondary)"
-                                            strokeWidth="1"
-                                        />
-                                    );
-                                });
-                            })()}
-                            <circle cx="50" cy="50" r="25" fill="var(--color-bg-secondary)" />
-                        </svg>
-                    </div>
-                    <div style={{
-                        display: 'flex',
-                        flexWrap: 'wrap',
-                        gap: 'var(--space-sm)',
-                        justifyContent: 'center',
-                        marginTop: 'var(--space-md)'
-                    }}>
-                        {Object.entries(channels).map(([key, config]) => (
-                            <div key={key} style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '4px',
-                                fontSize: '0.6875rem',
-                                color: 'var(--color-text-secondary)'
-                            }}>
-                                <div style={{
-                                    width: '8px',
-                                    height: '8px',
-                                    borderRadius: '2px',
-                                    background: config.color
-                                }} />
-                                {config.label}
-                            </div>
-                        ))}
-                    </div>
-                </div>
-
-                {/* Source Table */}
-                <div style={{
-                    padding: 'var(--space-lg)',
-                    background: 'var(--color-bg-secondary)',
-                    borderRadius: 'var(--radius-lg)',
-                    border: '1px solid var(--color-border)'
-                }}>
-                    <h3 style={{
-                        fontSize: '0.9375rem',
-                        fontWeight: 500,
-                        marginBottom: 'var(--space-lg)',
-                        color: 'var(--color-text-primary)'
-                    }}>
-                        Top Referring Sites
-                    </h3>
-                    <table style={{ width: '100%', fontSize: '0.8125rem' }}>
-                        <thead>
-                            <tr style={{ color: 'var(--color-text-tertiary)' }}>
-                                <th style={{ textAlign: 'left', padding: 'var(--space-xs) 0', fontWeight: 500 }}>Source</th>
-                                <th style={{ textAlign: 'right', padding: 'var(--space-xs) 0', fontWeight: 500 }}>Sessions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {topSources.length === 0 && (
-                                <tr>
-                                    <td colSpan={2} style={{ padding: 'var(--space-md) 0', color: 'var(--color-text-tertiary)' }}>
-                                        No referring sites in this period. Visits from links on other sites appear here.
-                                    </td>
-                                </tr>
-                            )}
-                            {topSources.slice(0, 8).map((source, idx) => (
-                                <tr key={idx} style={{ borderTop: '1px solid var(--color-border)' }}>
-                                    <td style={{
-                                        padding: 'var(--space-sm) 0',
-                                        color: 'var(--color-text-primary)'
-                                    }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)' }}>
-                                            <Globe size={12} style={{ color: 'var(--color-text-tertiary)' }} />
-                                            {source.site}
-                                        </div>
-                                    </td>
-                                    <td style={{
-                                        textAlign: 'right',
-                                        padding: 'var(--space-sm) 0',
-                                        color: 'var(--color-text-primary)'
-                                    }}>
-                                        {source.sessions?.toLocaleString()}
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            {/* Quick Links */}
-            <div className="dash-grid-3">
-                <Link
-                    href="/dashboard/traffic/campaigns"
-                    style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        padding: 'var(--space-md)',
-                        background: 'var(--color-bg-secondary)',
-                        border: '1px solid var(--color-border)',
-                        borderRadius: 'var(--radius-md)',
-                        textDecoration: 'none',
-                        color: 'var(--color-text-primary)',
-                        fontSize: '0.875rem'
-                    }}
-                >
-                    <span>View Campaigns</span>
-                    <ExternalLink size={14} />
-                </Link>
-                <Link
-                    href="/dashboard/traffic/trends"
-                    style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        padding: 'var(--space-md)',
-                        background: 'var(--color-bg-secondary)',
-                        border: '1px solid var(--color-border)',
-                        borderRadius: 'var(--radius-md)',
-                        textDecoration: 'none',
-                        color: 'var(--color-text-primary)',
-                        fontSize: '0.875rem'
-                    }}
-                >
-                    <span>Traffic Trends</span>
-                    <ExternalLink size={14} />
-                </Link>
-                <Link
-                    href="/dashboard/reports"
-                    style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        padding: 'var(--space-md)',
-                        background: 'var(--color-bg-secondary)',
-                        border: '1px solid var(--color-border)',
-                        borderRadius: 'var(--radius-md)',
-                        textDecoration: 'none',
-                        color: 'var(--color-text-primary)',
-                        fontSize: '0.875rem'
-                    }}
-                >
-                    <span>Generate Report</span>
-                    <ExternalLink size={14} />
-                </Link>
+            <div className="dash-grid-2">
+                <ChartCard title="Channels" subtitle="Sessions by channel">
+                    <BarList items={data.channels} labelHeader="Channel" valueHeader="Sessions" emptyText="No sessions in this period." />
+                </ChartCard>
+                <ChartCard title="Top referrers" subtitle="Every external site that sent visitors">
+                    <BarList
+                        items={data.referrers}
+                        labelHeader="Site"
+                        valueHeader="Sessions"
+                        emptyText="No referring sites in this period. Visits from links on other sites appear here."
+                    />
+                </ChartCard>
+                <ChartCard title="Social networks" subtitle="Sessions from social platforms">
+                    <BarList items={data.social} labelHeader="Network" valueHeader="Sessions" emptyText="No social traffic in this period." />
+                </ChartCard>
+                <ChartCard title="Search engines" subtitle="Organic search sessions by engine">
+                    <BarList items={data.search} labelHeader="Engine" valueHeader="Sessions" emptyText="No organic search traffic in this period." />
+                </ChartCard>
             </div>
         </div>
     );

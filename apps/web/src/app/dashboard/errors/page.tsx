@@ -1,157 +1,153 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { AlertTriangle, Clock, FileCode, Hash, Search } from 'lucide-react';
+import { AlertTriangle, Hash, Search } from 'lucide-react';
 import { customEvents } from '@/lib/api';
 import { useDomain } from '@/contexts/DomainContext';
+import { useApiRange } from '@/contexts/DateRangeContext';
+import { PageHeader } from '@/components/PageHeader';
+import { StatCard } from '@/components/StatCard';
+import { ChartCard } from '@/components/ChartCard';
+
+type ErrorRow = {
+    message: string;
+    source: string | null;
+    count: number;
+    first_seen: string;
+    last_seen: string;
+};
+
+/** "http://site/js/app.js?v=2" -> "app.js"; the full source stays in the tooltip. */
+function fileOf(source: string | null): string {
+    if (!source) return '—';
+    return source.split('?')[0].split('/').pop() || source;
+}
 
 export default function ErrorsPage() {
     const { selectedDomainId, loading: domainLoading } = useDomain();
-    const [data, setData] = useState<any>(null);
+    const range = useApiRange();
+    const [data, setData] = useState<{ totalErrors: number; errors: ErrorRow[] } | null>(null);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
 
     useEffect(() => {
+        if (!selectedDomainId) {
+            if (!domainLoading) setLoading(false);
+            return;
+        }
+        let cancelled = false;
         const load = async () => {
-            if (!selectedDomainId) return;
             setLoading(true);
-            const result = await customEvents.getErrors(selectedDomainId);
-            if (result.data) setData(result.data);
+            const result = await customEvents.getErrors(selectedDomainId, range.start, range.end);
+            if (cancelled) return;
+            setData(result.data ?? null);
+            setLoadError(result.data ? null : result.error || 'Could not load errors');
             setLoading(false);
         };
-        if (selectedDomainId) load();
-    }, [selectedDomainId]);
+        load();
+        return () => { cancelled = true; };
+    }, [selectedDomainId, range, domainLoading]);
+
+    const header = (
+        <PageHeader title="Errors" subtitle="JavaScript errors and crashes captured on your site" />
+    );
 
     if (!selectedDomainId && !domainLoading) {
         return (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-xl)', color: 'var(--color-text-secondary)' }}>
-                <p>Please select a domain to view error tracking</p>
+            <div className="page-stack">
+                {header}
+                <div className="card empty-note">Select a website to see its errors.</div>
             </div>
         );
     }
 
-    if (domainLoading || loading) {
-        return (
-            <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-xl)' }}>
-                <div className="loading-spinner" />
-            </div>
-        );
-    }
-
-    if (!selectedDomainId) {
-        return (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-xl)', color: 'var(--color-text-secondary)' }}>
-                <p>Please select a domain to view error tracking</p>
-            </div>
-        );
-    }
-
-    const errors = data?.errors || [];
-    const filtered = errors.filter((e: any) =>
-        e.message?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        e.source?.toLowerCase().includes(searchQuery.toLowerCase())
+    const busy = loading || domainLoading;
+    const errors = data?.errors ?? [];
+    const query = searchQuery.trim().toLowerCase();
+    const filtered = errors.filter(e =>
+        (e.message || '').toLowerCase().includes(query) ||
+        (e.source || '').toLowerCase().includes(query)
     );
 
     return (
-        <div>
-            {/* Header */}
-            <div style={{ marginBottom: 'var(--space-xl)' }}>
-                <h1 style={{ fontSize: '1.5rem', fontWeight: 600, color: 'var(--color-text-primary)', marginBottom: 'var(--space-xs)' }}>
-                    Error Tracking
-                </h1>
-                <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>
-                    JavaScript errors and crashes captured from your website
-                </p>
-            </div>
+        <div className="page-stack">
+            {header}
 
-            {/* Stats Cards */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--space-md)', marginBottom: 'var(--space-xl)' }}>
-                <div style={{
-                    background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-lg)',
-                    border: '1px solid var(--color-border)', padding: 'var(--space-lg)'
-                }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)', marginBottom: 'var(--space-sm)' }}>
-                        <AlertTriangle size={16} style={{ color: '#ef4444' }} />
-                        <span style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Errors</span>
-                    </div>
-                    <div style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--color-text-primary)' }}>
-                        {(data?.totalErrors || 0).toLocaleString()}
-                    </div>
+            {loadError && !busy && (
+                <div role="alert" className="card" style={{ color: 'var(--color-error)', fontSize: '0.875rem' }}>
+                    {loadError}
                 </div>
-                <div style={{
-                    background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-lg)',
-                    border: '1px solid var(--color-border)', padding: 'var(--space-lg)'
-                }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)', marginBottom: 'var(--space-sm)' }}>
-                        <Hash size={16} style={{ color: 'var(--color-accent-primary)' }} />
-                        <span style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Unique Errors</span>
-                    </div>
-                    <div style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--color-text-primary)' }}>
-                        {errors.length}
-                    </div>
-                </div>
+            )}
+
+            <div className="stat-grid">
+                <StatCard label="Total errors" icon={AlertTriangle} loading={busy}
+                    value={(data?.totalErrors ?? 0).toLocaleString()} />
+                <StatCard label="Unique errors" icon={Hash} loading={busy}
+                    value={errors.length.toLocaleString()} hint="Grouped by message and source" />
             </div>
 
-            {/* Search */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)', padding: 'var(--space-xs) var(--space-sm)', background: 'var(--color-bg-tertiary)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', marginBottom: 'var(--space-lg)', maxWidth: '400px' }}>
-                <Search size={14} style={{ color: 'var(--color-text-tertiary)' }} />
-                <input
-                    type="text"
-                    placeholder="Search errors..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    style={{ background: 'transparent', border: 'none', outline: 'none', fontSize: '0.8125rem', color: 'var(--color-text-primary)', width: '100%' }}
-                />
-            </div>
-
-            {/* Table */}
-            <div className="dash-table-wrap" style={{ background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', overflow: 'hidden' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8125rem' }}>
-                    <thead>
-                        <tr style={{ background: 'var(--color-bg-tertiary)' }}>
-                            <th style={{ textAlign: 'left', padding: 'var(--space-md)', fontWeight: 500, color: 'var(--color-text-secondary)' }}>Error Message</th>
-                            <th style={{ textAlign: 'left', padding: 'var(--space-md)', fontWeight: 500, color: 'var(--color-text-secondary)' }}>Source</th>
-                            <th style={{ textAlign: 'right', padding: 'var(--space-md)', fontWeight: 500, color: 'var(--color-text-secondary)' }}>Count</th>
-                            <th style={{ textAlign: 'right', padding: 'var(--space-md)', fontWeight: 500, color: 'var(--color-text-secondary)' }}>Last Seen</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {filtered.length === 0 ? (
-                            <tr>
-                                <td colSpan={4} style={{ padding: 'var(--space-xl)', textAlign: 'center', color: 'var(--color-text-secondary)' }}>
-                                    {errors.length === 0 ? '🎉 No errors detected — your site is clean!' : 'No errors match your search'}
-                                </td>
-                            </tr>
-                        ) : filtered.map((err: any, idx: number) => (
-                            <tr key={idx} style={{ borderTop: '1px solid var(--color-border)' }}>
-                                <td style={{ padding: 'var(--space-md)', color: 'var(--color-text-primary)' }}>
-                                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--space-xs)' }}>
-                                        <AlertTriangle size={14} style={{ color: '#ef4444', flexShrink: 0, marginTop: '2px' }} />
-                                        <span style={{ maxWidth: '400px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                            {err.message || 'Unknown Error'}
-                                        </span>
-                                    </div>
-                                </td>
-                                <td style={{ padding: 'var(--space-md)', color: 'var(--color-text-secondary)', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                        <FileCode size={12} />
-                                        {err.source ? err.source.split('/').pop() : '—'}
-                                    </div>
-                                </td>
-                                <td style={{ textAlign: 'right', padding: 'var(--space-md)', fontWeight: 600, color: err.count > 10 ? '#ef4444' : 'var(--color-text-primary)' }}>
-                                    {err.count.toLocaleString()}
-                                </td>
-                                <td style={{ textAlign: 'right', padding: 'var(--space-md)', color: 'var(--color-text-secondary)' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
-                                        <Clock size={12} />
-                                        {new Date(err.last_seen).toLocaleDateString()}
-                                    </div>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
+            <ChartCard
+                title="Error log"
+                subtitle="Most frequent first"
+                flush
+                loading={busy}
+                action={
+                    <label style={{ position: 'relative', flex: '0 1 240px', minWidth: 140 }}>
+                        <Search size={14} aria-hidden="true" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-muted)' }} />
+                        <input
+                            type="search"
+                            className="input"
+                            aria-label="Search errors"
+                            placeholder="Search errors…"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            style={{ padding: '6px 10px 6px 30px', fontSize: '0.8125rem' }}
+                        />
+                    </label>
+                }
+            >
+                {loadError ? (
+                    <p className="empty-note">Errors could not be loaded.</p>
+                ) : filtered.length === 0 ? (
+                    <p className="empty-note">
+                        {errors.length === 0 ? 'No errors in this period.' : 'No errors match your search.'}
+                    </p>
+                ) : (
+                    <div style={{ overflowX: 'auto' }}>
+                        <table className="data-table">
+                            <thead>
+                                <tr>
+                                    <th style={{ paddingLeft: 20 }}>Message</th>
+                                    <th>Source</th>
+                                    <th className="num">Count</th>
+                                    <th className="num" style={{ paddingRight: 20 }}>Last seen</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {filtered.map((err, idx) => (
+                                    <tr key={idx}>
+                                        <td style={{ paddingLeft: 20, maxWidth: 480 }}>
+                                            <div title={err.message} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                {err.message || 'Unknown error'}
+                                            </div>
+                                        </td>
+                                        <td className="muted" style={{ maxWidth: 220 }}>
+                                            <div title={err.source || undefined} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>
+                                                {fileOf(err.source)}
+                                            </div>
+                                        </td>
+                                        <td className="num" style={{ fontWeight: 500 }}>{Number(err.count).toLocaleString()}</td>
+                                        <td className="num muted" style={{ paddingRight: 20 }}>
+                                            {new Date(err.last_seen).toLocaleDateString()}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </ChartCard>
         </div>
     );
 }

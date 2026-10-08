@@ -4,6 +4,10 @@ import { useState, useEffect } from 'react';
 import { MousePointerClick, Hash, Search, FileText } from 'lucide-react';
 import { customEvents } from '@/lib/api';
 import { useDomain } from '@/contexts/DomainContext';
+import { useApiRange } from '@/contexts/DateRangeContext';
+import { PageHeader } from '@/components/PageHeader';
+import { StatCard } from '@/components/StatCard';
+import { ChartCard } from '@/components/ChartCard';
 
 type RageClick = {
     tag: string | null;
@@ -30,130 +34,132 @@ function pathOf(url: string): string {
 
 export default function RageClicksPage() {
     const { selectedDomainId, loading: domainLoading } = useDomain();
+    const range = useApiRange();
     const [data, setData] = useState<{ totalRageClicks: number; rageClicks: RageClick[] } | null>(null);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
 
     useEffect(() => {
+        if (!selectedDomainId) {
+            if (!domainLoading) setLoading(false);
+            return;
+        }
+        let cancelled = false;
         const load = async () => {
-            if (!selectedDomainId) return;
             setLoading(true);
-            const result = await customEvents.getRageClicks(selectedDomainId);
-            if (result.data) setData(result.data);
+            const result = await customEvents.getRageClicks(selectedDomainId, range.start, range.end);
+            if (cancelled) return;
+            setData(result.data ?? null);
+            setLoadError(result.data ? null : result.error || 'Could not load rage clicks');
             setLoading(false);
         };
-        if (selectedDomainId) load();
-    }, [selectedDomainId]);
+        load();
+        return () => { cancelled = true; };
+    }, [selectedDomainId, range, domainLoading]);
+
+    const header = (
+        <PageHeader title="Rage clicks" subtitle="Elements visitors clicked repeatedly in frustration" />
+    );
 
     if (!selectedDomainId && !domainLoading) {
         return (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-xl)', color: 'var(--color-text-secondary)' }}>
-                <p>Please select a domain to view rage clicks</p>
+            <div className="page-stack">
+                {header}
+                <div className="card empty-note">Select a website to see its rage clicks.</div>
             </div>
         );
     }
 
-    if (domainLoading || loading) {
-        return (
-            <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-xl)' }}>
-                <div className="loading-spinner" />
-            </div>
-        );
-    }
-
-    const rageClicks = data?.rageClicks || [];
-    const query = searchQuery.toLowerCase();
+    const busy = loading || domainLoading;
+    const rageClicks = data?.rageClicks ?? [];
+    const query = searchQuery.trim().toLowerCase();
     const filtered = rageClicks.filter(click =>
         describeElement(click).toLowerCase().includes(query) ||
         click.url.toLowerCase().includes(query)
     );
     const affectedPages = new Set(rageClicks.map(click => pathOf(click.url))).size;
 
-    const statCard = (icon: React.ReactNode, label: string, value: string) => (
-        <div style={{
-            background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-lg)',
-            border: '1px solid var(--color-border)', padding: 'var(--space-lg)'
-        }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)', marginBottom: 'var(--space-sm)' }}>
-                {icon}
-                <span style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</span>
-            </div>
-            <div style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--color-text-primary)' }}>
-                {value}
-            </div>
-        </div>
-    );
-
     return (
-        <div>
-            {/* Header */}
-            <div style={{ marginBottom: 'var(--space-xl)' }}>
-                <h1 style={{ fontSize: '1.5rem', fontWeight: 600, color: 'var(--color-text-primary)', marginBottom: 'var(--space-xs)' }}>
-                    Rage Clicks
-                </h1>
-                <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>
-                    Elements visitors clicked repeatedly in frustration over the last 30 days
-                </p>
+        <div className="page-stack">
+            {header}
+
+            {loadError && !busy && (
+                <div role="alert" className="card" style={{ color: 'var(--color-error)', fontSize: '0.875rem' }}>
+                    {loadError}
+                </div>
+            )}
+
+            <div className="stat-grid">
+                <StatCard label="Rage clicks" icon={MousePointerClick} loading={busy}
+                    value={(data?.totalRageClicks ?? 0).toLocaleString()} />
+                <StatCard label="Elements" icon={Hash} loading={busy}
+                    value={rageClicks.length.toLocaleString()} />
+                <StatCard label="Pages affected" icon={FileText} loading={busy}
+                    value={affectedPages.toLocaleString()} />
             </div>
 
-            {/* Stats Cards */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--space-md)', marginBottom: 'var(--space-xl)' }}>
-                {statCard(<MousePointerClick size={16} style={{ color: '#ef4444' }} />, 'Total Rage Clicks', (data?.totalRageClicks || 0).toLocaleString())}
-                {statCard(<Hash size={16} style={{ color: 'var(--color-accent-primary)' }} />, 'Elements', rageClicks.length.toLocaleString())}
-                {statCard(<FileText size={16} style={{ color: 'var(--color-accent-primary)' }} />, 'Pages Affected', affectedPages.toLocaleString())}
-            </div>
-
-            {/* Search */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)', padding: 'var(--space-xs) var(--space-sm)', background: 'var(--color-bg-tertiary)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', marginBottom: 'var(--space-lg)', maxWidth: '400px' }}>
-                <Search size={14} style={{ color: 'var(--color-text-tertiary)' }} />
-                <input
-                    type="text"
-                    placeholder="Search elements or pages..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    style={{ background: 'transparent', border: 'none', outline: 'none', fontSize: '0.8125rem', color: 'var(--color-text-primary)', width: '100%' }}
-                />
-            </div>
-
-            {/* Table */}
-            <div className="dash-table-wrap" style={{ background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', overflow: 'hidden' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8125rem' }}>
-                    <thead>
-                        <tr style={{ background: 'var(--color-bg-tertiary)' }}>
-                            <th style={{ textAlign: 'left', padding: 'var(--space-md)', fontWeight: 500, color: 'var(--color-text-secondary)' }}>Element</th>
-                            <th style={{ textAlign: 'left', padding: 'var(--space-md)', fontWeight: 500, color: 'var(--color-text-secondary)' }}>Page</th>
-                            <th style={{ textAlign: 'right', padding: 'var(--space-md)', fontWeight: 500, color: 'var(--color-text-secondary)' }}>Rage Clicks</th>
-                            <th style={{ textAlign: 'right', padding: 'var(--space-md)', fontWeight: 500, color: 'var(--color-text-secondary)' }}>Avg Clicks per Burst</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {filtered.length === 0 ? (
-                            <tr>
-                                <td colSpan={4} style={{ padding: 'var(--space-xl)', textAlign: 'center', color: 'var(--color-text-secondary)' }}>
-                                    {rageClicks.length === 0 ? 'No rage clicks detected in the last 30 days' : 'No rage clicks match your search'}
-                                </td>
-                            </tr>
-                        ) : filtered.map((click, idx) => (
-                            <tr key={idx} style={{ borderTop: '1px solid var(--color-border)' }}>
-                                <td style={{ padding: 'var(--space-md)', color: 'var(--color-text-primary)' }}>
-                                    <span style={{ display: 'inline-block', maxWidth: '360px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'var(--font-mono, monospace)' }}>
-                                        {describeElement(click)}
-                                    </span>
-                                </td>
-                                <td style={{ padding: 'var(--space-md)', color: 'var(--color-text-secondary)', maxWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={click.url}>
-                                    {pathOf(click.url)}
-                                </td>
-                                <td style={{ textAlign: 'right', padding: 'var(--space-md)', fontWeight: 600, color: click.count > 10 ? '#ef4444' : 'var(--color-text-primary)' }}>
-                                    {click.count.toLocaleString()}
-                                </td>
-                                <td style={{ textAlign: 'right', padding: 'var(--space-md)', color: 'var(--color-text-secondary)' }}>
-                                    {click.avg_click_count ?? '—'}
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
+            <ChartCard
+                title="Frustrated elements"
+                subtitle="Most rage clicks first"
+                flush
+                loading={busy}
+                action={
+                    <label style={{ position: 'relative', flex: '0 1 240px', minWidth: 140 }}>
+                        <Search size={14} aria-hidden="true" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-muted)' }} />
+                        <input
+                            type="search"
+                            className="input"
+                            aria-label="Search elements or pages"
+                            placeholder="Search elements or pages…"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            style={{ padding: '6px 10px 6px 30px', fontSize: '0.8125rem' }}
+                        />
+                    </label>
+                }
+            >
+                {loadError ? (
+                    <p className="empty-note">Rage clicks could not be loaded.</p>
+                ) : filtered.length === 0 ? (
+                    <p className="empty-note">
+                        {rageClicks.length === 0 ? 'No rage clicks in this period.' : 'No rage clicks match your search.'}
+                    </p>
+                ) : (
+                    <div style={{ overflowX: 'auto' }}>
+                        <table className="data-table">
+                            <thead>
+                                <tr>
+                                    <th style={{ paddingLeft: 20 }}>Element</th>
+                                    <th>Page</th>
+                                    <th className="num">Rage clicks</th>
+                                    <th className="num" style={{ paddingRight: 20 }}>Avg. clicks per burst</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {filtered.map((click, idx) => (
+                                    <tr key={idx}>
+                                        <td style={{ paddingLeft: 20, maxWidth: 380 }}>
+                                            <div title={describeElement(click)} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>
+                                                {describeElement(click)}
+                                            </div>
+                                        </td>
+                                        <td className="muted" style={{ maxWidth: 260 }}>
+                                            <div title={click.url} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                {pathOf(click.url)}
+                                            </div>
+                                        </td>
+                                        <td className="num" style={{ fontWeight: 500 }}>{Number(click.count).toLocaleString()}</td>
+                                        <td className="num muted" style={{ paddingRight: 20 }}>
+                                            {click.avg_click_count ?? '—'}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </ChartCard>
         </div>
     );
 }
