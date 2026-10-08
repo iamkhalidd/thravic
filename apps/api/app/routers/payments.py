@@ -33,7 +33,7 @@ from ..json_response import jsjson
 from ..logging import create_logger
 from ..middleware.admin_auth import AdminUser, admin_auth
 from ..middleware.auth import AuthUser, require_auth
-from ..services import plan_catalog, plan_service
+from ..services import domain_service, plan_catalog, plan_service, recording_service
 from ..services.email_service import send_payment_receipt_email
 
 log = create_logger("Payments")
@@ -166,11 +166,13 @@ async def current(user: AuthUser = Depends(require_auth)):
                 "success": True,
                 "subscription": {
                     "plan": plan.id,
+                    "planName": plan.name,
                     "paidPlan": subscription["plan"],
+                    "paidPlanName": (await plan_catalog.get(subscription["plan"])).name,
                     "status": subscription["status"],
                     "state": _billing_state(subscription["plan"], plan.id, period_end),
                     "graceEndsAt": grace_ends,
-                    "eventsUsed": await plan_service.events_this_month(user.user_id),
+                    "eventsUsed": await plan_service.events_this_period(user.user_id),
                     "eventsLimit": plan.events_limit,
                     "domainsLimit": plan.domains_limit,
                     "teamLimit": plan.team_limit,
@@ -562,8 +564,25 @@ async def webhook(request: Request):
         raise SimpleError("Internal error", 500) from None
 
 
+def projected_limit_at(
+    used: int, limit: int, start: datetime, resets_at: datetime, now: datetime
+) -> datetime | None:
+    """When, at the pace since `start`, the allowance runs out before it resets.
+
+    None when it won't (or there's too little to go on: under an hour of data).
+    """
+    elapsed = (now - start).total_seconds()
+    if used <= 0 or used >= limit or elapsed < 3600:
+        return None
+    runs_out = now + timedelta(seconds=(limit - used) * elapsed / used)
+    return runs_out if runs_out < resets_at else None
+
+
 @router.get("/usage")
 async def usage(user: AuthUser = Depends(require_auth)):
+    """Every allowance on the account: how much is used, the limit (None =
+    unlimited), when it resets, and for events when it will run out at this pace.
+    The flat event fields are kept for older clients."""
     try:
         if not get_settings().DATABASE_URL:
             return jsjson(
@@ -573,16 +592,60 @@ async def usage(user: AuthUser = Depends(require_auth)):
                         "eventsThisMonth": 0,
                         "eventsLimit": (await plan_catalog.get(FREE_PLAN)).events_limit,
                         "percentUsed": 0,
+                        "meters": [],
                     },
                 }
             )
 
-        events_used = await plan_service.events_this_month(user.user_id)
-        # The limit the collector enforces (an inactive subscription is free).
-        events_limit = (await plan_service.for_user(user.user_id)).events_limit
+        now = datetime.now(UTC)
+        # The plan the collector enforces (an inactive subscription is free).
+        plan = await plan_service.for_user(user.user_id)
+        start, resets_at = await plan_service.current_window(user.user_id, now)
+        events_used = await plan_service.events_this_period(user.user_id, start)
+        events_limit = plan.events_limit
         percent_used = (
             js_round((events_used / events_limit) * 100) if events_limit > 0 else 0
         )
+        projected = projected_limit_at(events_used, events_limit, start, resets_at, now)
+        tomorrow = datetime(now.year, now.month, now.day, tzinfo=UTC) + timedelta(days=1)
+
+        meters: list[dict[str, Any]] = [
+            {
+                "key": "events",
+                "label": "Events",
+                "used": events_used,
+                "limit": events_limit,
+                "resetsAt": resets_at,
+                "projectedLimitAt": projected,
+            },
+            {
+                "key": "websites",
+                "label": "Websites",
+                "used": await domain_service.count_by_user(user.user_id),
+                "limit": plan.domains_limit,
+                "resetsAt": None,
+            },
+        ]
+        if "team" in plan.features:
+            meters.append(
+                {
+                    "key": "team",
+                    "label": "Team members",
+                    "used": len(await plan_service.team_member_ids(user.user_id)),
+                    "limit": plan.team_limit,
+                    "resetsAt": None,
+                }
+            )
+        if "recordings" in plan.features:
+            meters.append(
+                {
+                    "key": "recordings",
+                    "label": "Recordings today",
+                    "used": await recording_service.count_started_today_for_owner(user.user_id),
+                    "limit": plan.recordings_per_day,
+                    "resetsAt": tomorrow,
+                }
+            )
 
         return jsjson(
             {
@@ -591,6 +654,10 @@ async def usage(user: AuthUser = Depends(require_auth)):
                     "eventsThisMonth": events_used,
                     "eventsLimit": events_limit,
                     "percentUsed": percent_used,
+                    "periodStart": start,
+                    "resetsAt": resets_at,
+                    "projectedLimitAt": projected,
+                    "meters": meters,
                 },
             }
         )

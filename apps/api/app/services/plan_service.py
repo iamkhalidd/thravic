@@ -138,13 +138,46 @@ async def owner_plan(domain_id: str) -> Plan:
     return await for_user(str(row["user_id"]) if row else "")
 
 
-async def events_this_month(user_id: str) -> int:
-    """Events stored this calendar month (UTC) across the user's domains.
+# The event allowance renews every cycle of a paid plan, counted from when the
+# plan started (so a yearly plan gets a fresh "monthly" allowance every 30 days);
+# accounts without a paid plan renew on the 1st of each month (UTC).
+USAGE_CYCLE = timedelta(days=30)
+
+
+def usage_window(anchor: datetime | None, now: datetime) -> tuple[datetime, datetime]:
+    """(start, resets_at) of the allowance window containing `now`.
+
+    `anchor` is the paid plan's `current_period_start`, or None without one.
+    """
+    if anchor is None or anchor > now:
+        start = datetime(now.year, now.month, 1, tzinfo=UTC)
+        year, month = divmod(now.month, 12)
+        return start, datetime(now.year + year, month + 1, 1, tzinfo=UTC)
+    start = anchor + ((now - anchor) // USAGE_CYCLE) * USAGE_CYCLE
+    return start, start + USAGE_CYCLE
+
+
+async def current_window(user_id: str, now: datetime | None = None) -> tuple[datetime, datetime]:
+    """The user's allowance window now, from their paid plan if they have one."""
+    row = await query_one(
+        f"""
+        SELECT current_period_start FROM subscriptions
+        WHERE user_id = $1 AND plan <> 'free' AND {entitled()}
+        ORDER BY created_at DESC LIMIT 1
+        """,
+        user_id,
+    )
+    return usage_window(row["current_period_start"] if row else None, now or datetime.now(UTC))
+
+
+async def events_this_period(user_id: str, since: datetime | None = None) -> int:
+    """Events stored in the current allowance window across the user's domains.
 
     Counted from `events` itself: nothing writes `usage_logs` or
     `subscriptions.events_used`. Served by the `(domain_id, created_at)` index.
     """
-    now = datetime.now(UTC)
+    if since is None:
+        since, _ = await current_window(user_id)
     row = await query_one(
         """
         SELECT COUNT(*)::text AS total
@@ -153,18 +186,32 @@ async def events_this_month(user_id: str) -> int:
         WHERE d.user_id = $1 AND e.created_at >= $2
         """,
         user_id,
-        datetime(now.year, now.month, 1, tzinfo=UTC),
+        since,
     )
     return int((row or {}).get("total") or 0)
 
 
+async def team_member_ids(owner_id: str) -> set[str]:
+    """People (other than the owner) on any of the owner's sites: one seat each."""
+    rows = await query(
+        """
+        SELECT DISTINCT dm.user_id FROM domain_members dm
+        JOIN domains d ON d.id = dm.domain_id
+        WHERE d.user_id = $1 AND dm.user_id <> $1
+        """,
+        owner_id,
+    )
+    return {str(row["user_id"]) for row in rows}
+
+
 async def over_event_limit(owner_id: str) -> bool:
-    """Whether the owner has used their plan's events for this month.
+    """Whether the owner has used their plan's events for this allowance window.
 
     Fails open: if the check itself errors, events are accepted, so a problem
-    here can never cost a customer data.
+    here can never cost a customer data. A cached "over" can outlive a reset by
+    up to `QUOTA_CACHE_SECONDS`.
     """
-    key = f"quota:{owner_id}:{datetime.now(UTC):%Y-%m}"
+    key = f"quota:{owner_id}"
     try:
         cached = await cache.get(key)
         if cached is not None:
@@ -174,7 +221,7 @@ async def over_event_limit(owner_id: str) -> bool:
             return local[1]
 
         plan = await for_user(owner_id)
-        over = await events_this_month(owner_id) >= plan.events_limit
+        over = await events_this_period(owner_id) >= plan.events_limit
 
         await cache.set(key, over, QUOTA_CACHE_SECONDS)
         _local_quota[key] = (time.monotonic() + QUOTA_CACHE_SECONDS, over)

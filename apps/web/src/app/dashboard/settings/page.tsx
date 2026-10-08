@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { UsageMeters } from '@/components/UsageMeters';
+import { shortDate, TONE_COLORS, type BillingState, type UsageMeter as UsageMeterData } from '@/lib/usage';
 import {
     Settings,
     User,
@@ -74,7 +76,8 @@ function SettingsPageInner() {
     const [activeTab, setActiveTab] = useState<'account' | 'subscription' | 'notifications' | 'export'>('account');
     const [loading, setLoading] = useState(true);
     const [plans, setPlans] = useState(fallbackPlans);
-    const [usage, setUsage] = useState<{ eventsThisMonth: number; eventsLimit: number; percentUsed: number } | null>(null);
+    const [meters, setMeters] = useState<UsageMeterData[] | null>(null);
+    const [current, setCurrent] = useState<BillingState | null>(null);
     const { selectedDomainId } = useDomain();
     const [exportError, setExportError] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
@@ -136,7 +139,10 @@ function SettingsPageInner() {
 
     useEffect(() => {
         payments.getUsage().then(({ data }) => {
-            if (data?.usage) setUsage(data.usage);
+            if (data?.usage?.meters) setMeters(data.usage.meters);
+        });
+        payments.getCurrent().then(({ data }) => {
+            if (data?.subscription) setCurrent(data.subscription);
         });
     }, []);
 
@@ -155,6 +161,11 @@ function SettingsPageInner() {
             })));
         });
     }, []);
+
+    useEffect(() => {
+        const tab = searchParams.get('tab');
+        if (tab === 'subscription' || tab === 'notifications' || tab === 'export') setActiveTab(tab);
+    }, [searchParams]);
 
     useEffect(() => {
         const paymentStatus = searchParams.get('payment');
@@ -275,7 +286,8 @@ function SettingsPageInner() {
         );
     }
 
-    const currentPlan = user?.subscription || 'free';
+    // The plan in force (a lapsed paid plan is free), not the plan last bought.
+    const currentPlan = current?.plan || user?.subscription || 'free';
     const avatarSrc = user?.avatar_url?.startsWith('/uploads')
         ? `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}${user.avatar_url}`
         : user?.avatar_url;
@@ -532,7 +544,20 @@ function SettingsPageInner() {
                                     Payments are securely processed by <strong>Paystack</strong> in NGN.
                                 </p>
 
-                                {usage && <UsageMeter {...usage} />}
+                                {current?.currentPeriodEnd && current.state === 'active' && (
+                                    <p style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)', marginTop: 'var(--space-xs)' }}>
+                                        Active until {shortDate(current.currentPeriodEnd)}. Plans don&apos;t renew automatically;
+                                        we email you a week before. Renewing early adds a month to this date.
+                                    </p>
+                                )}
+                                {current?.state === 'grace' && current.currentPeriodEnd && current.graceEndsAt && (
+                                    <p style={{ fontSize: '0.8rem', color: TONE_COLORS.warn, marginTop: 'var(--space-xs)' }}>
+                                        Your {current.paidPlanName} plan ended on {shortDate(current.currentPeriodEnd)}.
+                                        Renew by {shortDate(current.graceEndsAt)} to keep its features.
+                                    </p>
+                                )}
+
+                                {meters && <UsageMeters meters={meters} />}
                             </div>
 
                             {/* Promo code input */}
@@ -766,38 +791,6 @@ function SettingsPageInner() {
                     to { transform: rotate(360deg); }
                 }
             `}</style>
-        </div>
-    );
-}
-
-/** Events used this month against the plan's monthly allowance. */
-function UsageMeter({ eventsThisMonth, eventsLimit, percentUsed }: { eventsThisMonth: number; eventsLimit: number; percentUsed: number }) {
-    const color = percentUsed >= 100 ? '#ff5555' : percentUsed >= 85 ? '#ffaa00' : 'var(--color-text-primary)';
-    return (
-        <div style={{ marginTop: 'var(--space-lg)' }}>
-            <div className="flex items-center justify-between" style={{ fontSize: '0.875rem', marginBottom: 'var(--space-xs)' }}>
-                <span>Events this month</span>
-                <span style={{ color: 'var(--color-text-secondary)' }}>
-                    {eventsThisMonth.toLocaleString()} of {eventsLimit.toLocaleString()} ({percentUsed}%)
-                </span>
-            </div>
-            <div
-                role="progressbar"
-                aria-label="Events used this month"
-                aria-valuemin={0}
-                aria-valuemax={eventsLimit}
-                aria-valuenow={eventsThisMonth}
-                style={{ height: '8px', background: 'var(--color-bg-tertiary)', borderRadius: '4px', overflow: 'hidden' }}
-            >
-                <div style={{ width: `${Math.min(percentUsed, 100)}%`, height: '100%', background: color, borderRadius: '4px' }} />
-            </div>
-            {percentUsed >= 85 && (
-                <p style={{ fontSize: '0.8rem', color, marginTop: 'var(--space-xs)' }}>
-                    {percentUsed >= 100
-                        ? "You have used this plan's events for the month: new events and recordings are not being stored. Upgrade to resume now, or collection restarts on the 1st (UTC)."
-                        : "You are close to this plan's monthly allowance. When it runs out, new events stop being stored until the 1st (UTC)."}
-                </p>
-            )}
         </div>
     );
 }

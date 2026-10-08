@@ -580,3 +580,92 @@ async def test_only_the_owner_can_choose(seeded_domain, db_pool):
         app.dependency_overrides.clear()
 
     assert response.status_code == 404
+
+
+# ── Admin: extend a period ─────────────────────────────────────────────────
+
+
+async def _admin_post(path, body):
+    from app.main import app
+    from app.middleware.admin_auth import AdminUser, admin_auth
+    from app.middleware.auth import require_auth
+
+    admin = AdminUser(
+        user_id="00000000-0000-4000-8000-000000000001", email="a@x.invalid", role="admin"
+    )
+    app.dependency_overrides[require_auth] = lambda: admin
+    app.dependency_overrides[admin_auth] = lambda: admin
+    try:
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://t"
+        ) as client:
+            if body is None:
+                return await client.get(path)
+            return await client.post(path, json=body)
+    finally:
+        app.dependency_overrides.clear()
+
+
+async def _sub_id(db_pool, owner):
+    async with db_pool.acquire() as conn:
+        return str(await conn.fetchval("SELECT id FROM subscriptions WHERE user_id = $1", owner))
+
+
+@pytest.mark.parametrize(
+    ("period_end", "expected_end"),
+    [
+        (NOW + 10 * DAY, NOW + 17 * DAY),  # adds to the current end
+        (NOW - 20 * DAY, NOW + 7 * DAY),  # lapsed: from now
+    ],
+)
+async def test_an_admin_can_extend_a_period(
+    seeded_domain, db_pool, make_plan, period_end, expected_end
+):
+    plan = await make_plan()
+    owner = await _owner(db_pool, seeded_domain)
+    await _subscribe(db_pool, owner, plan, period_end)
+
+    response = await _admin_post(
+        f"/api/admin/subscriptions/{await _sub_id(db_pool, owner)}/extend", {"days": 7}
+    )
+
+    assert response.status_code == 200, response.json()
+    assert response.json()["state"] == "active"
+    assert _close_to((await _period(db_pool, owner))["current_period_end"], expected_end)
+    assert (await plan_service.for_user(owner)).name == plan
+
+
+@pytest.mark.parametrize(
+    ("period_end", "plan_id", "body", "status"),
+    [
+        (None, None, {"days": 7}, 400),  # admin grant without an end date
+        (NOW + DAY, "free", {"days": 7}, 400),
+        (NOW + DAY, None, {"days": 0}, 400),
+        (NOW + DAY, None, {"days": 400}, 400),
+        (NOW + DAY, None, {"days": "7"}, 400),
+    ],
+)
+async def test_extending_refuses_what_it_cannot_do(
+    seeded_domain, db_pool, make_plan, period_end, plan_id, body, status
+):
+    plan = plan_id or await make_plan()
+    owner = await _owner(db_pool, seeded_domain)
+    await _subscribe(db_pool, owner, plan, period_end)
+
+    response = await _admin_post(
+        f"/api/admin/subscriptions/{await _sub_id(db_pool, owner)}/extend", body
+    )
+
+    assert response.status_code == status
+
+
+async def test_the_admin_list_shows_each_subscriptions_state(seeded_domain, db_pool, make_plan):
+    plan = await make_plan()
+    owner = await _owner(db_pool, seeded_domain)
+    await _subscribe(db_pool, owner, plan, NOW - DAY)
+
+    response = await _admin_post(f"/api/admin/subscriptions/?plan={plan}", None)
+
+    (row,) = response.json()["subscriptions"]
+    assert row["state"] == "grace"
+    assert row["grace_ends_at"]

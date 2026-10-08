@@ -1,3 +1,5 @@
+import type { UsageMeter } from './usage';
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 interface ApiResponse<T> {
@@ -745,11 +747,20 @@ export const payments = {
         return null;
     },
 
-    /** Events stored this calendar month (UTC) across all of the user's domains. */
+    /** Every allowance on the account: used, limit, when it resets. Events are
+     * counted over the plan's billing cycle (the calendar month without one). */
     async getUsage() {
         return apiRequest<{
             success: boolean;
-            usage: { eventsThisMonth: number; eventsLimit: number; percentUsed: number };
+            usage: {
+                eventsThisMonth: number;
+                eventsLimit: number;
+                percentUsed: number;
+                periodStart?: string;
+                resetsAt?: string;
+                projectedLimitAt?: string | null;
+                meters: UsageMeter[];
+            };
         }>('/api/payments/usage');
     },
 
@@ -758,7 +769,12 @@ export const payments = {
         return apiRequest<{
             subscription: {
                 plan: string;
+                planName?: string;
+                paidPlan?: string;
+                paidPlanName?: string;
                 status: string;
+                state?: 'free' | 'active' | 'grace' | 'expired';
+                graceEndsAt?: string | null;
                 eventsUsed: number;
                 eventsLimit: number;
                 domainsLimit: number;

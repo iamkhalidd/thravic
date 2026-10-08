@@ -37,6 +37,8 @@ import { auth } from '@/lib/api';
 import { DomainProvider, useDomain } from '@/contexts/DomainContext';
 import { DateRangeProvider, useDateRange, datePresets } from '@/contexts/DateRangeContext';
 import { AnnouncementBanner } from '@/components/AnnouncementBanner';
+import { BillingBanner } from '@/components/BillingBanner';
+import { UsageWidget } from '@/components/UsageWidget';
 import { ImpersonationBanner } from '@/components/ImpersonationBanner';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { RouteErrorBoundary } from '@/components/RouteErrorBoundary';
@@ -334,6 +336,9 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                                     <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '140px' }}>
                                         {currentDomain?.domain || 'Select domain'}
                                     </span>
+                                    {currentDomain?.paused && (
+                                        <span style={{ fontSize: '0.6875rem', color: 'var(--color-text-muted)', flexShrink: 0 }}>Paused</span>
+                                    )}
                                 </div>
                                 <ChevronDown size={12} />
                             </button>
@@ -481,6 +486,8 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                         {!(sidebarCollapsed && !isMobile) && <span>Settings</span>}
                     </Link>
 
+                    {!(sidebarCollapsed && !isMobile) && <UsageWidget />}
+
                     {/* User row */}
                     {user && (
                         <div style={{
@@ -508,8 +515,8 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                                         }}>{user.name}</div>
                                         <div style={{
                                             fontSize: '0.6875rem', color: 'var(--color-text-muted)',
-                                            textTransform: 'capitalize',
-                                        }}>{user.subscription} Plan</div>
+                                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                                        }}>{user.email}</div>
                                     </div>
                                     <div style={{ display: 'flex', gap: '4px' }}>
                                         <button
@@ -537,6 +544,7 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
             >
                 <ImpersonationBanner />
                 <AnnouncementBanner />
+                <BillingBanner />
 
                 {/* Top Header */}
                 <header style={{

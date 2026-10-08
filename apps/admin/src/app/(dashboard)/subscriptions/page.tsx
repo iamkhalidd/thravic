@@ -15,9 +15,14 @@ interface Subscription {
     domains_limit: number;
     user_name: string;
     user_email: string;
-    current_period_end: string;
+    current_period_end: string | null;
     created_at: string;
+    /** free | active | grace | expired | canceled */
+    state: string;
+    grace_ends_at: string | null;
 }
+
+const fmtDate = (iso: string) => new Date(iso).toLocaleDateString();
 
 const PLAN_COLORS: Record<string, string> = {
     free: '#606072',
@@ -32,7 +37,13 @@ export default function SubscriptionsPage() {
     const [plan, setPlan] = useState('');
     const [loading, setLoading] = useState(true);
     const [editSub, setEditSub] = useState<Subscription | null>(null);
-    const [editForm, setEditForm] = useState({ plan: '', events_limit: 0, domains_limit: 0 });
+    const [editForm, setEditForm] = useState({ plan: '' });
+    const [extendDays, setExtendDays] = useState(30);
+    const [plans, setPlans] = useState<{ id: string; name: string }[]>([]);
+
+    useEffect(() => {
+        api.get('/api/admin/plans').then(data => setPlans(data.plans || [])).catch(console.error);
+    }, []);
 
     const loadData = async () => {
         setLoading(true);
@@ -54,13 +65,22 @@ export default function SubscriptionsPage() {
 
     const handleEdit = (sub: Subscription) => {
         setEditSub(sub);
-        setEditForm({ plan: sub.plan, events_limit: sub.events_limit, domains_limit: sub.domains_limit });
+        setEditForm({ plan: sub.plan });
     };
 
     const handleSave = async () => {
         if (!editSub) return;
         try {
             await api.patch(`/api/admin/subscriptions/${editSub.id}`, editForm);
+            setEditSub(null);
+            loadData();
+        } catch (err: any) { alert(err.message); }
+    };
+
+    const handleExtend = async () => {
+        if (!editSub) return;
+        try {
+            await api.post(`/api/admin/subscriptions/${editSub.id}/extend`, { days: extendDays });
             setEditSub(null);
             loadData();
         } catch (err: any) { alert(err.message); }
@@ -116,9 +136,7 @@ export default function SubscriptionsPage() {
             <div style={{ display: 'flex', gap: 'var(--space-md)', marginBottom: 'var(--space-md)', alignItems: 'center' }}>
                 <select className="input" style={{ width: '180px' }} value={plan} onChange={e => setPlan(e.target.value)}>
                     <option value="">All Plans</option>
-                    <option value="free">Free</option>
-                    <option value="pro">Pro</option>
-                    <option value="agency">Agency</option>
+                    {plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
                 <span style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>{total} total subscriptions</span>
             </div>
@@ -131,26 +149,25 @@ export default function SubscriptionsPage() {
                         <tr>
                             <th>User</th>
                             <th>Plan</th>
-                            <th>Status</th>
-                            <th>Events Used</th>
-                            <th>Events Limit</th>
-                            <th>Domains Limit</th>
-                            <th>Period End</th>
+                            <th>State</th>
+                            <th>Paid Until</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         {loading ? (
-                            <tr><td colSpan={8} className="loading"><div className="spinner" /></td></tr>
+                            <tr><td colSpan={5} className="loading"><div className="spinner" /></td></tr>
                         ) : subscriptions.map(sub => (
                             <tr key={sub.id}>
                                 <td><span style={{ color: 'var(--color-text-primary)', fontWeight: 500 }}>{sub.user_name}</span><br /><span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>{sub.user_email}</span></td>
                                 <td><span className={`badge badge-${sub.plan}`}>{sub.plan}</span></td>
-                                <td><span className={`badge badge-${sub.status}`}>{sub.status}</span></td>
-                                <td>{sub.events_used?.toLocaleString()}</td>
-                                <td>{sub.events_limit?.toLocaleString()}</td>
-                                <td>{sub.domains_limit}</td>
-                                <td>{sub.current_period_end ? new Date(sub.current_period_end).toLocaleDateString() : '—'}</td>
+                                <td><span className={`badge badge-${sub.state}`}>{sub.state}</span></td>
+                                <td>
+                                    {sub.current_period_end ? fmtDate(sub.current_period_end) : (sub.plan === 'free' ? '—' : 'No end date')}
+                                    {sub.state === 'grace' && sub.grace_ends_at && (
+                                        <><br /><span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>access until {fmtDate(sub.grace_ends_at)}</span></>
+                                    )}
+                                </td>
                                 <td>
                                     <button className="btn btn-ghost btn-sm" onClick={() => handleEdit(sub)} title="Edit"><Edit size={14} /></button>
                                 </td>
@@ -168,39 +185,46 @@ export default function SubscriptionsPage() {
                         <h3 className="modal-title">Edit Subscription: {editSub.user_name}</h3>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
                             <div>
-                                <label style={{ display: 'block', fontSize: '13px', color: 'var(--color-text-secondary)', marginBottom: '4px' }}>Plan</label>
-                                <select className="input" value={editForm.plan} onChange={e => {
-                                    const newPlan = e.target.value;
-                                    const defaults: Record<string, { e: number, d: number }> = {
-                                        free: { e: 5000, d: 1 },
-                                        pro: { e: 100000, d: 3 },
-                                        agency: { e: 500000, d: 20 }
-                                    };
-                                    setEditForm(f => ({ ...f, plan: newPlan, events_limit: defaults[newPlan]?.e ?? f.events_limit, domains_limit: defaults[newPlan]?.d ?? f.domains_limit }));
-                                }}>
-                                    <option value="free">Free</option>
-                                    <option value="pro">Pro</option>
-                                    <option value="agency">Agency</option>
+                                <label htmlFor="sub-plan" style={{ display: 'block', fontSize: '13px', color: 'var(--color-text-secondary)', marginBottom: '4px' }}>Plan</label>
+                                <select id="sub-plan" className="input" value={editForm.plan} onChange={e => setEditForm({ plan: e.target.value })}>
+                                    {plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                                 </select>
+                                <p style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginTop: '4px' }}>
+                                    Limits and features come from the plan&apos;s definition (Plans page).
+                                </p>
                             </div>
-                            <div>
-                                <label style={{ display: 'block', fontSize: '13px', color: 'var(--color-text-secondary)', marginBottom: '4px' }}>Events Limit</label>
-                                <input className="input" type="number" value={editForm.events_limit} onChange={e => setEditForm(f => ({ ...f, events_limit: parseInt(e.target.value) }))} />
-                            </div>
-                            <div>
-                                <label style={{ display: 'block', fontSize: '13px', color: 'var(--color-text-secondary)', marginBottom: '4px' }}>Domains Limit</label>
-                                <input className="input" type="number" value={editForm.domains_limit} onChange={e => setEditForm(f => ({ ...f, domains_limit: parseInt(e.target.value) }))} />
-                            </div>
+                            {editSub.plan !== 'free' && (
+                                <div>
+                                    <label htmlFor="extend-days" style={{ display: 'block', fontSize: '13px', color: 'var(--color-text-secondary)', marginBottom: '4px' }}>
+                                        Extend paid period
+                                    </label>
+                                    {editSub.current_period_end ? (
+                                        <div style={{ display: 'flex', gap: 'var(--space-sm)', alignItems: 'center' }}>
+                                            <input id="extend-days" className="input" type="number" min={1} max={365} style={{ width: '100px' }}
+                                                value={extendDays} onChange={e => setExtendDays(parseInt(e.target.value) || 0)} />
+                                            <span style={{ fontSize: '13px', color: 'var(--color-text-muted)' }}>days</span>
+                                            <button className="btn btn-ghost btn-sm" onClick={handleExtend} disabled={extendDays < 1 || extendDays > 365}>Extend</button>
+                                        </div>
+                                    ) : (
+                                        <p style={{ fontSize: '13px', color: 'var(--color-text-muted)' }}>No end date: this plan doesn&apos;t expire.</p>
+                                    )}
+                                    {editSub.current_period_end && (
+                                        <p style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginTop: '4px' }}>
+                                            Paid until {fmtDate(editSub.current_period_end)}; extends from then, or from today if it has lapsed.
+                                        </p>
+                                    )}
+                                </div>
+                            )}
                             <div style={{ display: 'flex', gap: 'var(--space-sm)', justifyContent: 'space-between', marginTop: 'var(--space-md)' }}>
                                 <button className="btn btn-danger btn-sm" onClick={async () => {
-                                    if (confirm('Cancel this subscription at Paystack immediately?')) {
+                                    if (confirm('End this paid plan now? The account moves to the free plan immediately.')) {
                                         try {
                                             await api.post(`/api/admin/subscriptions/${editSub.id}/cancel`, {});
                                             setEditSub(null);
                                             loadData();
                                         } catch (err: any) { alert(err.message); }
                                     }
-                                }}>Cancel Paystack Sub</button>
+                                }}>End access now</button>
                                 <div style={{ display: 'flex', gap: 'var(--space-sm)' }}>
                                     <button className="btn btn-ghost" onClick={() => setEditSub(null)}>Close</button>
                                     <button className="btn btn-primary" onClick={handleSave}>Save Changes</button>

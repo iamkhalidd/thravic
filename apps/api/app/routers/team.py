@@ -111,15 +111,7 @@ async def _check_team_limit(domain_id: str, target_id: str) -> None:
     plan = await plan_service.for_user(str(owner["user_id"]))
     if plan.team_limit is None:
         return
-    members = await query(
-        """
-        SELECT DISTINCT dm.user_id FROM domain_members dm
-        JOIN domains d ON d.id = dm.domain_id
-        WHERE d.user_id = $1 AND dm.user_id <> $1
-        """,
-        owner["user_id"],
-    )
-    ids = {str(row["user_id"]) for row in members}
+    ids = await plan_service.team_member_ids(str(owner["user_id"]))
     if target_id in ids or target_id == str(owner["user_id"]):
         return
     if len(ids) >= plan.team_limit:

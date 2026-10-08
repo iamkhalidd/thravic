@@ -6,6 +6,8 @@ database, so assertions only look at mail to this test's user.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
+
 import pytest
 
 from app.jobs import usage_alerts
@@ -19,10 +21,12 @@ def outbox(monkeypatch):
     mail: list[dict] = []
     state = {"fail": False}
 
-    async def _send(to, name, threshold, used, limit, plan):
+    async def _send(to, name, threshold, used, limit, plan, resets_at):
         if state["fail"]:
             raise ConnectionError("provider rejected the message")
-        mail.append({"to": to, "threshold": threshold, "used": used, "limit": limit})
+        mail.append(
+            {"to": to, "threshold": threshold, "used": used, "limit": limit, "resets": resets_at}
+        )
 
     monkeypatch.setattr(usage_alerts, "send_usage_limit_email", _send)
     return mail, state
@@ -112,3 +116,30 @@ async def test_suspended_owners_are_not_emailed(owner, outbox, db_pool):
     await usage_alerts.send_usage_alerts()
 
     assert _to(mail, owner) == []
+
+
+async def test_a_paid_plan_counts_from_its_billing_cycle(owner, outbox, db_pool):
+    """Paid 35 days ago: the second 30-day cycle began 5 days ago, so events from
+    before then are last cycle's, and the allowance renews in 25 days."""
+    mail, _ = outbox
+    async with db_pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE subscriptions SET current_period_start = NOW() - INTERVAL '35 days', "
+            "current_period_end = NOW() + INTERVAL '25 days' WHERE user_id = $1",
+            owner["id"],
+        )
+    await owner["add_events"](11)
+    async with db_pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE events SET created_at = NOW() - INTERVAL '6 days' WHERE id IN ("
+            "SELECT e.id FROM events e JOIN domains d ON d.id = e.domain_id "
+            "WHERE d.user_id = $1 LIMIT 3)",
+            owner["id"],
+        )
+
+    await usage_alerts.send_usage_alerts()
+
+    (alert,) = [m for m in mail if m["to"] == owner["email"]]
+    assert alert["threshold"] == 80 and alert["used"] == 8  # 11 - 3 from last cycle
+    renews_in = alert["resets"] - datetime.now(UTC)
+    assert timedelta(days=24) < renews_in < timedelta(days=26)

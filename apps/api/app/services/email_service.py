@@ -349,38 +349,47 @@ async def send_subscription_notice_email(
 
 
 async def send_usage_limit_email(
-    to: str, name: str, threshold: int, used: int, limit: int, plan: str
+    to: str,
+    name: str,
+    threshold: int,
+    used: int,
+    limit: int,
+    plan: str,
+    resets_at: datetime,
 ) -> None:
-    """Monthly event allowance at 80% or used up. Raises if the provider rejects it,
-    so the caller can try again later instead of losing the notice."""
+    """Event allowance at 80% or used up. `resets_at` is when the allowance renews
+    (the plan's billing cycle, or the 1st for free accounts). Raises if the
+    provider rejects it, so the caller can try again later instead of losing it."""
     frontend_url = get_settings().FRONTEND_URL or "http://localhost:3000"
     billing_url = f"{frontend_url}/dashboard/settings"
     used_text, limit_text = f"{used:,}", f"{limit:,}"
-    safe_name, safe_plan = html.escape(name or "there"), html.escape(plan.capitalize())
+    safe_name, safe_plan = html.escape(name or "there"), html.escape(plan)
+    renews = _js_date_string(resets_at)
 
     if threshold >= 100:
         subject = "Your Thravic event limit has been reached"
         lead = (
-            f"Your sites have sent {used_text} events this month, the {limit_text} included in "
-            f"the {safe_plan} plan. <strong>New events and session recordings are not being "
-            "stored</strong> until the 1st of next month (UTC), or until you upgrade."
+            f"Your sites have sent {used_text} events, the {limit_text} included in the "
+            f"{safe_plan} plan for this period. <strong>New events and session recordings are "
+            f"not being stored</strong> until the allowance renews on {renews}, or until you "
+            "upgrade."
         )
         text_lead = (
-            f"Your sites have sent {used_text} events this month, the {limit_text} included in "
-            f"the {plan.capitalize()} plan. New events and session recordings are not being "
-            "stored until the 1st of next month (UTC), or until you upgrade."
+            f"Your sites have sent {used_text} events, the {limit_text} included in the "
+            f"{plan} plan for this period. New events and session recordings are not being "
+            f"stored until the allowance renews on {renews}, or until you upgrade."
         )
     else:
-        subject = f"You have used {threshold}% of your Thravic events this month"
+        subject = f"You have used {threshold}% of your Thravic events"
         lead = (
             f"Your sites have sent {used_text} of the {limit_text} events included in the "
-            f"{safe_plan} plan this month. When the allowance runs out, new events stop being "
-            "stored until the 1st (UTC)."
+            f"{safe_plan} plan for this period. If the allowance runs out, new events stop "
+            f"being stored until it renews on {renews}."
         )
         text_lead = (
             f"Your sites have sent {used_text} of the {limit_text} events included in the "
-            f"{plan.capitalize()} plan this month. When the allowance runs out, new events stop "
-            "being stored until the 1st (UTC)."
+            f"{plan} plan for this period. If the allowance runs out, new events stop being "
+            f"stored until it renews on {renews}."
         )
 
     await send_email_or_raise(

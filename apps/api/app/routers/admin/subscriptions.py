@@ -6,6 +6,7 @@ Paystack charges, so there is no Paystack subscription to cancel.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends, Request
@@ -18,13 +19,28 @@ from ...logging import create_logger
 from ...middleware.admin_auth import AdminUser, admin_auth
 from ...services import plan_catalog
 from ...services.audit_service import log_action
-from ...services.plan_service import entitled
+from ...services.plan_service import GRACE_DAYS, entitled
 from ...validators.admin import update_subscription_schema
 from ._util import client_ip
 
 log = create_logger("Admin:Subscriptions")
 
 router = APIRouter()
+
+
+def _state(sub: dict[str, Any]) -> tuple[str, datetime | None]:
+    """free | active | grace | expired | <status>, and when grace ends."""
+    end = sub.get("current_period_end")
+    grace_ends = end + timedelta(days=GRACE_DAYS) if end else None
+    if (sub.get("plan") or "free") == "free":
+        return "free", None
+    if sub.get("status") != "active":
+        return sub.get("status") or "inactive", grace_ends
+    if end is None or end > datetime.now(UTC):
+        return "active", grace_ends
+    if grace_ends > datetime.now(UTC):
+        return "grace", grace_ends
+    return "expired", grace_ends
 
 
 def _count(row: dict | None) -> int:
@@ -69,6 +85,9 @@ async def list_subscriptions(request: Request):
             limit,
             offset,
         )
+
+        for sub in subscriptions:
+            sub["state"], sub["grace_ends_at"] = _state(sub)
 
         count_row = await query_one(
             f"SELECT COUNT(*) as count FROM subscriptions s {where}", *args
@@ -163,6 +182,61 @@ async def update_subscription(
     except Exception as exc:  # noqa: BLE001
         log.error(f"Subscription update error: {exc}")
         raise SimpleError("Failed to update subscription", 500) from None
+
+
+MAX_EXTEND_DAYS = 365
+
+
+@router.post("/{subscription_id}/extend")
+async def extend_subscription(
+    subscription_id: str, request: Request, admin: AdminUser = Depends(admin_auth)
+):
+    """Add days to a paid period (support cases, comped time). Extends from the
+    current end, or from now if it has already lapsed."""
+    try:
+        body = await _json_body(request)
+        days = body.get("days")
+        if not isinstance(days, int) or isinstance(days, bool) or not 1 <= days <= MAX_EXTEND_DAYS:
+            raise SimpleError(f"days must be a whole number from 1 to {MAX_EXTEND_DAYS}", 400)
+
+        sub = await query_one(
+            """
+            UPDATE subscriptions
+            SET current_period_end = GREATEST(current_period_end, NOW())
+                                     + make_interval(days => $2),
+                status = 'active', updated_at = NOW()
+            WHERE id = $1 AND plan <> 'free' AND current_period_end IS NOT NULL
+            RETURNING *
+            """,
+            subscription_id,
+            days,
+        )
+        if not sub:
+            existing = await query_one(
+                "SELECT plan, current_period_end FROM subscriptions WHERE id = $1",
+                subscription_id,
+            )
+            if not existing:
+                raise SimpleError("Subscription not found", 404)
+            if existing["plan"] == "free":
+                raise SimpleError("Free subscriptions have no period to extend", 400)
+            raise SimpleError("This plan has no end date, so there is nothing to extend", 400)
+
+        await log_action(
+            admin_id=admin.user_id,
+            action="subscription.extend",
+            target_type="subscription",
+            target_id=subscription_id,
+            details={"days": days, "current_period_end": sub["current_period_end"].isoformat()},
+            ip_address=client_ip(request),
+        )
+        sub["state"], sub["grace_ends_at"] = _state(sub)
+        return jsjson(sub)
+    except SimpleError:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        log.error(f"Subscription extend error: {exc}")
+        raise SimpleError("Failed to extend subscription", 500) from None
 
 
 @router.post("/{subscription_id}/cancel")
