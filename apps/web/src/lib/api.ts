@@ -1,4 +1,5 @@
 import type { UsageMeter } from './usage';
+import type { Platform } from '@/types';
 
 /** Required at sign-up besides name, email and password (see lib/profile.ts). */
 export interface SignupProfile {
@@ -304,6 +305,7 @@ export const domains = {
                 features?: string[];
                 isOwner?: boolean;
                 paused?: boolean;
+                platform?: Platform;
             }>;
         }>('/api/domains');
     },
@@ -315,16 +317,18 @@ export const domains = {
         });
     },
 
-    async create(domain: string, name?: string) {
+    /** `domain` is a website's hostname, or an app's bundle ID when `platform` isn't `web`. */
+    async create(domain: string, name?: string, platform: Platform = 'web') {
         return apiRequest<{
             id: string;
             domain: string;
             name: string;
             trackingId: string;
             verified: boolean;
+            platform?: Platform;
         }>('/api/domains', {
             method: 'POST',
-            body: JSON.stringify({ domain, name })
+            body: JSON.stringify({ domain, name, platform })
         });
     },
 
@@ -340,9 +344,11 @@ export const domains = {
     },
 
     async getScript(id: string) {
+        // For an app, `script` is the SDK's init code and `install` the npm command.
         return apiRequest<{
             trackingId: string;
             script: string;
+            install?: string;
             instructions: string[];
         }>(`/api/domains/${id}/script`);
     },
@@ -494,6 +500,9 @@ export const analytics = {
             devices: Array<{ name: string; sessions: number; percentage: number }>;
             browsers: Array<{ name: string; sessions: number; percentage: number }>;
             operatingSystems: Array<{ name: string; sessions: number; percentage: number }>;
+            /** Apps only. */
+            appVersions?: Array<{ name: string; sessions: number; percentage: number }>;
+            deviceModels?: Array<{ name: string; sessions: number; percentage: number }>;
         }>(`/api/analytics/${domainId}/devices${query}`);
     },
 

@@ -32,8 +32,12 @@ import {
     AlertTriangle,
     Gauge,
     FileInput,
-    MousePointerClick
+    MousePointerClick,
+    Smartphone
 } from 'lucide-react';
+import { isApp, pathFits } from '@/lib/platform';
+import { useToast } from '@/components/Toast';
+import type { Domain } from '@/types';
 import { auth } from '@/lib/api';
 import { DomainProvider, useDomain } from '@/contexts/DomainContext';
 import { DateRangeProvider, useDateRange, datePresets } from '@/contexts/DateRangeContext';
@@ -60,9 +64,10 @@ const navStructure = [
     {
         label: 'Behavior', icon: Users,
         children: [
-            { href: '/dashboard/behavior/pages', label: 'Pages' },
+            { href: '/dashboard/behavior/pages', label: 'Pages', appLabel: 'Screens' },
             { href: '/dashboard/behavior/paths', label: 'Paths' },
-            { href: '/dashboard/behavior/devices', label: 'Devices' }
+            { href: '/dashboard/behavior/devices', label: 'Devices' },
+            { href: '/dashboard/behavior/versions', label: 'Versions' }
         ]
     },
     {
@@ -80,6 +85,35 @@ const navStructure = [
     { href: '/dashboard/insights', icon: Sparkles, label: 'AI Insights' },
     { href: '/dashboard/reports', icon: FileBarChart, label: 'Reports' },
 ];
+
+type NavEntry = {
+    href?: string; label: string; appLabel?: string; icon?: any; exact?: boolean;
+    children?: NavEntry[];
+};
+
+/**
+ * The sidebar for one kind of property. An app keeps the same sections, minus the
+ * pages it has nothing for (a group left empty goes too) and with app wording.
+ */
+function navFor(app: boolean): NavEntry[] {
+    const fit = (items: NavEntry[]): NavEntry[] => items.flatMap(item => {
+        if (item.children) {
+            const children = fit(item.children);
+            return children.length ? [{ ...item, children }] : [];
+        }
+        if (item.href && !pathFits(item.href, app)) return [];
+        return [{ ...item, label: app && item.appLabel ? item.appLabel : item.label }];
+    });
+    return fit(navStructure);
+}
+
+/** The switcher's list, as [heading, properties] groups. Headings only once there's an app. */
+function switcherGroups(list: Domain[]): Array<[string | null, Domain[]]> {
+    const apps = list.filter(d => isApp(d));
+    if (apps.length === 0) return [[null, list]];
+    const sites = list.filter(d => !isApp(d));
+    return [['Websites', sites], ['Apps', apps]].filter(([, items]) => items.length > 0) as Array<[string, Domain[]]>;
+}
 interface NavItemProps {
     item: any;
     pathname: string;
@@ -180,7 +214,21 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
     const [user, setUser] = useState<{ name: string; email: string; subscription: string; avatar_url?: string } | null>(null);
     const [domainDropdownOpen, setDomainDropdownOpen] = useState(false);
     const [expandedSections, setExpandedSections] = useState<string[]>(['Traffic', 'Behavior']);
-    const { domains: domainList, selectedDomainId: selectedDomain, setSelectedDomainId: setSelectedDomain } = useDomain();
+    const { domains: domainList, selectedDomainId: selectedDomain, setSelectedDomainId: setSelectedDomain, selectedDomain: currentProperty } = useDomain();
+    const { toast } = useToast();
+    const appSelected = isApp(currentProperty);
+    const nav = navFor(appSelected);
+
+    // Switching to an app while on a website-only page (or back): go to the overview
+    // rather than show an empty page.
+    useEffect(() => {
+        if (!currentProperty || pathFits(pathname, appSelected)) return;
+        router.replace('/dashboard');
+        toast('info', appSelected
+            ? 'That page needs a website, so here is the overview of your app.'
+            : 'That page is for apps, so here is the overview of your site.');
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [pathname, currentProperty?.id, appSelected]);
     const { dateRange, setDateRange, comparisonEnabled, toggleComparison, live, setLive, streaming } = useDateRange();
     const [dateDropdownOpen, setDateDropdownOpen] = useState(false);
 
@@ -318,9 +366,9 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                                 }}
                             >
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                    <Globe size={13} />
+                                    {appSelected ? <Smartphone size={13} aria-label="App" /> : <Globe size={13} aria-label="Website" />}
                                     <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '140px' }}>
-                                        {currentDomain?.domain || 'Select domain'}
+                                        {(appSelected && currentDomain?.name) || currentDomain?.domain || 'Select property'}
                                     </span>
                                     {currentDomain?.paused && (
                                         <span style={{ fontSize: '0.6875rem', color: 'var(--color-text-muted)', flexShrink: 0 }}>Paused</span>
@@ -335,22 +383,41 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                                     border: '1px solid var(--color-border)', borderRadius: '6px',
                                     boxShadow: 'var(--shadow-md)', zIndex: 100, maxHeight: '200px', overflow: 'auto',
                                 }}>
-                                    {domainList.map(domain => (
-                                        <button
-                                            key={domain.id}
-                                            onClick={() => { setSelectedDomain(domain.id); setDomainDropdownOpen(false); }}
-                                            style={{
-                                                width: '100%', padding: '8px 12px',
-                                                background: selectedDomain === domain.id ? 'var(--color-bg-hover)' : 'transparent',
-                                                border: 'none', textAlign: 'left', cursor: 'pointer',
-                                                fontSize: '0.8125rem', color: selectedDomain === domain.id ? 'var(--color-accent-primary)' : 'var(--color-text-primary)',
-                                            }}
-                                        >
-                                            {domain.domain}
-                                            {domain.paused && (
-                                                <span style={{ marginLeft: '6px', fontSize: '0.6875rem', color: 'var(--color-text-muted)' }}>Paused</span>
+                                    {switcherGroups(domainList).map(([heading, items]) => (
+                                        <div key={heading ?? 'all'} role="group" aria-label={heading ?? undefined}>
+                                            {heading && (
+                                                <div style={{
+                                                    padding: '8px 12px 4px', fontSize: '0.6875rem', fontWeight: 500,
+                                                    textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--color-text-muted)',
+                                                }}>{heading}</div>
                                             )}
-                                        </button>
+                                            {items.map(domain => {
+                                                const app = isApp(domain);
+                                                const Icon = app ? Smartphone : Globe;
+                                                return (
+                                                    <button
+                                                        key={domain.id}
+                                                        onClick={() => { setSelectedDomain(domain.id); setDomainDropdownOpen(false); }}
+                                                        title={app ? domain.domain : undefined}
+                                                        style={{
+                                                            width: '100%', padding: '8px 12px',
+                                                            display: 'flex', alignItems: 'center', gap: '6px',
+                                                            background: selectedDomain === domain.id ? 'var(--color-bg-hover)' : 'transparent',
+                                                            border: 'none', textAlign: 'left', cursor: 'pointer',
+                                                            fontSize: '0.8125rem', color: selectedDomain === domain.id ? 'var(--color-accent-primary)' : 'var(--color-text-primary)',
+                                                        }}
+                                                    >
+                                                        <Icon size={13} style={{ flexShrink: 0, color: 'var(--color-text-muted)' }} aria-hidden="true" />
+                                                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                            {(app && domain.name) || domain.domain}
+                                                        </span>
+                                                        {domain.paused && (
+                                                            <span style={{ fontSize: '0.6875rem', color: 'var(--color-text-muted)' }}>Paused</span>
+                                                        )}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
                                     ))}
                                     <Link
                                         href="/dashboard/domains/new"
@@ -360,7 +427,7 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                                             borderTop: '1px solid var(--color-border)',
                                             color: 'var(--color-accent-primary)', fontSize: '0.8125rem',
                                         }}
-                                    >+ Add Domain</Link>
+                                    >+ Add website or app</Link>
                                 </div>
                             )}
                         </div>
@@ -373,9 +440,9 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                     padding: (sidebarCollapsed && !isMobile) ? '8px 4px' : '8px 0',
                 }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                        {navStructure.map((item, idx) => (
+                        {nav.map(item => (
                             <NavItem
-                                key={idx}
+                                key={item.label}
                                 item={item}
                                 pathname={pathname}
                                 expandedSections={expandedSections}

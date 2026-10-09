@@ -9,6 +9,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { ChartCard } from '@/components/ChartCard';
 import { duration } from '@/components/charts/format';
 import { ChangeBadge } from '@/components/ChangeBadge';
+import { isApp } from '@/lib/platform';
 
 interface PageRow {
     path: string;
@@ -33,7 +34,9 @@ const COLUMNS: Array<{ key: SortKey; label: string }> = [
 const HIGH_BOUNCE = 60;
 
 export default function PagesPage() {
-    const { selectedDomainId, loading: domainLoading } = useDomain();
+    const { selectedDomainId, selectedDomain, loading: domainLoading } = useDomain();
+    // An app's page views are screens (paths like /Checkout); same data, its own words.
+    const app = isApp(selectedDomain);
     const range = useApiRange();
     const [pages, setPages] = useState<PageRow[]>([]);
     const [loading, setLoading] = useState(true);
@@ -96,7 +99,12 @@ export default function PagesPage() {
 
     return (
         <div className="page-stack">
-            <PageHeader title="Pages" subtitle="Views, time on page, entries and exits for each page." />
+            <PageHeader
+                title={app ? 'Screens' : 'Pages'}
+                subtitle={app
+                    ? 'Views, time on screen, entries and exits for each screen.'
+                    : 'Views, time on page, entries and exits for each page.'}
+            />
 
             {!selectedDomainId && !domainLoading ? (
                 <div className="card"><div className="empty-note">Select a site to see its pages.</div></div>
@@ -118,7 +126,7 @@ export default function PagesPage() {
                             <table className="data-table">
                                 <thead>
                                     <tr>
-                                        <th style={{ paddingLeft: 20 }}>Page</th>
+                                        <th style={{ paddingLeft: 20 }}>{app ? 'Screen' : 'Page'}</th>
                                         {COLUMNS.map(col => (
                                             <Fragment key={col.key}>
                                             <th

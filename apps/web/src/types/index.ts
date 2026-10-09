@@ -19,7 +19,11 @@ export interface Domain {
     isOwner?: boolean;
     /** Over the owner's website limit (a lapsed plan): kept, but not collecting. */
     paused?: boolean;
+    /** `web` for a website; anything else is a mobile app, whose `domain` is its bundle ID. */
+    platform?: Platform;
 }
+
+export type Platform = 'web' | 'ios' | 'android' | 'cross';
 
 export interface DomainSettings {
     trackClicks: boolean;

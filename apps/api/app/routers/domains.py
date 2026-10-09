@@ -282,7 +282,11 @@ def _app_install(domain: dict[str, Any], api_url: str) -> dict[str, Any]:
     """The SDK install for a mobile app, in the shape the web snippet uses."""
     script = (
         "import { Thravic } from '@thravic/react-native';\n\n"
-        f"Thravic.init('{domain['tracking_id']}', {{ apiUrl: '{api_url}' }});"
+        # The bundle ID passed DOMAIN_PATTERN on create, so it is safe inside quotes.
+        f"Thravic.init('{domain['tracking_id']}', {{\n"
+        f"  apiUrl: '{api_url}',\n"
+        f"  bundleId: '{domain['domain']}',\n"
+        "});"
     )
     return {
         "trackingId": domain["tracking_id"],

@@ -8,6 +8,7 @@ import { useApiRange } from '@/contexts/DateRangeContext';
 import { PageHeader } from '@/components/PageHeader';
 import { ChartCard } from '@/components/ChartCard';
 import { BarList } from '@/components/charts/BarList';
+import { isApp } from '@/lib/platform';
 
 type Breakdown = Array<{ name: string; sessions: number; percentage: number }>;
 
@@ -15,6 +16,7 @@ interface DevicesData {
     devices: Breakdown;
     browsers: Breakdown;
     operatingSystems: Breakdown;
+    deviceModels?: Breakdown;
 }
 
 const DEVICE_ICONS: Record<string, typeof Monitor> = {
@@ -29,7 +31,9 @@ function deviceIcon(name: string) {
 }
 
 export default function DevicesPage() {
-    const { selectedDomainId, loading: domainLoading } = useDomain();
+    const { selectedDomainId, selectedDomain, loading: domainLoading } = useDomain();
+    // An app has no browser; its device models take that card.
+    const app = isApp(selectedDomain);
     const range = useApiRange();
     const [data, setData] = useState<DevicesData | null>(null);
     const [loading, setLoading] = useState(true);
@@ -61,12 +65,17 @@ export default function DevicesPage() {
     const devices = (data?.devices ?? [])
         .filter(d => d.name.toLowerCase() !== 'unknown')
         .map(d => ({ label: d.name, value: d.sessions, icon: deviceIcon(d.name) }));
-    const browsers = (data?.browsers ?? []).map(b => ({ label: b.name, value: b.sessions }));
+    const browsers = ((app ? data?.deviceModels : data?.browsers) ?? []).map(b => ({ label: b.name, value: b.sessions }));
     const systems = (data?.operatingSystems ?? []).map(o => ({ label: o.name, value: o.sessions }));
 
     return (
         <div className="page-stack">
-            <PageHeader title="Devices" subtitle="Sessions by device type, browser and operating system." />
+            <PageHeader
+                title="Devices"
+                subtitle={app
+                    ? 'Sessions by device type, model and operating system.'
+                    : 'Sessions by device type, browser and operating system.'}
+            />
 
             {!selectedDomainId && !domainLoading ? (
                 <div className="card"><div className="empty-note">Select a site to see its devices.</div></div>
@@ -75,7 +84,7 @@ export default function DevicesPage() {
                     <ChartCard title="Device type" subtitle="Sessions" loading={busy}>
                         {errorNote || <BarList items={devices} emptyText="No sessions in this period." />}
                     </ChartCard>
-                    <ChartCard title="Browsers" subtitle="Sessions" loading={busy}>
+                    <ChartCard title={app ? 'Device models' : 'Browsers'} subtitle="Sessions" loading={busy}>
                         {errorNote || <BarList items={browsers} limit={10} emptyText="No sessions in this period." />}
                     </ChartCard>
                     <ChartCard title="Operating systems" subtitle="Sessions" loading={busy}>

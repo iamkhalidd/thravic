@@ -24,6 +24,8 @@ import {
 import { analytics, domains } from '@/lib/api';
 import type { Metrics, TopPage, TimeseriesData, RealtimeData } from '@/types';
 import { ScriptInstallation } from '@/components/ScriptInstallation';
+import { AppInstallation } from '@/components/AppInstallation';
+import { isApp } from '@/lib/platform';
 import { PageHeader } from '@/components/PageHeader';
 import { StatCard } from '@/components/StatCard';
 import { ChartCard } from '@/components/ChartCard';
@@ -63,6 +65,9 @@ export default function DashboardPage() {
     const [copied, setCopied] = useState(false);
     const [trackingScript, setTrackingScript] = useState('');
     const [showInstructions, setShowInstructions] = useState(false);
+    // An app's overview: screens for pages, and versions where a site shows its sources.
+    const app = isApp(selectedDomain);
+    const [versionData, setVersionData] = useState<{ label: string; value: number }[]>([]);
 
     useEffect(() => {
         if (!selectedDomainId) return;
@@ -81,13 +86,14 @@ export default function DashboardPage() {
         const loadData = async () => {
             if (!range.background) setLoading(true);
             const { start, end, compare } = range;
-            const [overviewRes, timeseriesRes, realtimeRes, sourcesRes, prevOverview, prevSeries] = await Promise.all([
+            const [overviewRes, timeseriesRes, realtimeRes, sourcesRes, prevOverview, prevSeries, devicesRes] = await Promise.all([
                 analytics.getOverview(selectedDomainId, start, end),
                 analytics.getTimeseries(selectedDomainId, start, end),
                 analytics.getRealtime(selectedDomainId),
-                analytics.getSources(selectedDomainId, start, end),
+                app ? null : analytics.getSources(selectedDomainId, start, end),
                 compare ? analytics.getOverview(selectedDomainId, compare.start, compare.end) : null,
                 compare ? analytics.getTimeseries(selectedDomainId, compare.start, compare.end) : null,
+                app ? analytics.getDevices(selectedDomainId, start, end) : null,
             ]);
             if (cancelled) return;
 
@@ -97,8 +103,9 @@ export default function DashboardPage() {
             setRealtime(realtimeRes.data ?? null);
             setPrevious(prevOverview?.data?.metrics ?? null);
             setPreviousSeries(prevSeries?.data?.data ?? []);
-            const byType = sourcesRes.data?.byType as Record<string, number> | undefined;
+            const byType = sourcesRes?.data?.byType as Record<string, number> | undefined;
             setSourceData(byType ? SOURCE_LABELS.map(([key, label]) => ({ label, value: byType[key] || 0 })) : []);
+            setVersionData((devicesRes?.data?.appVersions ?? []).map(v => ({ label: v.name, value: v.sessions })));
             setLoading(false);
         };
 
@@ -109,7 +116,7 @@ export default function DashboardPage() {
         }, 30000);
 
         return () => { cancelled = true; clearInterval(interval); };
-    }, [selectedDomainId, range, domainsLoading]);
+    }, [selectedDomainId, range, domainsLoading, app]);
 
     const handleCopyScript = () => {
         navigator.clipboard.writeText(trackingScript);
@@ -219,9 +226,11 @@ export default function DashboardPage() {
                     <div className="flex items-start gap-md">
                         <Code size={20} aria-hidden="true" style={{ color: 'var(--color-warning)', flexShrink: 0, marginTop: 2 }} />
                         <div style={{ flex: 1, minWidth: 0 }}>
-                            <h2 className="card-title">Install your tracking script</h2>
+                            <h2 className="card-title">{app ? 'Install the SDK' : 'Install your tracking script'}</h2>
                             <p className="card-subtitle" style={{ marginBottom: 12 }}>
-                                Add this to the <code>&lt;head&gt;</code> of your website to start collecting data.
+                                {app
+                                    ? <>Run <code>npm install @thravic/react-native</code>, then add this where your app starts.</>
+                                    : <>Add this to the <code>&lt;head&gt;</code> of your website to start collecting data.</>}
                             </p>
                             <div style={{
                                 position: 'relative', background: 'var(--color-bg-primary)',
@@ -247,7 +256,7 @@ export default function DashboardPage() {
 
             {/* Instruction Modal */}
             {showInstructions && selectedDomain && (
-                <div role="dialog" aria-modal="true" aria-label="Install tracking script" style={{
+                <div role="dialog" aria-modal="true" aria-label={app ? 'Install the SDK' : 'Install tracking script'} style={{
                     position: 'fixed', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.5)', backdropFilter: 'blur(4px)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 'var(--space-md)',
                 }}>
@@ -258,11 +267,13 @@ export default function DashboardPage() {
                         }}>
                             <X size={20} />
                         </button>
-                        <h2 style={{ marginBottom: 'var(--space-xs)' }}>Install tracking script</h2>
+                        <h2 style={{ marginBottom: 'var(--space-xs)' }}>{app ? 'Install the SDK' : 'Install tracking script'}</h2>
                         <p style={{ marginBottom: 'var(--space-lg)', fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
-                            Select your platform below and follow the steps to install Thravic.
+                            {app ? 'Pick how your app is built and follow the steps.' : 'Select your platform below and follow the steps to install Thravic.'}
                         </p>
-                        <ScriptInstallation script={trackingScript || `<script async src="${API_URL}/tf.js" data-tracking-id="${selectedDomain.trackingId}"></script>`} />
+                        {app
+                            ? <AppInstallation init={trackingScript} />
+                            : <ScriptInstallation script={trackingScript || `<script async src="${API_URL}/tf.js" data-tracking-id="${selectedDomain.trackingId}"></script>`} />}
                         <div style={{ marginTop: 'var(--space-xl)', display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-sm)' }}>
                             <button onClick={() => setShowInstructions(false)} className="btn btn-secondary">Close</button>
                             <button
@@ -272,7 +283,7 @@ export default function DashboardPage() {
                                         setShowInstructions(false);
                                         window.location.reload();
                                     } else {
-                                        alert((result.data as any)?.message || 'Script not detected. Please verify your installation.');
+                                        alert((result.data as any)?.message || (app ? 'No data from your app yet.' : 'Script not detected. Please verify your installation.'));
                                     }
                                 }}
                                 className="btn btn-primary"
@@ -287,7 +298,7 @@ export default function DashboardPage() {
             <div className="stat-grid">
                 <StatCard label="Visitors" icon={Users} value={(metrics?.uniqueVisitors ?? 0).toLocaleString()}
                     change={change(metrics?.uniqueVisitors, previous?.uniqueVisitors)} />
-                <StatCard label="Pageviews" icon={Eye} value={(metrics?.pageviews ?? 0).toLocaleString()}
+                <StatCard label={app ? 'Screen views' : 'Pageviews'} icon={Eye} value={(metrics?.pageviews ?? 0).toLocaleString()}
                     change={change(metrics?.pageviews, previous?.pageviews)} />
                 <StatCard label="Sessions" icon={Activity} value={(metrics?.sessions ?? 0).toLocaleString()}
                     change={change(metrics?.sessions, previous?.sessions)} />
@@ -298,47 +309,57 @@ export default function DashboardPage() {
             </div>
 
             <div className="split-grid">
-                <ChartCard title="Traffic" subtitle="Visitors and pageviews per day">
+                <ChartCard title="Traffic" subtitle={app ? 'Users and screen views per day' : 'Visitors and pageviews per day'}>
                     <TimeSeriesChart
                         data={chartData}
                         xKey="date"
                         height={260}
                         series={[
                             { key: 'visitors', label: 'Visitors' },
-                            { key: 'pageviews', label: 'Pageviews' },
+                            { key: 'pageviews', label: app ? 'Screen views' : 'Pageviews' },
                             ...(comparing ? [{ key: 'previousVisitors', label: 'Visitors, previous period', muted: true }] : []),
                         ]}
                     />
                 </ChartCard>
-                <ChartCard
-                    title="Sources"
-                    subtitle="Sessions by channel"
-                    action={<Link href="/dashboard/traffic/sources" className="btn btn-ghost" style={{ padding: '4px 8px', fontSize: '0.8125rem' }}>Details</Link>}
-                >
-                    <BarList items={sourceData} emptyText="No sessions in this period" />
-                </ChartCard>
+                {app ? (
+                    <ChartCard
+                        title="Versions"
+                        subtitle="Sessions by app version"
+                        action={<Link href="/dashboard/behavior/versions" className="btn btn-ghost" style={{ padding: '4px 8px', fontSize: '0.8125rem' }}>Details</Link>}
+                    >
+                        <BarList items={versionData} emptyText="No sessions in this period" />
+                    </ChartCard>
+                ) : (
+                    <ChartCard
+                        title="Sources"
+                        subtitle="Sessions by channel"
+                        action={<Link href="/dashboard/traffic/sources" className="btn btn-ghost" style={{ padding: '4px 8px', fontSize: '0.8125rem' }}>Details</Link>}
+                    >
+                        <BarList items={sourceData} emptyText="No sessions in this period" />
+                    </ChartCard>
+                )}
             </div>
 
             <div className="split-grid">
                 <ChartCard
-                    title="Top pages"
-                    subtitle="Pageviews"
-                    action={<Link href="/dashboard/behavior/pages" className="btn btn-ghost" style={{ padding: '4px 8px', fontSize: '0.8125rem' }}>All pages</Link>}
+                    title={app ? 'Top screens' : 'Top pages'}
+                    subtitle={app ? 'Screen views' : 'Pageviews'}
+                    action={<Link href="/dashboard/behavior/pages" className="btn btn-ghost" style={{ padding: '4px 8px', fontSize: '0.8125rem' }}>{app ? 'All screens' : 'All pages'}</Link>}
                 >
-                    <BarList items={topPages.map(p => ({ label: p.path, value: p.views }))} emptyText="No pageviews in this period" />
+                    <BarList items={topPages.map(p => ({ label: p.path, value: p.views }))} emptyText={app ? 'No screen views in this period' : 'No pageviews in this period'} />
                 </ChartCard>
                 <ChartCard title="Right now" subtitle="Visitors in the last 5 minutes">
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 12 }}>
                         <span className="stat-value" style={{ fontSize: '2rem' }}>{realtime?.activeVisitors || 0}</span>
                         <span className="stat-hint">
-                            {realtime?.pageviewsLast30Min ?? 0} pageviews in the last 30 minutes
+                            {realtime?.pageviewsLast30Min ?? 0} {app ? 'screen views' : 'pageviews'} in the last 30 minutes
                         </span>
                     </div>
                     <BarList
                         items={(realtime?.activePages ?? []).map(p => ({ label: p.path, value: p.count }))}
                         limit={5}
                         showShare={false}
-                        emptyText="Nobody is on the site right now"
+                        emptyText={app ? 'Nobody is in the app right now' : 'Nobody is on the site right now'}
                     />
                 </ChartCard>
             </div>

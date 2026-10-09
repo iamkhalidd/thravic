@@ -230,6 +230,20 @@ def test_an_app_never_records_even_when_switched_on(client, app_site, writes):
     assert start.status_code == 403
 
 
+def test_the_app_install_snippet_names_the_bundle_id():
+    from app.routers.domains import _app_install
+
+    install = _app_install(
+        {"tracking_id": "TF-1A2B3C4D", "domain": "com.acme.shop"}, "https://api.example.com"
+    )
+
+    assert install["install"] == "npm install @thravic/react-native"
+    assert "Thravic.init('TF-1A2B3C4D'" in install["script"]
+    # Screen URLs are app://<bundleId>/..., so the snippet sets it.
+    assert "bundleId: 'com.acme.shop'" in install["script"]
+    assert "apiUrl: 'https://api.example.com'" in install["script"]
+
+
 def test_is_app_reads_the_platform():
     assert domain_service.is_app({"platform": "ios"})
     assert not domain_service.is_app({"platform": "web"})
