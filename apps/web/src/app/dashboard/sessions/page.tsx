@@ -119,7 +119,7 @@ export default function SessionsPage() {
             return;
         }
 
-        setLoading(true);
+        if (!range.background) setLoading(true);
         recordings.list(selectedDomainId, {
             device: deviceFilter || undefined,
             duration: durationFilter || undefined,

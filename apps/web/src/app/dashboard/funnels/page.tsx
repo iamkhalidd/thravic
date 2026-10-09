@@ -99,7 +99,7 @@ export default function FunnelsPage() {
             return;
         }
 
-        setLoading(true);
+        if (!range.background) setLoading(true);
         setSelectedFunnel(null);
         setFunnelMetrics(null);
         getFunnels(selectedDomainId).then(data => {

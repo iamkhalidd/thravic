@@ -56,7 +56,7 @@ export default function TrafficSourcesPage() {
         let cancelled = false;
 
         const loadData = async () => {
-            setLoading(true);
+            if (!range.background) setLoading(true);
             setError(null);
             const { start, end } = range;
             const [overviewRes, referrersRes, socialRes, searchRes] = await Promise.all([

@@ -51,6 +51,7 @@ from .routers import team as team_routes
 from .routers import tracker as tracker_routes
 from .routers import webhooks as webhook_routes
 from .security import validate_cors_origins, validate_security_config
+from .services import live_service
 from .services.email_service import send_email_or_raise
 
 log = create_logger("Server")
@@ -79,12 +80,15 @@ async def lifespan(_app: FastAPI):
     # Redis is optional — caching degrades gracefully. Collection itself writes
     # straight to Postgres, so nothing depends on Redis being up.
     await init_redis()
+    # Live dashboard notices ride on Redis pub/sub when it's there
+    await live_service.start()
 
     log.info(f"Thravic API ready on port {settings.PORT}")
     yield
 
     shutdown_jobs(scheduler)
 
+    await live_service.stop()
     await close_redis()
     await close_database()
     log.info("Shutdown complete")

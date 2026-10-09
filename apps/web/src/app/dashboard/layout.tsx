@@ -177,9 +177,8 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
     const [domainDropdownOpen, setDomainDropdownOpen] = useState(false);
     const [expandedSections, setExpandedSections] = useState<string[]>(['Traffic', 'Behavior']);
     const { domains: domainList, selectedDomainId: selectedDomain, setSelectedDomainId: setSelectedDomain } = useDomain();
-    const { dateRange, setDateRange, comparisonEnabled, toggleComparison } = useDateRange();
+    const { dateRange, setDateRange, comparisonEnabled, toggleComparison, live, setLive, streaming } = useDateRange();
     const [dateDropdownOpen, setDateDropdownOpen] = useState(false);
-    const [realTimeEnabled, setRealTimeEnabled] = useState(false);
 
     const [isMobile, setIsMobile] = useState(false);
 
@@ -229,22 +228,6 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
             setUser(result.data);
         });
     }, []);
-
-    // ── Refresh data when user returns to the tab ──────────────────────────
-    // Next.js App Router caches route segments and client state. When a user leaves and comes
-    // back, the page doesn't re-fetch. This fixes that by incrementing a key that forces
-    // a remount of the main content area, triggering all useEffect data fetches again.
-    const [refreshKey, setRefreshKey] = useState(0);
-    useEffect(() => {
-        const handleVisibility = () => {
-            if (document.visibilityState === 'visible') {
-                router.refresh();
-                setRefreshKey(prev => prev + 1);
-            }
-        };
-        document.addEventListener('visibilitychange', handleVisibility);
-        return () => document.removeEventListener('visibilitychange', handleVisibility);
-    }, [router]);
 
     const handleLogout = async () => {
         await auth.logout();
@@ -637,21 +620,23 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
                         <ThemeToggle />
                         
-                        {/* Live — desktop only */}
+                        {/* Live — desktop only; on, the open page re-fetches as the API pushes new events */}
                         <button
                             className="desktop-only"
-                            onClick={() => setRealTimeEnabled(!realTimeEnabled)}
+                            onClick={() => setLive(!live)}
+                            aria-pressed={live}
+                            title={!live ? 'Live paused. Click to show new data as it arrives.' : streaming ? 'Live: new data shows up as it arrives. Click to pause.' : 'Live: connecting, checking every 30 seconds meanwhile. Click to pause.'}
                             style={{
                                 alignItems: 'center', gap: '6px',
                                 padding: '5px 10px',
-                                background: realTimeEnabled ? 'rgba(16,185,129,0.1)' : 'var(--color-bg-primary)',
-                                border: `1px solid ${realTimeEnabled ? '#10b981' : 'var(--color-border)'}`,
+                                background: live ? 'rgba(16,185,129,0.1)' : 'var(--color-bg-primary)',
+                                border: `1px solid ${live ? '#10b981' : 'var(--color-border)'}`,
                                 borderRadius: '6px', cursor: 'pointer',
                                 fontSize: '0.8125rem',
-                                color: realTimeEnabled ? '#10b981' : 'var(--color-text-secondary)',
+                                color: live ? '#10b981' : 'var(--color-text-secondary)',
                             }}
                         >
-                            <RefreshCw size={13} className={realTimeEnabled ? 'animate-spin' : ''} />
+                            <RefreshCw size={13} />
                             <span>Live</span>
                         </button>
 
@@ -676,7 +661,7 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                 </header>
 
                 {/* Page Content */}
-                <div key={refreshKey} className="dash-content">
+                <div className="dash-content">
                     {/* Per page, so a broken page keeps the sidebar and other pages working. */}
                     <RouteErrorBoundary>{children}</RouteErrorBoundary>
                 </div>

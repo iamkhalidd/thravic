@@ -100,7 +100,7 @@ export default function HeatmapsPage() {
         }
 
         let cancelled = false;
-        setLoading(true);
+        if (!range.background) setLoading(true);
         getPages(selectedDomainId, range)
             .then(data => {
                 if (cancelled) return;
@@ -123,7 +123,7 @@ export default function HeatmapsPage() {
 
         let cancelled = false;
         const loadHeatmap = async () => {
-            setLoadingHeatmap(true);
+            if (!range.background) setLoadingHeatmap(true);
 
             const data = await getHeatmap(selectedDomainId, heatmapType, selectedPage, viewport, range).catch(() => ({}));
             if (cancelled) return;

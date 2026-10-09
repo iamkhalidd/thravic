@@ -41,7 +41,7 @@ export default function CampaignsPage() {
         let cancelled = false;
 
         const loadCampaigns = async () => {
-            setLoading(true);
+            if (!range.background) setLoading(true);
             setError(null);
             const result = await sources.getCampaigns(selectedDomainId, range.start, range.end);
             if (cancelled) return;

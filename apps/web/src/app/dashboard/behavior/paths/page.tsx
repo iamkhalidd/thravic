@@ -27,7 +27,7 @@ export default function PathsPage() {
             return;
         }
         let cancelled = false;
-        setLoading(true);
+        if (!range.background) setLoading(true);
         analytics.getPaths(selectedDomainId, range.start, range.end).then(result => {
             if (cancelled) return;
             setError(result.error ?? null);

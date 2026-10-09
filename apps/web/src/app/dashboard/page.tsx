@@ -79,7 +79,7 @@ export default function DashboardPage() {
         let cancelled = false;
 
         const loadData = async () => {
-            setLoading(true);
+            if (!range.background) setLoading(true);
             const { start, end, compare } = range;
             const [overviewRes, timeseriesRes, realtimeRes, sourcesRes, prevOverview, prevSeries] = await Promise.all([
                 analytics.getOverview(selectedDomainId, start, end),

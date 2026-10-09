@@ -38,7 +38,7 @@ export default function ErrorsPage() {
         }
         let cancelled = false;
         const load = async () => {
-            setLoading(true);
+            if (!range.background) setLoading(true);
             const result = await customEvents.getErrors(selectedDomainId, range.start, range.end);
             if (cancelled) return;
             setData(result.data ?? null);

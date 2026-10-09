@@ -30,6 +30,7 @@ from ..middleware.settings_gate import tracking_gate
 from ..services import (
     domain_service,
     event_service,
+    live_service,
     plan_service,
     recording_service,
     webhook_service,
@@ -306,6 +307,9 @@ async def collect_event(trackingId: str, request: Request):
             description="Event insert",
         )
 
+        # Open dashboards re-fetch now rather than on their next poll
+        await live_service.notify(domain["id"])
+
         # Fire and forget — the response must not wait on webhook delivery
         _fire_and_forget(
             webhook_service.trigger_webhooks(
@@ -391,6 +395,7 @@ async def collect_batch(trackingId: str, request: Request):
         # Only newly stored events: the tracker re-sends a batch until it is
         # acknowledged, and a replay must not notify subscribers twice.
         if stored:
+            await live_service.notify(domain["id"])
             # Subscribers get the event as the tracker sent it, as on the
             # single-event route; `inserts[i]` was built from `events[i]`.
             raw_event = {id(row): event for row, event in zip(inserts, events, strict=True)}

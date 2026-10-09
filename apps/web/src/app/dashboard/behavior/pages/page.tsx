@@ -46,7 +46,7 @@ export default function PagesPage() {
             return;
         }
         let cancelled = false;
-        setLoading(true);
+        if (!range.background) setLoading(true);
         analytics.getTopPages(selectedDomainId, range.start, range.end).then(result => {
             if (cancelled) return;
             setError(result.error ?? null);

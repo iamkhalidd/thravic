@@ -47,7 +47,7 @@ export default function RageClicksPage() {
         }
         let cancelled = false;
         const load = async () => {
-            setLoading(true);
+            if (!range.background) setLoading(true);
             const result = await customEvents.getRageClicks(selectedDomainId, range.start, range.end);
             if (cancelled) return;
             setData(result.data ?? null);

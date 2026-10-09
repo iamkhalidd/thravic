@@ -1,6 +1,14 @@
 'use client';
 
-import { createContext, useContext, useState, ReactNode, useMemo } from 'react';
+import { createContext, useContext, useState, ReactNode, useMemo, useCallback, useEffect } from 'react';
+import { streamLiveUpdates } from '@/lib/api';
+import { useDomain } from './DomainContext';
+
+// Live polls at this rate only while the push stream is down
+const LIVE_FALLBACK_INTERVAL_MS = 30_000;
+// A busy site pushes constantly; re-fetch at most this often (first update is immediate)
+const LIVE_MIN_GAP_MS = 5_000;
+const LIVE_RETRY_MAX_MS = 30_000;
 
 // Date range presets
 export const datePresets = [
@@ -23,6 +31,16 @@ interface DateRangeContextType {
     comparisonEnabled: boolean;
     setComparisonEnabled: (enabled: boolean) => void;
     toggleComparison: () => void;
+
+    // Live: re-fetch on an interval and when the tab comes back into view
+    live: boolean;
+    setLive: (live: boolean) => void;
+    // Moves the range end to "now", so every page re-fetches in the background
+    refresh: () => void;
+    // True when the latest range change came from refresh(), not the user
+    background: boolean;
+    // True while the API's push stream is connected
+    streaming: boolean;
 
     // Computed date values
     startDate: Date;
@@ -75,10 +93,94 @@ function getDateRange(rangeValue: string): { start: Date; end: Date } {
 }
 
 export function DateRangeProvider({ children }: { children: ReactNode }) {
-    const [dateRange, setDateRange] = useState('30d');
-    const [comparisonEnabled, setComparisonEnabled] = useState(false);
+    const [dateRange, setDateRangeState] = useState('30d');
+    const [comparisonEnabled, setComparisonState] = useState(false);
+    const [refreshTick, setRefreshTick] = useState(0);
+    const [background, setBackground] = useState(false);
+    const [live, setLiveState] = useState(true);
 
-    const toggleComparison = () => setComparisonEnabled(prev => !prev);
+    // User-driven changes show the loading state; refresh() changes don't.
+    const setDateRange = (range: string) => { setBackground(false); setDateRangeState(range); };
+    const setComparisonEnabled = (enabled: boolean) => { setBackground(false); setComparisonState(enabled); };
+    const toggleComparison = () => { setBackground(false); setComparisonState(prev => !prev); };
+
+    const refresh = useCallback(() => {
+        setBackground(true);
+        setRefreshTick(t => t + 1);
+    }, []);
+
+    useEffect(() => {
+        try {
+            if (localStorage.getItem('tf_live') === 'false') setLiveState(false);
+        } catch { /* storage unavailable */ }
+    }, []);
+
+    const setLive = (next: boolean) => {
+        setLiveState(next);
+        try { localStorage.setItem('tf_live', String(next)); } catch { /* storage unavailable */ }
+        if (next) refresh();
+    };
+
+    // Live: the API pushes a notice as soon as the domain stores new events.
+    const { selectedDomainId } = useDomain();
+    const [streaming, setStreaming] = useState(false);
+    useEffect(() => {
+        if (!live || !selectedDomainId) return;
+        const controller = new AbortController();
+        let lastRefresh = 0;
+        let trailing: ReturnType<typeof setTimeout> | undefined;
+
+        const onUpdate = () => {
+            // A hidden tab catches up when it's shown again
+            if (document.visibilityState !== 'visible' || trailing) return;
+            const wait = lastRefresh + LIVE_MIN_GAP_MS - Date.now();
+            const run = () => { trailing = undefined; lastRefresh = Date.now(); refresh(); };
+            if (wait <= 0) run();
+            else trailing = setTimeout(run, wait);
+        };
+
+        (async () => {
+            let retryMs = 2_000;
+            let opened = false;
+            while (!controller.signal.aborted) {
+                try {
+                    await streamLiveUpdates(selectedDomainId, {
+                        onOpen: () => {
+                            setStreaming(true);
+                            retryMs = 2_000;
+                            // After a drop, pick up whatever arrived meanwhile
+                            if (opened) onUpdate();
+                            opened = true;
+                        },
+                        onUpdate,
+                    }, controller.signal);
+                } catch { /* closed or unreachable: retry below */ }
+                setStreaming(false);
+                if (controller.signal.aborted) return;
+                await new Promise(resolve => setTimeout(resolve, retryMs));
+                retryMs = Math.min(retryMs * 2, LIVE_RETRY_MAX_MS);
+            }
+        })();
+
+        return () => {
+            controller.abort();
+            if (trailing) clearTimeout(trailing);
+            setStreaming(false);
+        };
+    }, [live, selectedDomainId, refresh]);
+
+    // Coming back to the tab always catches up; Live polls only while the stream is down.
+    useEffect(() => {
+        const onVisible = () => { if (document.visibilityState === 'visible') refresh(); };
+        document.addEventListener('visibilitychange', onVisible);
+        const id = live && !streaming
+            ? setInterval(() => { if (document.visibilityState === 'visible') refresh(); }, LIVE_FALLBACK_INTERVAL_MS)
+            : undefined;
+        return () => {
+            document.removeEventListener('visibilitychange', onVisible);
+            if (id) clearInterval(id);
+        };
+    }, [live, streaming, refresh]);
 
     const { startDate, endDate, comparisonStartDate, comparisonEndDate } = useMemo(() => {
         const { start, end } = getDateRange(dateRange);
@@ -101,7 +203,9 @@ export function DateRangeProvider({ children }: { children: ReactNode }) {
             comparisonStartDate: compStart,
             comparisonEndDate: compEnd
         };
-    }, [dateRange, comparisonEnabled]);
+        // refreshTick recomputes "now" so the range end keeps moving forward
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [dateRange, comparisonEnabled, refreshTick]);
 
     const getApiDateParams = () => {
         return {
@@ -117,6 +221,11 @@ export function DateRangeProvider({ children }: { children: ReactNode }) {
             comparisonEnabled,
             setComparisonEnabled,
             toggleComparison,
+            live,
+            setLive,
+            refresh,
+            background,
+            streaming,
             startDate,
             endDate,
             comparisonStartDate,
@@ -142,7 +251,7 @@ export function useDateRange() {
  * the range picker in the header drives every page.
  */
 export function useApiRange() {
-    const { startDate, endDate, comparisonStartDate, comparisonEndDate } = useDateRange();
+    const { startDate, endDate, comparisonStartDate, comparisonEndDate, background } = useDateRange();
     return useMemo(() => {
         const start = startDate.toISOString();
         const end = endDate.toISOString();
@@ -150,9 +259,11 @@ export function useApiRange() {
             start,
             end,
             key: `${start}|${end}`,
+            // A Live/tab-focus refresh: re-fetch without swapping the page for skeletons
+            background,
             compare: comparisonStartDate && comparisonEndDate
                 ? { start: comparisonStartDate.toISOString(), end: comparisonEndDate.toISOString() }
                 : null,
         };
-    }, [startDate, endDate, comparisonStartDate, comparisonEndDate]);
+    }, [startDate, endDate, comparisonStartDate, comparisonEndDate, background]);
 }

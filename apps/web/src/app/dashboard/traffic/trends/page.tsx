@@ -44,7 +44,7 @@ export default function TrendsPage() {
         let cancelled = false;
 
         const loadData = async () => {
-            setLoading(true);
+            if (!range.background) setLoading(true);
             setError(null);
             // GET /api/analytics/{id}/dashboard: one row per day in `timeseries`.
             const result = await analytics.getDashboard(selectedDomainId, range.start, range.end);

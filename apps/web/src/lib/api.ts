@@ -105,6 +105,39 @@ async function refreshToken(): Promise<boolean> {
     }
 }
 
+/**
+ * Holds the domain's live stream open: `onUpdate` fires each time the API
+ * stores new events for it. Resolves when the stream ends and throws if it
+ * can't open, so the caller decides when to reconnect. Uses fetch rather than
+ * EventSource so the token travels in a header instead of the URL.
+ */
+export async function streamLiveUpdates(
+    domainId: string,
+    handlers: { onOpen: () => void; onUpdate: () => void },
+    signal: AbortSignal
+): Promise<void> {
+    const open = () => fetch(`${API_URL}/api/analytics/${domainId}/live`, {
+        headers: { Accept: 'text/event-stream', Authorization: `Bearer ${getTokens().accessToken}` },
+        signal,
+    });
+
+    let response = await open();
+    if (response.status === 401 && await refreshToken()) response = await open();
+    if (!response.ok || !response.body) throw new Error(`Live stream unavailable (${response.status})`);
+    handlers.onOpen();
+
+    const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+    let buffer = '';
+    while (true) {
+        const { value, done } = await reader.read();
+        if (done) return;
+        // Messages end in a blank line; keep any partial one for the next chunk.
+        const messages = (buffer + value).split('\n\n');
+        buffer = messages.pop() ?? '';
+        if (messages.some(m => m.split('\n').includes('event: update'))) handlers.onUpdate();
+    }
+}
+
 // Auth API
 export const auth = {
     async register(email: string, password: string, name: string, profile: SignupProfile) {

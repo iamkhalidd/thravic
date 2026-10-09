@@ -12,9 +12,11 @@ Two things are easy to get wrong here and are handled deliberately:
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, Request
+from fastapi.responses import StreamingResponse
 
 from ..db import query
 from ..errors import SimpleError
@@ -22,7 +24,7 @@ from ..js_compat import js_round, url_path
 from ..json_response import jsjson
 from ..logging import create_logger
 from ..middleware.auth import AuthUser, require_auth
-from ..services import domain_service, event_service, session_service
+from ..services import domain_service, event_service, live_service, session_service
 
 log = create_logger("Analytics")
 
@@ -31,6 +33,8 @@ router = APIRouter()
 DEFAULT_RANGE_DAYS = 30
 REALTIME_WINDOW_MINUTES = 30
 HOUR_INTERVAL_MAX_DAYS = 2
+# Comment lines on the live stream, so proxies don't close it as idle
+LIVE_HEARTBEAT_SECONDS = 20
 
 SOURCE_TYPES = ("direct", "organic", "paid", "social", "referral", "email")
 
@@ -211,6 +215,31 @@ async def utm(domainId: str, request: Request, user: AuthUser = Depends(require_
     except Exception as exc:
         log.error(f"Analytics UTM error: {exc}")
         raise SimpleError(FAILED_UTM, 500) from None
+
+
+@router.get("/{domainId}/live")
+async def live(domainId: str, request: Request, user: AuthUser = Depends(require_auth)):
+    """Server-sent events: an `update` each time the domain stores new events.
+
+    The event carries no data; the dashboard re-fetches through the routes below.
+    """
+    domain = await _require_owned_domain(domainId, user.user_id)
+
+    async def stream():
+        with live_service.subscribe(domain["id"]) as updates:
+            yield "retry: 5000\n\n"
+            while not await request.is_disconnected():
+                try:
+                    await asyncio.wait_for(updates.get(), timeout=LIVE_HEARTBEAT_SECONDS)
+                    yield "event: update\ndata: {}\n\n"
+                except TimeoutError:
+                    yield ": ping\n\n"
+
+    return StreamingResponse(
+        stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.get("/{domainId}/realtime")
