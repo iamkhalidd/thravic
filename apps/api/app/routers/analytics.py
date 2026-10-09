@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
@@ -483,6 +484,8 @@ async def devices(domainId: str, request: Request, user: AuthUser = Depends(requ
             """
             SELECT
                 CASE
+                    -- Mobile apps report their OS; a browser's is in its user-agent.
+                    WHEN s.os IS NOT NULL THEN s.os
                     WHEN s.user_agent ILIKE '%Windows%' THEN 'Windows'
                     WHEN s.user_agent ILIKE '%iPhone%' OR s.user_agent ILIKE '%iPad%' THEN 'iOS'
                     WHEN s.user_agent ILIKE '%Macintosh%'
@@ -502,6 +505,25 @@ async def devices(domainId: str, request: Request, user: AuthUser = Depends(requ
             start_date,
             end_date,
         )
+
+        # What only the mobile SDK reports; websites leave the columns NULL.
+        app_breakdowns: dict[str, list[dict[str, Any]]] = {}
+        if domain_service.is_app(domain):
+            for key, column in (("appVersions", "app_version"), ("deviceModels", "device_model")):
+                app_breakdowns[key] = await query(
+                    f"""
+                    SELECT COALESCE(s.{column}, 'Unknown') AS name,
+                           COUNT(DISTINCT s.session_id)::int AS count
+                    FROM sessions s
+                    WHERE s.domain_id = $1 AND s.started_at >= $2 AND s.started_at <= $3
+                    GROUP BY 1
+                    ORDER BY count DESC
+                    LIMIT 20
+                    """,
+                    domain["id"],
+                    start_date,
+                    end_date,
+                )
 
         # Percentages for all three lists are computed against the DEVICE total.
         # That is what the Express implementation does, quirk included.
@@ -538,6 +560,17 @@ async def devices(domainId: str, request: Request, user: AuthUser = Depends(requ
                     }
                     for row in os_rows
                 ],
+                **{
+                    key: [
+                        {
+                            "name": row["name"],
+                            "sessions": row["count"],
+                            "percentage": _percentage(row["count"]),
+                        }
+                        for row in rows
+                    ]
+                    for key, rows in app_breakdowns.items()
+                },
             }
         )
     except SimpleError:

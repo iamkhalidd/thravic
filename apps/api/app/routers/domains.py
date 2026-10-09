@@ -89,7 +89,16 @@ def _validate_create(body: dict[str, Any]) -> tuple[dict[str, Any] | None, str |
     if issue:
         return None, first_message([issue])
 
-    return {"domain": domain, "name": name}, None
+    # Optional, so existing clients keep creating websites. An app's `domain` is
+    # its bundle ID (`com.acme.shop`), which DOMAIN_PATTERN already admits; it
+    # must have a dot, as every iOS and Android bundle ID does.
+    platform = body.get("platform", "web")
+    if platform not in domain_service.PLATFORMS:
+        return None, "platform must be one of: " + ", ".join(domain_service.PLATFORMS)
+    if platform != "web" and "." not in domain:
+        return None, "Invalid bundle ID (for example com.acme.shop)"
+
+    return {"domain": domain, "name": name, "platform": platform}, None
 
 
 def _validate_settings(body: dict[str, Any]) -> tuple[dict[str, Any] | None, str | None]:
@@ -150,6 +159,7 @@ async def list_domains(user: AuthUser = Depends(require_auth)):
                     "name": domain["name"],
                     "trackingId": domain["tracking_id"],
                     "verified": domain["verified"],
+                    "platform": domain.get("platform") or "web",
                     "createdAt": domain["created_at"],
                     # Unknown plans fall back to the free feature set
                     "features": list(owner_plan.features),
@@ -199,6 +209,7 @@ async def create_domain(request: Request, user: AuthUser = Depends(require_auth)
             values["domain"],
             values["name"] or values["domain"],
             generate_tracking_id(),
+            values["platform"],
         )
         if not domain:
             raise SimpleError(FAILED_CREATE, 500)
@@ -210,6 +221,7 @@ async def create_domain(request: Request, user: AuthUser = Depends(require_auth)
                 "name": domain["name"],
                 "trackingId": domain["tracking_id"],
                 "verified": domain["verified"],
+                "platform": domain.get("platform") or "web",
             },
             status_code=201,
         )
@@ -237,6 +249,9 @@ async def get_script(domainId: str, user: AuthUser = Depends(require_auth)):
                 "have an empty src URL. Set SERVER_URL to your production backend URL."
             )
 
+        if domain_service.is_app(domain):
+            return jsjson(_app_install(domain, api_url))
+
         script = (
             "<!-- Thravic Analytics -->\n"
             f'<script async src="{api_url}/tf.js" '
@@ -263,10 +278,44 @@ async def get_script(domainId: str, user: AuthUser = Depends(require_auth)):
         raise SimpleError(FAILED_SCRIPT, 500) from None
 
 
+def _app_install(domain: dict[str, Any], api_url: str) -> dict[str, Any]:
+    """The SDK install for a mobile app, in the shape the web snippet uses."""
+    script = (
+        "import { Thravic } from '@thravic/react-native';\n\n"
+        f"Thravic.init('{domain['tracking_id']}', {{ apiUrl: '{api_url}' }});"
+    )
+    return {
+        "trackingId": domain["tracking_id"],
+        "install": "npm install @thravic/react-native",
+        "script": script,
+        "instructions": [
+            "Install the Thravic SDK in your app",
+            "Call Thravic.init once, when your app starts",
+            "Screens and sessions are tracked from then on",
+            "Open your app, then return here to verify the installation",
+        ],
+    }
+
+
 @router.post("/{domainId}/verify")
 async def verify_domain(domainId: str, user: AuthUser = Depends(require_auth)):
     try:
         domain = await _load_owned_domain(domainId, user.user_id)
+
+        # An app has no page to fetch: it is installed once it has sent something.
+        if domain_service.is_app(domain):
+            if not await domain_service.has_sessions(domain["id"]):
+                return jsjson(
+                    {
+                        "verified": False,
+                        "message": (
+                            "No data from your app yet. Run it with Thravic.init "
+                            "added, open a screen or two, then try again."
+                        ),
+                    }
+                )
+            await domain_service.verify(domain["id"])
+            return jsjson({"verified": True, "message": "App verified successfully"})
 
         raw_domain = str(domain["domain"]).strip()
         site_url = raw_domain if raw_domain.startswith("http") else f"https://{raw_domain}"
@@ -410,6 +459,7 @@ async def get_domain(domainId: str, user: AuthUser = Depends(require_auth)):
                 "name": domain["name"],
                 "trackingId": domain["tracking_id"],
                 "verified": domain["verified"],
+                "platform": domain.get("platform") or "web",
                 "createdAt": domain["created_at"],
                 "settings": domain_service.effective_settings(domain),
             }

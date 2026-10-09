@@ -24,7 +24,7 @@ def account(monkeypatch):
     async def _count_by_user(_user_id):
         return state["domains"]
 
-    async def _create(user_id, domain, name, tracking_id):
+    async def _create(user_id, domain, name, tracking_id, platform="web"):
         state["created"].append(domain)
         return {"id": "d1", "domain": domain, "name": name, "tracking_id": tracking_id,
                 "verified": False}

@@ -107,9 +107,10 @@ async def upsert(params: dict[str, Any]) -> dict[str, Any] | None:
             (session_id, domain_id, visitor_id, source, source_type, referrer,
              utm_source, utm_medium, utm_campaign, utm_term, utm_content,
              user_agent, screen_width, screen_height, language,
-             country, region, city, pageviews)
+             country, region, city, os, os_version, app_version, device_model,
+             pageviews)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
-                $16, $17, $18, 0)
+                $16, $17, $18, $19, $20, $21, $22, 0)
         ON CONFLICT (session_id, domain_id)
         DO UPDATE SET
            ended_at = NOW()
@@ -134,6 +135,11 @@ async def upsert(params: dict[str, Any]) -> dict[str, Any] | None:
         params.get("country") or None,
         params.get("region") or None,
         params.get("city") or None,
+        # Reported by the mobile app SDK; NULL for websites.
+        params.get("os") or None,
+        params.get("osVersion") or None,
+        params.get("appVersion") or None,
+        params.get("deviceModel") or None,
     )
     return rows[0] if rows else None
 

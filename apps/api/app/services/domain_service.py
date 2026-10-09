@@ -45,6 +45,16 @@ SETTING_CHOICES: dict[str, tuple[int, ...]] = {
 # Event types each setting switches off at collection.
 EVENT_TYPE_SETTINGS = {"click": "trackClicks", "scroll": "trackScrolls", "form": "trackForms"}
 
+# What a property is (`domains.platform`). Everything but 'web' is a mobile app,
+# whose `domain` column holds the bundle ID.
+PLATFORMS = ("web", "ios", "android", "cross")
+
+
+def is_app(domain: dict[str, Any] | None) -> bool:
+    """Whether the property is a mobile app. Rows cached before the platform
+    column existed have no `platform`, and are websites."""
+    return bool(domain) and (domain.get("platform") or "web") != "web"
+
 
 def effective_settings(domain: dict[str, Any]) -> dict[str, bool | int]:
     """The domain's stored overrides on top of the defaults.
@@ -70,18 +80,19 @@ def collects(domain: dict[str, Any], event_type: str) -> bool:
 
 
 async def create(
-    user_id: str, domain: str, name: str, tracking_id: str
+    user_id: str, domain: str, name: str, tracking_id: str, platform: str = "web"
 ) -> dict[str, Any] | None:
     rows = await query(
         """
-        INSERT INTO domains (user_id, domain, name, tracking_id)
-        VALUES ($1, $2, $3, $4)
+        INSERT INTO domains (user_id, domain, name, tracking_id, platform)
+        VALUES ($1, $2, $3, $4, $5)
         RETURNING *
         """,
         user_id,
         domain,
         name,
         tracking_id,
+        platform,
     )
     return rows[0] if rows else None
 
@@ -189,6 +200,14 @@ async def _forget_tracking_lookup(tracking_id: str) -> None:
         await client.delete(f"domain:tracking:{tracking_id}")
     except Exception:
         pass  # the entry expires on its own within TRACKING_CACHE_TTL_SECONDS
+
+
+async def has_sessions(domain_id: str) -> bool:
+    """Whether anything has been collected for the property yet."""
+    row = await query_one(
+        "SELECT EXISTS (SELECT 1 FROM sessions WHERE domain_id = $1) AS found", domain_id
+    )
+    return bool(row and row["found"])
 
 
 async def verify(domain_id: str) -> dict[str, Any] | None:

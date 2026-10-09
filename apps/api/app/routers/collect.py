@@ -71,6 +71,9 @@ REALTIME_WINDOW_MINUTES = 5
 
 INVALID_TRACKING_ID = "Invalid tracking ID"
 
+# App SDK device fields and the width of the `sessions` column each is stored in.
+APP_DEVICE_FIELDS = {"os": 50, "osVersion": 50, "appVersion": 50, "deviceModel": 100}
+
 # Strong references so background webhook deliveries are not garbage collected.
 _background_tasks: set[asyncio.Task] = set()
 
@@ -140,6 +143,13 @@ def _event_issues(body: dict) -> list[dict]:
     _, issue = string_field(body, "language", required=False)
     if issue:
         issues.append(issue)
+
+    # Device details the mobile app SDK reports (a browser's come from its
+    # user-agent). Optional, so the web tracker never sends them.
+    for name in APP_DEVICE_FIELDS:
+        _, issue = string_field(body, name, required=False)
+        if issue:
+            issues.append(issue)
 
     data = body.get("data")
     if data is not None and not isinstance(data, dict):
@@ -350,6 +360,9 @@ async def collect_batch(trackingId: str, request: Request):
         # Event types switched off for this domain are acknowledged but not stored.
         events = [e for e in body["events"] if domain_service.collects(domain, e["type"])]
         user_agent = request.headers.get("user-agent") or ""
+        # One lookup per request: every event in a batch comes from one device. The
+        # mobile SDK sends only batches, so without it apps would have no geo.
+        location = check_ip(_client_ip(request)) if events else {}
 
         inserts: list[dict[str, Any]] = []
         for event in events:
@@ -362,7 +375,7 @@ async def collect_batch(trackingId: str, request: Request):
 
             await retry_transient(
                 lambda event=event, source_type=source_type: session_service_upsert(
-                    domain["id"], event, user_agent, source_type
+                    domain["id"], event, user_agent, source_type, location
                 ),
                 description="Session upsert",
             )
@@ -422,8 +435,7 @@ async def session_service_upsert(
 ) -> None:
     """`sessionService.upsert` as called from the collectors.
 
-    `location` is the geo lookup from the request IP; the single-event route has
-    it, the batch route does not.
+    `location` is the geo lookup from the request IP.
     """
     from ..services import session_service
 
@@ -450,6 +462,10 @@ async def session_service_upsert(
             "country": location.get("country"),
             "region": location.get("region"),
             "city": location.get("city"),
+            **{
+                name: (event.get(name) or "")[:width] or None
+                for name, width in APP_DEVICE_FIELDS.items()
+            },
         }
     )
 
@@ -547,7 +563,12 @@ def _recording_events_issues(body: dict) -> list[dict]:
 
 
 async def _records(domain: dict[str, Any]) -> bool:
-    """Recording needs the domain's setting on and the owner's plan to include it."""
+    """Recording needs the domain's setting on and the owner's plan to include it.
+
+    Never for a mobile app: recordings replay a web page's DOM.
+    """
+    if domain_service.is_app(domain):
+        return False
     if not domain_service.effective_settings(domain)["sessionRecording"]:
         return False
     plan = await plan_service.owner_plan(domain["id"])
