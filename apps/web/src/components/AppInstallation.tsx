@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Check, ClipboardList, Copy } from 'lucide-react';
+import { Check, ClipboardList, Copy, ExternalLink } from 'lucide-react';
 
 const SDK_PACKAGE = '@thravic/react-native';
 
@@ -70,6 +70,13 @@ export function AppInstallation({ init }: { init: string }) {
                         <li key={step} style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>{step}</li>
                     ))}
                 </ol>
+                {/* New tab, so the tracking ID and the verify button stay where they are */}
+                <a href="/docs/react-native" target="_blank" rel="noopener" style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 'var(--space-sm)',
+                    fontSize: '0.8125rem', color: 'var(--color-accent-primary)',
+                }}>
+                    Full setup guide: Expo Router, custom events, opt-out <ExternalLink size={13} />
+                </a>
             </div>
         </div>
     );

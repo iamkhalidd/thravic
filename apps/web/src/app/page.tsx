@@ -19,13 +19,36 @@ const AppOverviewView = dynamic(() => import('./demo/DemoViews').then(mod => mod
 
 /* ─── DATA ─── */
 
-// The install flow as the dashboard runs it (dashboard/domains/new)
-const journey = [
-    { title: 'Add your site', body: 'Enter your domain, or your app’s bundle ID, in the dashboard and Thravic creates a tracking ID for it.' },
-    { title: 'Paste the script', body: 'Copy one tag into your site’s head. There are instructions for HTML, WordPress, Shopify, Webflow and Next.js. Mobile apps install the React Native SDK instead.' },
-    { title: 'Verify it', body: 'Thravic checks the script is live. Data appears within a few minutes of your first visitor.' },
-    { title: 'Find it and fix it', body: 'Replays, heatmaps and funnels show where people struggle. Ship a fix, then compare periods to see if it worked.' },
-];
+// The install flow as the dashboard runs it (dashboard/domains/new), for a
+// website and for a mobile app. Step 2 shows its code under the text.
+type Platform = 'web' | 'app';
+
+const journeys: Record<Platform, { head: string; sub: string; code: string; codeLabel: string; steps: { title: string; body: string }[] }> = {
+    web: {
+        head: 'Live on your site in four steps',
+        sub: 'One tag in your site’s head is the whole install. No tag manager, no build changes.',
+        codeLabel: 'Example tracking script',
+        code: '<script async src=".../tf.js"\n  data-tracking-id="your-id">\n</script>',
+        steps: [
+            { title: 'Add your site', body: 'Enter your domain in the dashboard and Thravic creates a tracking ID for it.' },
+            { title: 'Paste the script', body: 'Copy one tag into your site’s head. There are instructions for HTML, WordPress, Shopify, Webflow and Next.js.' },
+            { title: 'Verify it', body: 'Thravic checks the script is live. Data appears within a few minutes of your first visitor.' },
+            { title: 'Find it and fix it', body: 'Replays, heatmaps and funnels show where people struggle. Ship a fix, then compare periods to see if it worked.' },
+        ],
+    },
+    app: {
+        head: 'Live in your app in four steps',
+        sub: 'One package and one line of setup for React Native and Expo. Works in Expo Go, no config plugin.',
+        codeLabel: 'Example SDK setup',
+        code: "npx expo install \\\n  @thravic/react-native\n\nThravic.init('your-id', {\n  bundleId: 'com.acme.shop',\n});",
+        steps: [
+            { title: 'Add your app', body: 'Choose Mobile app in the dashboard and enter its name and bundle ID. Thravic creates a tracking ID for it.' },
+            { title: 'Install the SDK', body: 'Add the package and start it when your app loads. Screen views come from React Navigation or Expo Router.' },
+            { title: 'Verify it', body: 'Open the app and visit a screen or two. Thravic checks events are arriving, and data appears within a minute.' },
+            { title: 'Find it and fix it', body: 'Screens, paths and funnels show where people drop off. Versions show whether a release made things better.' },
+        ],
+    },
+};
 
 const stories = [
     {
@@ -169,6 +192,8 @@ const s = {
 export default function HomePage() {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [tiers, setTiers] = useState<Tier[]>(pricingTiers);
+    const [platform, setPlatform] = useState<Platform>('web');
+    const journey = journeys[platform];
 
     React.useEffect(() => {
         // Every card comes from the admin-managed plans; the built-in tiers above
@@ -307,22 +332,41 @@ export default function HomePage() {
             <section id="how-it-works" className="lp-section">
                 <div style={s.container}>
                     <div className="lp-section-head">
-                        <h2 style={s.sectionTitle}>Live on your site in four steps</h2>
-                        <p style={s.sectionSub}>
-                            One tag in your site&apos;s head is the whole install. No tag manager, no build changes.
-                        </p>
+                        <h2 style={s.sectionTitle}>{journey.head}</h2>
+                        <p style={s.sectionSub}>{journey.sub}</p>
+                        <div role="tablist" aria-label="Install for" style={{
+                            display: 'inline-flex', gap: 4, padding: 4, marginTop: 24,
+                            background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border)', borderRadius: 999,
+                        }}>
+                            {([['web', 'Website'], ['app', 'Mobile app']] as const).map(([id, label]) => (
+                                <button key={id} type="button" role="tab" aria-selected={platform === id} onClick={() => setPlatform(id)}
+                                    style={{
+                                        padding: '6px 16px', borderRadius: 999, cursor: 'pointer', fontSize: '0.875rem',
+                                        border: 'none', fontWeight: platform === id ? 600 : 400,
+                                        background: platform === id ? 'var(--color-bg-card)' : 'transparent',
+                                        color: platform === id ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
+                                    }}>
+                                    {label}
+                                </button>
+                            ))}
+                        </div>
                     </div>
 
                     <ol className="lp-steps">
-                        {journey.map((step, i) => (
+                        {journey.steps.map((step, i) => (
                             <li key={step.title} className="lp-step">
                                 <span className="lp-step-num">{String(i + 1).padStart(2, '0')}</span>
                                 <h3>{step.title}</h3>
                                 <p>{step.body}</p>
                                 {i === 1 && (
-                                    <pre className="lp-code" aria-label="Example tracking script">
-                                        <code>{'<script async src=".../tf.js"\n  data-tracking-id="your-id">\n</script>'}</code>
+                                    <pre className="lp-code" aria-label={journey.codeLabel}>
+                                        <code>{journey.code}</code>
                                     </pre>
+                                )}
+                                {i === 1 && platform === 'app' && (
+                                    <Link href="/docs/react-native" className="lp-text-link" style={{ marginTop: 12 }}>
+                                        Full setup guide <ArrowRight size={14} />
+                                    </Link>
                                 )}
                             </li>
                         ))}
@@ -477,6 +521,7 @@ export default function HomePage() {
                         </div>
                         {[
                             { title: 'Product', links: [{ label: 'Features', href: '#features' }, { label: 'Pricing', href: '#pricing' }, { label: 'Demo', href: '/demo' }] },
+                            { title: 'Docs', links: [{ label: 'React Native & Expo', href: '/docs/react-native' }] },
                             { title: 'Company', links: [{ label: 'About', href: '/about' }, { label: 'Contact', href: '/contact' }] },
                             { title: 'Legal', links: [{ label: 'Privacy', href: '/privacy' }, { label: 'GDPR', href: '/gdpr' }, { label: 'Cookies', href: '/cookies' }] },
                         ].map((group, i) => (
