@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { Fragment, useState, useEffect } from 'react';
 import { Search, AlertTriangle } from 'lucide-react';
 import { analytics } from '@/lib/api';
 import { useDomain } from '@/contexts/DomainContext';
@@ -8,6 +8,7 @@ import { useApiRange } from '@/contexts/DateRangeContext';
 import { PageHeader } from '@/components/PageHeader';
 import { ChartCard } from '@/components/ChartCard';
 import { duration } from '@/components/charts/format';
+import { ChangeBadge } from '@/components/ChangeBadge';
 
 interface PageRow {
     path: string;
@@ -39,6 +40,8 @@ export default function PagesPage() {
     const [error, setError] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [sortBy, setSortBy] = useState<SortKey>('pageviews');
+    // Views per path in the previous period; null unless Compare is on
+    const [previousViews, setPreviousViews] = useState<Map<string, number> | null>(null);
 
     useEffect(() => {
         if (!selectedDomainId) {
@@ -47,14 +50,22 @@ export default function PagesPage() {
         }
         let cancelled = false;
         if (!range.background) setLoading(true);
-        analytics.getTopPages(selectedDomainId, range.start, range.end).then(result => {
+        Promise.all([
+            analytics.getTopPages(selectedDomainId, range.start, range.end),
+            range.compare ? analytics.getTopPages(selectedDomainId, range.compare.start, range.compare.end) : null,
+        ]).then(([result, prevResult]) => {
             if (cancelled) return;
             setError(result.error ?? null);
             setPages(result.data?.pages ?? []);
+            setPreviousViews(prevResult?.data
+                ? new Map(prevResult.data.pages.map(p => [p.path || '/', p.pageviews || 0]))
+                : null);
             setLoading(false);
         });
         return () => { cancelled = true; };
     }, [selectedDomainId, range, domainLoading]);
+
+    const comparing = previousViews !== null;
 
     const query = searchQuery.toLowerCase();
     const filteredPages = pages
@@ -109,8 +120,8 @@ export default function PagesPage() {
                                     <tr>
                                         <th style={{ paddingLeft: 20 }}>Page</th>
                                         {COLUMNS.map(col => (
+                                            <Fragment key={col.key}>
                                             <th
-                                                key={col.key}
                                                 className="num"
                                                 aria-sort={sortBy === col.key ? 'descending' : 'none'}
                                                 style={col.key === 'bounceRate' ? { paddingRight: 20 } : undefined}
@@ -127,13 +138,17 @@ export default function PagesPage() {
                                                     {col.label}{sortBy === col.key ? ' ↓' : ''}
                                                 </button>
                                             </th>
+                                            {comparing && col.key === 'pageviews' && (
+                                                <th className="num" title="Views against the previous period">vs previous</th>
+                                            )}
+                                            </Fragment>
                                         ))}
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {filteredPages.length === 0 ? (
                                         <tr>
-                                            <td colSpan={6} className="empty-note">
+                                            <td colSpan={comparing ? 7 : 6} className="empty-note">
                                                 {pages.length === 0 ? 'No pageviews in this period.' : 'No pages match your search.'}
                                             </td>
                                         </tr>
@@ -153,6 +168,11 @@ export default function PagesPage() {
                                                         <span style={{ fontWeight: 500, minWidth: '3.5em' }}>{views.toLocaleString()}</span>
                                                     </span>
                                                 </td>
+                                                {comparing && (
+                                                    <td className="num">
+                                                        <ChangeBadge now={views} before={previousViews.get(page.path || '/') ?? 0} />
+                                                    </td>
+                                                )}
                                                 <td className="num">{duration(page.avgTime || 0)}</td>
                                                 <td className="num">{(page.entries || 0).toLocaleString()}</td>
                                                 <td className="num">{(page.exits || 0).toLocaleString()}</td>

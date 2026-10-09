@@ -21,6 +21,7 @@ import { StatCard } from '@/components/StatCard';
 import { ChartCard } from '@/components/ChartCard';
 import { BarList } from '@/components/charts/BarList';
 import type { BarListItem } from '@/components/charts/BarList';
+import { percentChange } from '@/components/ChangeBadge';
 
 type ChannelKey = 'direct' | 'organic' | 'paid' | 'social' | 'referral' | 'email';
 
@@ -35,6 +36,8 @@ const CHANNELS: Array<{ key: ChannelKey; label: string; icon: ReactNode }> = [
 
 interface SourcesData {
     totalSessions: number;
+    /** Set when Compare is on. */
+    previousSessions?: number;
     channels: BarListItem[];
     referrers: BarListItem[];
     social: BarListItem[];
@@ -58,32 +61,54 @@ export default function TrafficSourcesPage() {
         const loadData = async () => {
             if (!range.background) setLoading(true);
             setError(null);
-            const { start, end } = range;
-            const [overviewRes, referrersRes, socialRes, searchRes] = await Promise.all([
+            const fetchPeriod = (start: string, end: string) => Promise.all([
                 sources.getOverview(selectedDomainId, start, end),
                 sources.getReferrers(selectedDomainId, start, end),
                 sources.getSocial(selectedDomainId, start, end),
                 sources.getSearch(selectedDomainId, start, end),
+            ]).then(([overviewRes, referrersRes, socialRes, searchRes]) => {
+                if (!overviewRes.data) return { error: overviewRes.error || 'Could not load traffic sources.' };
+                const byType = overviewRes.data.summary?.byType;
+                const period: SourcesData = {
+                    totalSessions: overviewRes.data.summary?.totalSessions ?? 0,
+                    channels: CHANNELS.map(c => ({ label: c.label, value: byType?.[c.key]?.count ?? 0, icon: c.icon })),
+                    // The referrers endpoint has the full list; the overview's top list is the fallback.
+                    referrers: (referrersRes.data?.referrers ?? overviewRes.data.topReferrers ?? [])
+                        .map(r => ({ label: r.site, value: r.sessions ?? 0, icon: <Globe size={14} /> })),
+                    social: (socialRes.data?.platforms ?? overviewRes.data.topSocial ?? [])
+                        .map(p => ({ label: p.platform, value: p.sessions ?? 0 })),
+                    search: (searchRes.data?.engines ?? []).map(e => ({ label: e.engine, value: e.sessions ?? 0 })),
+                };
+                return { period };
+            });
+
+            const [current, previous] = await Promise.all([
+                fetchPeriod(range.start, range.end),
+                range.compare ? fetchPeriod(range.compare.start, range.compare.end) : null,
             ]);
             if (cancelled) return;
 
-            if (!overviewRes.data) {
-                setError(overviewRes.error || 'Could not load traffic sources.');
+            if (!current.period) {
+                setError(current.error ?? 'Could not load traffic sources.');
                 setData(null);
                 setLoading(false);
                 return;
             }
 
-            const byType = overviewRes.data.summary?.byType;
+            const prev = previous?.period;
+            // With Compare on, each row carries its previous-period value (0 if it had none)
+            const withPrevious = (items: BarListItem[], before?: BarListItem[]) => {
+                if (!before) return items;
+                const byLabel = new Map(before.map(i => [i.label, i.value]));
+                return items.map(i => ({ ...i, previous: byLabel.get(i.label) ?? 0 }));
+            };
             setData({
-                totalSessions: overviewRes.data.summary?.totalSessions ?? 0,
-                channels: CHANNELS.map(c => ({ label: c.label, value: byType?.[c.key]?.count ?? 0, icon: c.icon })),
-                // The referrers endpoint has the full list; the overview's top list is the fallback.
-                referrers: (referrersRes.data?.referrers ?? overviewRes.data.topReferrers ?? [])
-                    .map(r => ({ label: r.site, value: r.sessions ?? 0, icon: <Globe size={14} /> })),
-                social: (socialRes.data?.platforms ?? overviewRes.data.topSocial ?? [])
-                    .map(p => ({ label: p.platform, value: p.sessions ?? 0 })),
-                search: (searchRes.data?.engines ?? []).map(e => ({ label: e.engine, value: e.sessions ?? 0 })),
+                ...current.period,
+                previousSessions: prev?.totalSessions,
+                channels: withPrevious(current.period.channels, prev?.channels),
+                referrers: withPrevious(current.period.referrers, prev?.referrers),
+                social: withPrevious(current.period.social, prev?.social),
+                search: withPrevious(current.period.search, prev?.search),
             });
             setLoading(false);
         };
@@ -136,7 +161,8 @@ export default function TrafficSourcesPage() {
             {header}
 
             <div className="stat-grid">
-                <StatCard label="Sessions" icon={Activity} value={data.totalSessions.toLocaleString()} hint="All channels" />
+                <StatCard label="Sessions" icon={Activity} value={data.totalSessions.toLocaleString()} hint="All channels"
+                    change={percentChange(data.totalSessions, data.previousSessions)} />
                 <StatCard
                     label="Top channel"
                     icon={Trophy}

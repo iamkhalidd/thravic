@@ -9,6 +9,7 @@ const LIVE_FALLBACK_INTERVAL_MS = 30_000;
 // A busy site pushes constantly; re-fetch at most this often (first update is immediate)
 const LIVE_MIN_GAP_MS = 5_000;
 const LIVE_RETRY_MAX_MS = 30_000;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 // Date range presets
 export const datePresets = [
@@ -84,6 +85,7 @@ function getDateRange(rangeValue: string): { start: Date; end: Date } {
         case 'last_month':
             start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
             end.setDate(0); // Last day of previous month
+            end.setHours(23, 59, 59, 999);
             break;
         default:
             start.setDate(start.getDate() - 30);
@@ -185,16 +187,15 @@ export function DateRangeProvider({ children }: { children: ReactNode }) {
     const { startDate, endDate, comparisonStartDate, comparisonEndDate } = useMemo(() => {
         const { start, end } = getDateRange(dateRange);
 
-        // Calculate comparison period (previous period of same length)
+        // The previous period: same length, ending where this one starts. "Today"
+        // is a partial day, so it compares with yesterday up to the same time.
         let compStart: Date | null = null;
         let compEnd: Date | null = null;
 
         if (comparisonEnabled) {
-            const daysDiff = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-            compEnd = new Date(start);
-            compEnd.setDate(compEnd.getDate() - 1);
-            compStart = new Date(compEnd);
-            compStart.setDate(compStart.getDate() - daysDiff);
+            const shift = dateRange === 'today' ? DAY_MS : end.getTime() - start.getTime();
+            compStart = new Date(start.getTime() - shift);
+            compEnd = new Date(end.getTime() - shift);
         }
 
         return {

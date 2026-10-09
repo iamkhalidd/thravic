@@ -44,6 +44,9 @@ import { ImpersonationBanner } from '@/components/ImpersonationBanner';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { RouteErrorBoundary } from '@/components/RouteErrorBoundary';
 
+// Pages that read useApiRange().compare; elsewhere the Compare button would do nothing
+const COMPARE_PAGES = ['/dashboard', '/dashboard/traffic/trends', '/dashboard/traffic/sources', '/dashboard/behavior/pages'];
+
 const navStructure = [
     { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', exact: true },
     {
@@ -591,10 +594,12 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                             )}
                         </div>
 
-                        {/* Compare — desktop only */}
-                        <button
+                        {/* Compare — desktop only, and only where a page shows the previous period */}
+                        {COMPARE_PAGES.includes(pathname) && <button
                             className="desktop-only"
                             onClick={toggleComparison}
+                            aria-pressed={comparisonEnabled}
+                            title="Compare with the previous period of the same length"
                             style={{
                                 alignItems: 'center', gap: '6px',
                                 padding: '5px 10px',
@@ -607,7 +612,7 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                         >
                             <TrendingUp size={13} />
                             <span>Compare</span>
-                        </button>
+                        </button>}
                     </div>
 
                     {/* Right: actions — Live and Export desktop only, theme always */}

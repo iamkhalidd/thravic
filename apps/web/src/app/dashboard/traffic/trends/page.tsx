@@ -7,6 +7,7 @@ import {
     AlertTriangle,
     CheckCircle,
     Minus,
+    Sigma,
 } from 'lucide-react';
 import { analytics } from '@/lib/api';
 import { useDomain } from '@/contexts/DomainContext';
@@ -15,6 +16,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { StatCard } from '@/components/StatCard';
 import { ChartCard } from '@/components/ChartCard';
 import { TimeSeriesChart } from '@/components/charts/TimeSeriesChart';
+import { percentChange } from '@/components/ChangeBadge';
 
 type Metric = 'visitors' | 'sessions' | 'pageviews';
 type Row = { date: string; visitors: number; sessions: number; pageviews: number };
@@ -32,6 +34,8 @@ export default function TrendsPage() {
     const { selectedDomainId, loading: domainLoading } = useDomain();
     const range = useApiRange();
     const [chartData, setChartData] = useState<Row[]>([]);
+    // The previous period, day by day; null unless Compare is on
+    const [previousData, setPreviousData] = useState<Row[] | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [metric, setMetric] = useState<Metric>('visitors');
@@ -47,8 +51,12 @@ export default function TrendsPage() {
             if (!range.background) setLoading(true);
             setError(null);
             // GET /api/analytics/{id}/dashboard: one row per day in `timeseries`.
-            const result = await analytics.getDashboard(selectedDomainId, range.start, range.end);
+            const [result, prevResult] = await Promise.all([
+                analytics.getDashboard(selectedDomainId, range.start, range.end),
+                range.compare ? analytics.getDashboard(selectedDomainId, range.compare.start, range.compare.end) : null,
+            ]);
             if (cancelled) return;
+            setPreviousData(prevResult?.data ? prevResult.data.timeseries || [] : null);
             if (result.data) {
                 setChartData(result.data.timeseries || []);
             } else {
@@ -79,7 +87,7 @@ export default function TrendsPage() {
             <div className="page-stack">
                 {header}
                 <div className="stat-grid">
-                    {[1, 2, 3].map(i => <StatCard key={i} label="" value="" loading />)}
+                    {[1, 2, 3, 4].map(i => <StatCard key={i} label="" value="" loading />)}
                 </div>
                 <ChartCard title="" loading height={280}><span /></ChartCard>
             </div>
@@ -105,6 +113,14 @@ export default function TrendsPage() {
             </div>
         );
     }
+
+    const total = chartData.reduce((sum, d) => sum + (d[metric] || 0), 0);
+    const previousTotal = previousData?.reduce((sum, d) => sum + (d[metric] || 0), 0);
+    // The previous period, aligned day by day, as a dashed comparison line.
+    const previousKey = `previous_${metric}`;
+    const plotted = previousData
+        ? chartData.map((d, i) => ({ ...d, [previousKey]: previousData[i]?.[metric] ?? null }))
+        : chartData;
 
     // Trend: second half of the period against the first half.
     const halfLength = Math.floor(chartData.length / 2);
@@ -138,6 +154,13 @@ export default function TrendsPage() {
 
             <div className="stat-grid">
                 <StatCard
+                    label={`Total ${metricLabel.toLowerCase()}`}
+                    icon={Sigma}
+                    value={total.toLocaleString()}
+                    change={percentChange(total, previousTotal)}
+                    hint={previousTotal !== undefined ? `${previousTotal.toLocaleString()} in the previous period` : 'In the selected period'}
+                />
+                <StatCard
                     label={`${metricLabel} trend`}
                     value={
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: trendColor }}>
@@ -166,10 +189,13 @@ export default function TrendsPage() {
 
             <ChartCard title={`${metricLabel} over time`} subtitle="Per day">
                 <TimeSeriesChart
-                    data={chartData}
+                    data={plotted}
                     xKey="date"
                     height={280}
-                    series={[{ key: metric, label: metricLabel }]}
+                    series={[
+                        { key: metric, label: metricLabel },
+                        ...(previousData ? [{ key: previousKey, label: `${metricLabel}, previous period`, muted: true }] : []),
+                    ]}
                 />
             </ChartCard>
         </div>

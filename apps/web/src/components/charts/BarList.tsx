@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { compactNumber } from './format';
+import { ChangeBadge } from '../ChangeBadge';
 
 export interface BarListItem {
     label: string;
@@ -12,6 +13,8 @@ export interface BarListItem {
     href?: string;
     /** Secondary text after the label (e.g. a medium). */
     detail?: string;
+    /** Value in the previous period; set when Compare is on, adds a change badge. */
+    previous?: number;
 }
 
 /**
@@ -35,6 +38,8 @@ export function BarList({
     const rows = [...items].sort((a, b) => b.value - a.value).slice(0, limit);
     const max = Math.max(...rows.map(r => r.value), 0);
     const total = items.reduce((sum, r) => sum + r.value, 0);
+    // Comparing when any row carries a previous value; rows without one had none
+    const comparing = items.some(r => r.previous !== undefined);
 
     if (!rows.length || max === 0) return <div className="empty-note">{emptyText}</div>;
 
@@ -65,6 +70,11 @@ export function BarList({
                                 {showShare && total > 0 && (
                                     <span style={{ color: 'var(--color-text-muted)', minWidth: '3.2em', textAlign: 'right' }}>
                                         {formatShare(row.value / total)}
+                                    </span>
+                                )}
+                                {comparing && (
+                                    <span style={{ minWidth: '4.2em', textAlign: 'right' }}>
+                                        <ChangeBadge now={row.value} before={row.previous ?? 0} />
                                     </span>
                                 )}
                             </span>
