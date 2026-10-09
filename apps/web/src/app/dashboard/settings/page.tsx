@@ -879,10 +879,10 @@ function SettingsPageInner() {
 }
 
 const NOTIFICATION_COPY: Record<string, { label: string; description: string }> = {
-    weeklyReport: { label: 'Weekly report', description: 'A summary of your analytics every week' },
-    trafficAlerts: { label: 'Traffic alerts', description: 'Significant changes in traffic' },
-    insightAlerts: { label: 'AI insight alerts', description: 'High-priority AI insights by email' },
-    productUpdates: { label: 'Product updates', description: 'New features and improvements' },
+    weeklyReport: { label: 'Weekly report', description: 'Every Monday: last week for each site against the week before' },
+    trafficAlerts: { label: 'Traffic alerts', description: 'When an hour of traffic rises or falls by more than half' },
+    insightAlerts: { label: 'AI insight alerts', description: 'High-priority insights, at most once a day (Pro plan)' },
+    productUpdates: { label: 'Product updates', description: 'Occasional emails about new features' },
 };
 
 const sectionTitle: React.CSSProperties = {

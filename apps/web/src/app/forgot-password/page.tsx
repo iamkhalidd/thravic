@@ -80,7 +80,7 @@ export default function ForgotPasswordPage() {
                                 lineHeight: 1.6,
                             }}>
                                 If an account exists for <strong style={{ color: 'var(--color-text-primary)' }}>{email}</strong>,
-                                we&apos;ve sent a password reset link. It expires in 1 hour.
+                                we&apos;ve sent a password reset link. It expires in 15 minutes.
                             </p>
                             <p style={{
                                 fontSize: '0.8125rem',

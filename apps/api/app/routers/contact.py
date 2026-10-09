@@ -19,7 +19,7 @@ from fastapi import APIRouter, Request
 from ..errors import PayloadError
 from ..json_response import jsjson
 from ..logging import create_logger
-from ..services.email_service import send_email
+from ..services.email_service import contact_form_email, send_email
 
 log = create_logger("Route:Contact")
 
@@ -135,12 +135,8 @@ async def submit(request: Request):
 
         log.info(f"New contact form submission from {data['email']} ({data['type']})")
 
-        await send_email(
-            RECIPIENT,
-            f"[Contact Form] {data['type']}: {data['subject']}",
-            _html_body(data),
-            _text_body(data),
-        )
+        subject, html_body, text_body = contact_form_email(data)
+        await send_email(RECIPIENT, subject, html_body, text_body)
 
         return jsjson({"success": True, "message": "Message sent successfully"})
     except PayloadError:
@@ -151,39 +147,3 @@ async def submit(request: Request):
             {"error": "Failed to send message. Please try again later."}, status_code=500
         ) from None
 
-
-def _text_body(data: dict) -> str:
-    return f"""
-New Contact Form Submission
-
-Name: {data['name']}
-Email: {data['email']}
-Type: {data['type']}
-Subject: {data['subject']}
-
-Message:
-{data['message']}
-            """
-
-
-def _html_body(data: dict) -> str:
-    message = str(data["message"]).replace("\n", "<br>")
-    return f"""
-                <div style="font-family: sans-serif; color: #333; line-height: 1.6;
-                            max-width: 600px; margin: 0 auto; border: 1px solid #eee;
-                            padding: 20px; border-radius: 8px;">
-                    <h2 style="color: #000; border-bottom: 2px solid #f4f5f6;
-                               padding-bottom: 10px;">New Contact Submission</h2>
-                    <p><strong>From:</strong> {data['name']} (&lt;{data['email']}&gt;)</p>
-                    <p><strong>Inquiry Type:</strong> {data['type']}</p>
-                    <p><strong>Subject:</strong> {data['subject']}</p>
-                    <div style="background: #f9f9f9; padding: 15px; border-radius: 4px;
-                                margin-top: 20px; white-space: pre-wrap;">
-                        {message}
-                    </div>
-                    <p style="font-size: 12px; color: #666; margin-top: 30px;
-                              border-top: 1px solid #eee; padding-top: 10px;">
-                        This message was sent from the Thravic Contact Us form.
-                    </p>
-                </div>
-            """

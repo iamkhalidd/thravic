@@ -62,7 +62,7 @@ BCRYPT_MAX_BYTES = 72
 
 RESET_RATE_LIMIT_MAX = 3
 RESET_RATE_LIMIT_WINDOW_SECONDS = 60 * 60
-RESET_TOKEN_TTL_SECONDS = 60 * 60
+RESET_TOKEN_TTL_SECONDS = 15 * 60
 RESET_TOKEN_BYTES = 32  # -> 64 hex chars, matching crypto.randomBytes(32).toString('hex')
 
 MAX_AVATAR_BYTES = 2 * 1024 * 1024
@@ -361,7 +361,9 @@ async def forgot_password(payload: ForgotPasswordSchema):
     frontend_url = get_settings().FRONTEND_URL or "http://localhost:3000"
     reset_link = f"{frontend_url}/reset-password?token={reset_token}"
 
-    await email_service.send_password_reset_email(user["email"], reset_link)
+    await email_service.send_password_reset_email(
+        user["email"], reset_link, expires_minutes=RESET_TOKEN_TTL_SECONDS // 60
+    )
     log.info(f"Password reset email sent to {normalized_email}")
     return jsjson(generic_response)
 

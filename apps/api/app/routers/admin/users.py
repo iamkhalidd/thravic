@@ -28,8 +28,8 @@ from ...services.audit_service import log_action
 from ...services.email_service import (
     send_account_reactivated_email,
     send_account_suspended_email,
-    send_email,
 )
+from ...services.email_service import send_direct_email as send_direct_email_template
 from ...services.plan_service import entitled
 from ...validators.admin import admin_reset_password_schema, update_user_schema
 from ..auth import hash_password
@@ -384,12 +384,7 @@ async def send_direct_email(
         if not user:
             raise SimpleError("User not found", 404)
 
-        await send_email(
-            user["email"],
-            subject,
-            message.replace("\n", "<br>"),
-            message,
-        )
+        await send_direct_email_template(user["email"], user["name"], subject, message)
 
         await log_action(
             admin_id=admin.user_id,

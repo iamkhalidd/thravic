@@ -23,6 +23,7 @@ from . import (
     events,
     export,
     plans,
+    product_updates,
     promos,
     retention,
     settings,
@@ -46,6 +47,7 @@ _SUBROUTERS = (
     (export, "/export"),
     (plans, "/plans"),
     (promos, "/promos"),
+    (product_updates, "/product-updates"),
 )
 
 for _module, _prefix in _SUBROUTERS:

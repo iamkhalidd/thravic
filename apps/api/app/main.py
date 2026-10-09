@@ -52,7 +52,7 @@ from .routers import tracker as tracker_routes
 from .routers import webhooks as webhook_routes
 from .security import validate_cors_origins, validate_security_config
 from .services import live_service
-from .services.email_service import send_email_or_raise
+from .services.email_service import diagnostic_email, send_email_or_raise
 
 log = create_logger("Server")
 
@@ -217,13 +217,8 @@ async def test_email(request: Request):
 
     now = js_iso_datetime(datetime.now(UTC))
     try:
-        await send_email_or_raise(
-            to,
-            "🧪 Thravic Test Email",
-            '<div style="font-family:sans-serif;padding:20px;"><h2>✅ SMTP is working!</h2>'
-            f"<p>Sent at: {now}</p><p>Server: {settings.SERVER_URL or 'localhost'}</p></div>",
-            f"This is a test email from Thravic at {now}. If you see this, SMTP is working!",
-        )
+        subject, html_body, text_body = diagnostic_email(now, settings.SERVER_URL or "localhost")
+        await send_email_or_raise(to, subject, html_body, text_body)
         return jsjson({"ok": True, "message": f"Test email sent to {to}"})
     except Exception as error:
         return jsjson(

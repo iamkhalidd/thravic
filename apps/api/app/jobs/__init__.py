@@ -1,8 +1,9 @@
 """Job wiring — port of `jobs/index.ts`.
 
 `init_jobs()` starts the scheduler and registers the hourly traffic alert, the
-hourly usage-limit and renewal-reminder emails, the daily retention job and the
-cleanup of under-18 accounts (see `jobs/runner.py`
+hourly usage-limit and renewal-reminder emails, the daily retention job, the
+cleanup of under-18 accounts, the Monday weekly report and the daily AI insight
+alerts (see `jobs/runner.py`
 for how they are scheduled).
 Collection is written to Postgres in the request, so there is no background
 event drainer and nothing here touches Redis.
@@ -15,11 +16,13 @@ from datetime import UTC
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from ..logging import create_logger
+from .insight_alerts import start_insight_alert_job
 from .restricted_accounts import start_restricted_account_job
 from .retention import start_retention_job
 from .subscription_reminders import start_subscription_reminder_job
 from .traffic_alert import start_traffic_alert_job
 from .usage_alerts import start_usage_alert_job
+from .weekly_report import start_weekly_report_job
 
 log = create_logger("Jobs")
 
@@ -39,6 +42,8 @@ def init_jobs() -> AsyncIOScheduler:
     start_usage_alert_job(scheduler)
     start_subscription_reminder_job(scheduler)
     start_restricted_account_job(scheduler)
+    start_weekly_report_job(scheduler)
+    start_insight_alert_job(scheduler)
     scheduler.start()
 
     log.info("[Jobs] All jobs scheduled.")

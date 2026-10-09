@@ -19,7 +19,7 @@ from apscheduler.triggers.cron import CronTrigger
 from ..db import query
 from ..js_compat import js_round
 from ..logging import create_logger
-from ..services.email_service import send_email
+from ..services.email_service import send_traffic_alert_email
 
 log = create_logger("Job")
 
@@ -57,20 +57,9 @@ WHERE (COALESCE(curr.count, 0) > 10 OR COALESCE(prev.count, 0) > 10)
 
 
 async def send_alert(to: str, domain: str, alert_type: str, message: str) -> None:
-    """`sendAlert` — note Express passes only `text`, so it doubles as the HTML."""
-    body = (
-        "Hello,\n\n"
-        f"We detected a significant traffic change for {domain}.\n\n"
-        f"{message}\n\n"
-        "Check your dashboard for details."
-    )
-    await send_email(
-        to,
-        f"[Thravic] {alert_type} Alert for {domain}",
-        # `html: options.html || options.text` in sendEmail
-        body,
-        body,
-    )
+    """`alert_type` is "Traffic Spike" or "Traffic Drop"."""
+    kind = "drop" if "drop" in alert_type.lower() else "spike"
+    await send_traffic_alert_email(to, domain, kind, message)
 
 
 async def check_traffic_spikes() -> None:
