@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { BarChart3, ArrowRight, Check, Menu, X } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import ShaderBackdrop from '@/components/ShaderBackdrop';
 import { formatPlanPrice, payments, planPeriod } from '@/lib/api';
 
 // Dynamically import Recharts-based views to prevent SSR hydration mismatches
@@ -112,6 +113,8 @@ const s = {
         paddingTop: 'clamp(112px, 16vh, 160px)', paddingBottom: '120px',
         textAlign: 'center' as const,
         position: 'relative' as const,
+        // Keeps the shader backdrop behind the hero's content, above the page
+        isolation: 'isolate' as const,
     },
     h1: {
         fontSize: 'clamp(2.5rem, 6vw, 4.5rem)',
@@ -259,6 +262,7 @@ export default function HomePage() {
 
             {/* ═══ HERO ═══ */}
             <section style={s.hero}>
+                <ShaderBackdrop fade />
                 <div style={s.container}>
                     <h1 style={s.h1}>
                         See why visitors leave, not just that they did.

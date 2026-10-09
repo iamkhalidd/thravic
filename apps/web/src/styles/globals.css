@@ -454,6 +454,22 @@ a.card:hover {
     }
 }
 
+@keyframes backdrop-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* Shader behind the landing hero and auth pages (ShaderBackdrop.tsx) */
+.shader-backdrop {
+    animation: backdrop-in 900ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .shader-backdrop {
+        animation: none;
+    }
+}
+
 @keyframes float {
     0% { transform: translateY(0px); }
     50% { transform: translateY(-10px); }

@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { BarChart3, Mail, Lock, User, ArrowRight, ArrowLeft } from 'lucide-react';
 import { auth } from '@/lib/api';
 import { CountrySelect } from '@/components/CountrySelect';
+import ShaderBackdrop from '@/components/ShaderBackdrop';
 import { countryError, dateOfBirthError, latestAdultBirthDate, phoneError } from '@/lib/profile';
 
 const labelStyle = {
@@ -64,8 +65,10 @@ export default function RegisterPage() {
             alignItems: 'center',
             justifyContent: 'center',
             background: 'var(--color-bg-primary)',
-            position: 'relative'
+            position: 'relative',
+            isolation: 'isolate'
         }}>
+            <ShaderBackdrop />
             {/* Back to Home Link */}
             <Link href="/" style={{
                 position: 'absolute',

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { BarChart3, Mail, Lock, ArrowRight, ArrowLeft } from 'lucide-react';
 import { auth } from '@/lib/api';
+import ShaderBackdrop from '@/components/ShaderBackdrop';
 
 // Codes the API's OAuth callbacks put in `/login?error=...`.
 const OAUTH_ERRORS: Record<string, string> = {
@@ -56,8 +57,10 @@ export default function LoginPage() {
             alignItems: 'center',
             justifyContent: 'center',
             background: 'var(--color-bg-primary)',
-            position: 'relative'
+            position: 'relative',
+            isolation: 'isolate'
         }}>
+            <ShaderBackdrop />
             {/* Back to Home Link */}
             <Link href="/" style={{
                 position: 'absolute',
