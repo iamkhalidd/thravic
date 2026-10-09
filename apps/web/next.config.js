@@ -10,6 +10,15 @@ const nextConfig = {
     env: {
         NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001',
     },
+    // Signed-in pages are client components and cannot export metadata, so
+    // keep them out of search with a header instead.
+    async headers() {
+        const noindex = [{ key: 'X-Robots-Tag', value: 'noindex, nofollow' }];
+        return [
+            { source: '/dashboard/:path*', headers: noindex },
+            { source: '/auth/:path*', headers: noindex },
+        ];
+    },
 };
 
 module.exports = nextConfig;
