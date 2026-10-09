@@ -2,10 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import {
-    BarChart3, Target, MousePointer2, Video, Sparkles, Globe,
-    ArrowRight, Check, Lock, PlayCircle, Menu, X
-} from 'lucide-react';
+import { BarChart3, ArrowRight, Check, Menu, X } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { formatPlanPrice, payments, planPeriod } from '@/lib/api';
@@ -15,10 +12,60 @@ const OverviewView = dynamic(() => import('./demo/DemoViews').then(mod => mod.Ov
 const SessionsView = dynamic(() => import('./demo/DemoViews').then(mod => mod.SessionsView), { ssr: false });
 const FunnelsView = dynamic(() => import('./demo/DemoViews').then(mod => mod.FunnelsView), { ssr: false });
 const HeatmapsView = dynamic(() => import('./demo/DemoViews').then(mod => mod.HeatmapsView), { ssr: false });
+const InsightsView = dynamic(() => import('./demo/DemoViews').then(mod => mod.InsightsView), { ssr: false });
 
 /* ─── DATA ─── */
 
-/* ─── DATA ─── */
+// The install flow as the dashboard runs it (dashboard/domains/new)
+const journey = [
+    { title: 'Add your site', body: 'Enter your domain in the dashboard and Thravic creates a tracking ID for it.' },
+    { title: 'Paste the script', body: 'Copy one tag into your site’s head. There are instructions for HTML, WordPress, Shopify, Webflow and Next.js.' },
+    { title: 'Verify it', body: 'Thravic checks the script is live. Data appears within a few minutes of your first visitor.' },
+    { title: 'Find it and fix it', body: 'Replays, heatmaps and funnels show where people struggle. Ship a fix, then compare periods to see if it worked.' },
+];
+
+const stories = [
+    {
+        label: 'replays', View: SessionsView, view: 'sessions',
+        title: 'Watch the visit, not a summary of it.',
+        body: 'Session replays play back clicks, scrolls and page changes as they happened. Form inputs are masked before anything leaves the browser, so you see where someone struggled without seeing what they typed.',
+    },
+    {
+        label: 'funnels', View: FunnelsView, view: 'funnels',
+        title: 'Find the step where people give up.',
+        body: 'Define the steps of your signup or checkout. Thravic shows how many visitors reach each one and where the biggest drop happens.',
+    },
+    {
+        label: 'heatmaps', View: HeatmapsView, view: 'heatmaps',
+        title: 'See what gets clicked and what never gets seen.',
+        body: 'Click maps show where attention lands on each page. Scroll depth shows how far down people actually get, so you know whether your call to action is above the drop.',
+    },
+    {
+        label: 'AI insights', View: InsightsView, view: 'insights',
+        title: 'A daily read on what changed.',
+        body: 'Each day Thravic reports what moved on your site, ranks it by priority and suggests what to do about it, with a short forecast of where traffic is heading.',
+    },
+];
+
+const alsoIncluded = [
+    { name: 'Traffic sources', detail: 'Channels, referrers, search engines and social networks.' },
+    { name: 'UTM campaigns', detail: 'Sessions, visitors and pageviews for every UTM-tagged link.' },
+    { name: 'Pages and paths', detail: 'Entry and exit pages, and how people move between them.' },
+    { name: 'Devices', detail: 'Device types, browsers and operating systems.' },
+    { name: 'Errors', detail: 'JavaScript errors and crashes, most frequent first.' },
+    { name: 'Performance', detail: 'Core Web Vitals for each page.' },
+    { name: 'Forms', detail: 'Submissions for every form on your site.' },
+    { name: 'Rage clicks', detail: 'Elements people click again and again because nothing happens.' },
+    { name: 'Reports and webhooks', detail: 'CSV exports of your raw data, and events sent to your own systems.' },
+    { name: 'Team', detail: 'Invite teammates to the same sites.' },
+];
+
+const privacyFacts = [
+    'No cookies. Visits are counted with browser storage instead.',
+    'Every form input is masked in session replays.',
+    'Honors Do Not Track and Global Privacy Control.',
+    'Optional consent mode: nothing is tracked until the visitor opts in.',
+];
 
 // Shown only if the plans API can't be reached; normally every card comes from
 // the admin-managed plans (GET /api/payments/plans).
@@ -50,7 +97,7 @@ const s = {
     // Nav
     nav: {
         position: 'fixed' as const, top: 0, left: 0, right: 0, zIndex: 50,
-        background: 'rgba(0, 0, 0, 0.4)',
+        background: 'color-mix(in srgb, var(--color-bg-primary) 72%, transparent)',
         backdropFilter: 'blur(12px)',
         WebkitBackdropFilter: 'blur(12px)',
         borderBottom: '1px solid var(--color-border)',
@@ -62,46 +109,36 @@ const s = {
 
     // Hero
     hero: {
-        paddingTop: '200px', paddingBottom: '140px',
+        paddingTop: 'clamp(112px, 16vh, 160px)', paddingBottom: '120px',
         textAlign: 'center' as const,
         position: 'relative' as const,
     },
     h1: {
-        fontSize: 'clamp(3rem, 7vw, 6rem)',
+        fontSize: 'clamp(2.5rem, 6vw, 4.5rem)',
         fontWeight: 600,
-        letterSpacing: '-0.04em',
+        letterSpacing: '-0.035em',
         lineHeight: 1.05,
-        marginBottom: '24px',
+        margin: '0 auto 24px',
+        maxWidth: '16ch',
         color: 'var(--color-text-primary)',
-        marginTop: '24px'
+        textWrap: 'balance' as const,
     },
     heroSub: {
-        fontSize: 'clamp(1.125rem, 2vw, 1.375rem)',
+        fontSize: 'clamp(1.0625rem, 1.6vw, 1.25rem)',
         color: 'var(--color-text-secondary)',
-        maxWidth: '540px',
-        margin: '0 auto 40px',
-        lineHeight: 1.5,
-        letterSpacing: '-0.01em'
+        maxWidth: '560px',
+        margin: '0 auto 36px',
+        lineHeight: 1.55,
+        letterSpacing: '-0.01em',
+        textWrap: 'pretty' as const,
     },
     ctaRow: {
-        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '16px',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px',
         flexWrap: 'wrap' as const,
     },
-
-    // Badges/Pills
-    sectionPill: {
-        display: 'inline-flex',
-        alignItems: 'center',
-        padding: '0.25rem 0.75rem',
-        background: 'var(--color-bg-secondary)',
-        border: '1px solid var(--color-border)',
-        borderRadius: '9999px',
-        fontSize: '0.75rem',
-        fontWeight: 500,
-        color: 'var(--color-text-primary)',
-        textTransform: 'uppercase' as const,
-        letterSpacing: '0.05em',
-        marginBottom: '24px',
+    heroCta: {
+        padding: '12px 20px', borderRadius: '8px', fontSize: '0.9375rem', fontWeight: 500,
+        display: 'inline-flex', alignItems: 'center', gap: '8px', textDecoration: 'none',
     },
 
     // Typography
@@ -144,8 +181,6 @@ export default function HomePage() {
 
     return (
         <div style={s.page}>
-            <div className="linear-hero-grid"></div>
-
             {/* ═══ NAV ═══ */}
             <nav style={s.nav}>
                 <div style={s.navInner}>
@@ -162,6 +197,7 @@ export default function HomePage() {
 
                         <div className="desktop-only" style={{ display: 'flex', gap: '24px' }}>
                             {[
+                                { label: 'How it works', href: '#how-it-works' },
                                 { label: 'Features', href: '#features' },
                                 { label: 'Pricing', href: '#pricing' },
                                 { label: 'Demo', href: '/demo' },
@@ -201,6 +237,7 @@ export default function HomePage() {
                 {/* Mobile Menu Dropdown */}
                 <div className={`lp-nav-links ${isMobileMenuOpen ? 'active' : ''}`}>
                     {[
+                        { label: 'How it works', href: '#how-it-works' },
                         { label: 'Features', href: '#features' },
                         { label: 'Pricing', href: '#pricing' },
                         { label: 'Demo', href: '/demo' },
@@ -223,194 +260,175 @@ export default function HomePage() {
             {/* ═══ HERO ═══ */}
             <section style={s.hero}>
                 <div style={s.container}>
-                    <div className="linear-pill">
-                        <Sparkles size={12} style={{ color: 'var(--color-text-muted)' }} />
-                        <span>Thravic Public Beta</span>
-                        <ArrowRight size={12} style={{ color: 'var(--color-text-muted)' }} />
-                    </div>
-
-                    <h1 style={s.h1} className="lp-mobile-left-align">
-                        The analytics system<br />
-                        <span className="text-gradient">for modern teams.</span>
+                    <h1 style={s.h1}>
+                        See why visitors leave, not just that they did.
                     </h1>
-                    
-                    <p style={s.heroSub} className="lp-mobile-left-align">
-                        Purpose-built for speed and clarity. Thravic turns overwhelming data into undeniable user insights in milliseconds.
+
+                    <p style={s.heroSub}>
+                        Session replays, heatmaps and conversion funnels from one lightweight script.
+                        Watch real visits, find the step where people drop off, and fix it.
                     </p>
-                    
-                    <div style={s.ctaRow} className="lp-mobile-left-align">
-                        <Link href="/register" className="btn-primary" style={{ padding: '12px 24px', borderRadius: '999px', fontSize: '0.875rem', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: '8px', textDecoration: 'none' }}>
-                            Start tracking free <ArrowRight size={14} />
+
+                    <div style={s.ctaRow}>
+                        <Link href="/register" className="btn-primary" style={s.heroCta}>
+                            Start free <ArrowRight size={16} />
                         </Link>
-                        <Link href="/demo" style={{ padding: '12px 24px', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--color-border)', color: 'var(--color-text-primary)', borderRadius: '999px', fontSize: '0.875rem', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: '8px', textDecoration: 'none', backdropFilter: 'blur(10px)' }}>
-                            View interactive demo <Globe size={14} style={{ color: 'var(--color-text-muted)' }}/>
+                        <Link href="/demo" className="btn-secondary" style={s.heroCta}>
+                            Try the live demo
                         </Link>
                     </div>
 
-                    {/* HERO BROWSER MOCKUP */}
-                    <div className="animate-fade-in-up lp-hero-mockup-wrapper lp-mobile-edge-to-edge" style={{ 
-                        marginTop: '80px', 
-                        position: 'relative',
-                        zIndex: 20
-                    }}>
-                        {/* Glow effect */}
-                        <div style={{
-                            position: 'absolute', top: '10%', left: '10%', right: '10%', bottom: '10%',
-                            background: 'var(--gradient-primary)', filter: 'blur(100px)', opacity: 0.15, zIndex: -1,
-                            borderRadius: '100px'
-                        }} />
-                        
-                        <div className="browser-mockup animate-float" style={{ textAlign: 'left' }}>
-                            <div className="browser-mockup-header">
-                                <div style={{ display: 'flex', gap: '6px' }}>
-                                    <div className="browser-mockup-dot" style={{ background: '#ff5f56' }} />
-                                    <div className="browser-mockup-dot" style={{ background: '#ffbd2e' }} />
-                                    <div className="browser-mockup-dot" style={{ background: '#27c93f' }} />
-                                </div>
-                                <div style={{ 
-                                    flex: 1, textAlign: 'center', fontSize: '0.75rem', 
-                                    color: 'var(--color-text-muted)', fontFamily: 'var(--font-mono)' 
-                                }}>
-                                    app.thravic.com/demo
-                                </div>
-                            </div>
-                            <div style={{ padding: '24px', background: 'var(--color-bg-primary)' }}>
-                                <OverviewView />
-                            </div>
+                    <ul className="lp-hero-facts">
+                        <li>One script tag</li>
+                        <li>~6 KB gzipped</li>
+                        <li>Form inputs masked in replays</li>
+                    </ul>
+
+                    {/* Product preview: the real demo dashboard, cropped to its first screen */}
+                    <div className="lp-hero-preview">
+                        <Link href="/demo" className="lp-hero-preview-bar">
+                            <span>Live demo</span>
+                            <span>Sample data<span className="desktop-inline"> · Open the full demo</span> <ArrowRight size={12} /></span>
+                        </Link>
+                        <div className="lp-hero-preview-body">
+                            <OverviewView />
                         </div>
                     </div>
                 </div>
             </section>
 
-            {/* ═══ STORYTELLING FEATURES ═══ */}
-            <section id="features" style={{ padding: '120px 0', borderTop: '1px solid var(--color-border)' }}>
-                {/* Feature 1: Session Recordings (Text Left, Mockup Right) */}
-                <div style={{ ...s.container, marginBottom: '160px' }}>
-                    <div className="lp-story-grid">
-                        <div className="lp-story-grid-text lp-mobile-left-align">
-                            <div style={s.sectionPill}><Video size={14} style={{ marginRight: '6px' }} /> Session Replays</div>
-                            <h2 style={{ ...s.sectionTitle, marginBottom: '16px' }}>Understand every click.</h2>
-                            <p style={{ ...s.sectionSub, margin: 0 }}>
-                                Privacy-safe session recordings let you play back exactly what users do, where they get stuck, and why they leave. Stop guessing and start watching.
-                            </p>
-                            <ul style={{ listStyle: 'none', padding: 0, marginTop: '32px', display: 'flex', flexDirection: 'column', gap: '16px', color: 'var(--color-text-secondary)', fontSize: '0.9375rem' }}>
-                                <li style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Check size={16} color="var(--color-text-primary)" /> Identify UX friction points</li>
-                                <li style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Check size={16} color="var(--color-text-primary)" /> Watch users navigate forms</li>
-                                <li style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Check size={16} color="var(--color-text-primary)" /> See exactly how bugs occur</li>
-                            </ul>
-                        </div>
-                        <div className="lp-story-grid-mockup" style={{ position: 'relative' }}>
-                            <div style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, background: '#34B1AA', filter: 'blur(80px)', opacity: 0.1, zIndex: -1 }} />
-                            <div className="glass-panel animate-float lp-mobile-edge-to-edge" style={{ padding: '24px' }}>
-                                <SessionsView />
+            {/* ═══ HOW IT WORKS ═══ */}
+            <section id="how-it-works" className="lp-section">
+                <div style={s.container}>
+                    <div className="lp-section-head">
+                        <h2 style={s.sectionTitle}>Live on your site in four steps</h2>
+                        <p style={s.sectionSub}>
+                            One tag in your site&apos;s head is the whole install. No tag manager, no build changes.
+                        </p>
+                    </div>
+
+                    <ol className="lp-steps">
+                        {journey.map((step, i) => (
+                            <li key={step.title} className="lp-step">
+                                <span className="lp-step-num">{String(i + 1).padStart(2, '0')}</span>
+                                <h3>{step.title}</h3>
+                                <p>{step.body}</p>
+                                {i === 1 && (
+                                    <pre className="lp-code" aria-label="Example tracking script">
+                                        <code>{'<script async src=".../tf.js"\n  data-tracking-id="your-id">\n</script>'}</code>
+                                    </pre>
+                                )}
+                            </li>
+                        ))}
+                    </ol>
+                </div>
+            </section>
+
+            {/* ═══ WHAT YOU SEE ═══ */}
+            <section id="features" className="lp-section">
+                <div style={s.container}>
+                    <div className="lp-section-head">
+                        <h2 style={s.sectionTitle}>What you see once it&apos;s running</h2>
+                        <p style={s.sectionSub}>
+                            Every view below is the real dashboard, filled with sample data.
+                        </p>
+                    </div>
+
+                    <div className="lp-stories">
+                        {stories.map((story, i) => (
+                            <div key={story.title} className={i % 2 ? 'lp-story-grid-reverse' : 'lp-story-grid'}>
+                                <div className="lp-story-grid-text lp-story-copy">
+                                    <h3>{story.title}</h3>
+                                    <p>{story.body}</p>
+                                    <Link href={`/demo?view=${story.view}`} className="lp-text-link">
+                                        Open {story.label} in the demo <ArrowRight size={14} />
+                                    </Link>
+                                </div>
+                                <div className="lp-story-grid-mockup">
+                                    <div className="lp-shot" aria-hidden="true">
+                                        <div className="lp-shot-body">
+                                            <story.View />
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
-                        </div>
+                        ))}
                     </div>
                 </div>
+            </section>
 
-                {/* Feature 2: Funnels (Mockup Left, Text Right) */}
-                <div style={{ ...s.container, marginBottom: '160px' }}>
-                    <div className="lp-story-grid-reverse">
-                        <div className="lp-story-grid-text lp-mobile-left-align" style={{ position: 'relative' }}>
-                            <div style={s.sectionPill}><Target size={14} style={{ marginRight: '6px' }} /> Conversion Funnels</div>
-                            <h2 style={{ ...s.sectionTitle, marginBottom: '16px' }}>Funnels that convert.</h2>
+            {/* ═══ EVERYTHING ELSE ═══ */}
+            <section className="lp-section">
+                <div style={s.container}>
+                    <div className="lp-split">
+                        <div>
+                            <h2 style={{ ...s.sectionTitle, fontSize: 'clamp(1.75rem, 3vw, 2.5rem)' }}>Also in the dashboard</h2>
                             <p style={{ ...s.sectionSub, margin: 0 }}>
-                                Build multi-step conversion funnels in seconds. Identify the exact drop-off points in your onboarding or checkout flows and fix the leaks.
+                                The analytics you&apos;d expect, next to the tools that explain them.
                             </p>
                         </div>
-                        <div className="lp-story-grid-mockup" style={{ position: 'relative' }}>
-                            <div style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, background: 'var(--color-accent-primary)', filter: 'blur(80px)', opacity: 0.1, zIndex: -1 }} />
-                            <div className="glass-panel animate-float-delayed lp-mobile-edge-to-edge" style={{ padding: '24px' }}>
-                                <FunnelsView />
-                            </div>
-                        </div>
+                        <dl className="lp-also">
+                            {alsoIncluded.map(item => (
+                                <div key={item.name}>
+                                    <dt>{item.name}</dt>
+                                    <dd>{item.detail}</dd>
+                                </div>
+                            ))}
+                        </dl>
                     </div>
                 </div>
+            </section>
 
-                {/* Feature 3: Heatmaps (Text Left, Mockup Right) */}
-                <div style={{ ...s.container }}>
-                    <div className="lp-story-grid">
-                        <div className="lp-story-grid-text lp-mobile-left-align">
-                            <div style={s.sectionPill}><MousePointer2 size={14} style={{ marginRight: '6px' }} /> Visual Heatmaps</div>
-                            <h2 style={{ ...s.sectionTitle, marginBottom: '16px' }}>See what matters.</h2>
+            {/* ═══ PRIVACY ═══ */}
+            <section className="lp-section">
+                <div style={s.container}>
+                    <div className="lp-split">
+                        <div>
+                            <h2 style={{ ...s.sectionTitle, fontSize: 'clamp(1.75rem, 3vw, 2.5rem)' }}>Built to collect less</h2>
                             <p style={{ ...s.sectionSub, margin: 0 }}>
-                                Instantly see where people click, move, and scroll on your key pages. Discover which CTAs are working and which content is being ignored.
+                                You see how people use your site. You don&apos;t see what they type.
                             </p>
                         </div>
-                        <div className="lp-story-grid-mockup" style={{ position: 'relative' }}>
-                            <div style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, background: '#f59e0b', filter: 'blur(80px)', opacity: 0.15, zIndex: -1 }} />
-                            <div className="glass-panel animate-float-slow lp-mobile-edge-to-edge" style={{ padding: '24px' }}>
-                                <HeatmapsView />
-                            </div>
-                        </div>
+                        <ul className="lp-checks">
+                            {privacyFacts.map(fact => (
+                                <li key={fact}><Check size={16} strokeWidth={2} aria-hidden="true" /> {fact}</li>
+                            ))}
+                        </ul>
                     </div>
                 </div>
             </section>
 
             {/* ═══ PRICING ═══ */}
-            <section id="pricing" style={{
-                padding: '120px 0',
-                borderTop: '1px solid var(--color-border)',
-            }}>
+            <section id="pricing" className="lp-section">
                 <div style={s.container}>
-                    <div style={{ textAlign: 'center', marginBottom: '80px' }}>
-                        <div style={s.sectionPill}>Pricing</div>
-                        <h2 style={s.sectionTitle}>Scale without surprises.</h2>
-                        <p style={s.sectionSub}>No opaque metrics. No arbitrary limits on seats. Just straightforward pricing for teams of any size.</p>
+                    <div className="lp-section-head">
+                        <h2 style={s.sectionTitle}>Pricing</h2>
+                        <p style={s.sectionSub}>Start free. Upgrade when you need more sites, more events or longer history.</p>
                     </div>
 
-                    <div className="lp-grid-3" style={{ maxWidth: '960px', margin: '0 auto' }}>
-                        {tiers.map((tier, i) => (
-                            <div key={i} style={{
-                                background: 'transparent',
-                                borderTop: '1px solid var(--color-border)',
-                                paddingTop: '32px',
-                                position: 'relative',
-                            }}>
-                                <h4 style={{ fontSize: '1.125rem', fontWeight: 500, marginBottom: '8px', color: 'var(--color-text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    {tier.name}
-                                    {tier.badge && (
-                                        <span style={{ fontSize: '0.6875rem', fontWeight: 500, padding: '2px 8px', borderRadius: '999px', border: '1px solid var(--color-border)', color: 'var(--color-text-secondary)' }}>
-                                            {tier.badge}
-                                        </span>
-                                    )}
-                                </h4>
-                                <p style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', marginBottom: '32px', minHeight: '40px' }}>
-                                    {tier.description}
-                                </p>
-                                <div style={{ marginBottom: '32px' }}>
-                                    <span style={{ fontSize: '3rem', fontWeight: 500, letterSpacing: '-0.04em', color: 'var(--color-text-primary)' }}>
-                                        {tier.price}
-                                    </span>
-                                    {tier.period && (
-                                        <span style={{ color: 'var(--color-text-muted)', fontSize: '0.875rem', marginLeft: '4px' }}>
-                                            {tier.period}
-                                        </span>
-                                    )}
+                    <div className="lp-pricing">
+                        {tiers.map(tier => (
+                            <div key={tier.id} className={`lp-plan${tier.highlighted ? ' lp-plan-featured' : ''}`}>
+                                <div className="lp-plan-head">
+                                    <h3>{tier.name}</h3>
+                                    {tier.badge && <span className="badge">{tier.badge}</span>}
                                 </div>
-                                <ul style={{
-                                    listStyle: 'none', padding: 0, marginBottom: '40px',
-                                    display: 'flex', flexDirection: 'column', gap: '16px',
-                                }}>
-                                    {tier.features.map((feature, idx) => (
-                                        <li key={idx} style={{
-                                            display: 'flex', alignItems: 'center', gap: '12px',
-                                            fontSize: '0.875rem', color: 'var(--color-text-secondary)',
-                                        }}>
-                                            <Check size={14} style={{ color: 'var(--color-text-primary)', flexShrink: 0 }} strokeWidth={2} />
+                                <p className="lp-plan-desc">{tier.description}</p>
+                                <p className="lp-plan-price">
+                                    {tier.price}
+                                    {tier.period && <span>{tier.period}</span>}
+                                </p>
+                                <ul className="lp-plan-features">
+                                    {tier.features.map(feature => (
+                                        <li key={feature}>
+                                            <Check size={14} strokeWidth={2} aria-hidden="true" />
                                             {feature}
                                         </li>
                                     ))}
                                 </ul>
-                                <Link href="/register" style={{
-                                    display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '10px 0',
-                                    background: tier.highlighted ? 'var(--color-text-primary)' : 'rgba(255,255,255,0.03)',
-                                    border: tier.highlighted ? 'none' : '1px solid var(--color-border)',
-                                    borderRadius: '8px',
-                                    color: tier.highlighted ? 'var(--color-bg-primary)' : 'var(--color-text-primary)',
-                                    textDecoration: 'none', fontWeight: 500, fontSize: '0.875rem',
-                                    transition: 'background 0.2s',
-                                }}>{tier.cta}</Link>
+                                <Link href="/register" className={tier.highlighted ? 'btn-primary' : 'btn-secondary'}>
+                                    {tier.cta}
+                                </Link>
                             </div>
                         ))}
                     </div>
@@ -418,22 +436,20 @@ export default function HomePage() {
             </section>
 
             {/* ═══ CTA ═══ */}
-            <section style={{ padding: '160px 0', borderTop: '1px solid var(--color-border)' }}>
+            <section className="lp-section">
                 <div style={{ ...s.container, textAlign: 'center' as const }}>
-                    <div style={{ 
-                        width: '64px', height: '64px', margin: '0 auto 32px', borderRadius: '16px',
-                        background: 'var(--color-text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        boxShadow: '0 0 32px rgba(255,255,255,0.1)'
-                    }}>
-                        <BarChart3 size={32} style={{ color: 'var(--color-bg-primary)' }} strokeWidth={1.5} />
-                    </div>
-                    <h2 style={s.sectionTitle}>Build better products, faster.</h2>
-                    <p style={{ ...s.sectionSub, marginBottom: '40px' }}>
-                        Join the next generation of product teams building with Thravic.
+                    <h2 style={s.sectionTitle}>Find out where your visitors drop off.</h2>
+                    <p style={{ ...s.sectionSub, marginBottom: '36px' }}>
+                        Create a free account and paste the script. Data appears within a few minutes of your next visitor.
                     </p>
-                    <Link href="/register" className="btn-primary" style={{ padding: '12px 32px', borderRadius: '999px', fontSize: '0.9375rem', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: '8px', textDecoration: 'none' }}>
-                        Get Started Free <ArrowRight size={14} />
-                    </Link>
+                    <div style={s.ctaRow}>
+                        <Link href="/register" className="btn-primary" style={s.heroCta}>
+                            Start free <ArrowRight size={16} />
+                        </Link>
+                        <Link href="/demo" className="btn-secondary" style={s.heroCta}>
+                            Explore the demo
+                        </Link>
+                    </div>
                 </div>
             </section>
 
@@ -459,8 +475,8 @@ export default function HomePage() {
                         </div>
                         {[
                             { title: 'Product', links: [{ label: 'Features', href: '#features' }, { label: 'Pricing', href: '#pricing' }, { label: 'Demo', href: '/demo' }] },
-                            { title: 'Company', links: [{ label: 'About', href: '/about' }, { label: 'Blog', href: '#' }, { label: 'Contact', href: '/contact' }] },
-                            { title: 'Legal', links: [{ label: 'Privacy', href: '/privacy' }, { label: 'Terms', href: '#' }, { label: 'GDPR', href: '/gdpr' }, { label: 'Cookies', href: '/cookies' }] },
+                            { title: 'Company', links: [{ label: 'About', href: '/about' }, { label: 'Contact', href: '/contact' }] },
+                            { title: 'Legal', links: [{ label: 'Privacy', href: '/privacy' }, { label: 'GDPR', href: '/gdpr' }, { label: 'Cookies', href: '/cookies' }] },
                         ].map((group, i) => (
                             <div key={i}>
                                 <h5 style={{
