@@ -9,7 +9,7 @@ import { ThemedLogo } from '@/components/ThemedLogo';
 import {
     LayoutDashboard, Globe, Users, Target, MousePointer2, Video, Sparkles, FileBarChart,
     Settings, ChevronDown, ChevronRight, ArrowRight, TrendingUp, Calendar, PanelLeftClose,
-    PanelLeftOpen, Gauge, UsersRound, Menu, RefreshCw, Download,
+    PanelLeftOpen, Gauge, UsersRound, Menu, RefreshCw, Download, Smartphone, Check,
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import {
@@ -17,13 +17,15 @@ import {
     BehaviorPagesView, FunnelsView, HeatmapsView, SessionsView,
     InsightsView, ReportsView, BehaviorPathsView, BehaviorDevicesView,
     ErrorsView, PerformanceView, FormsView, RageClicksView, TeamView, SettingsView,
+    VersionsView, DemoAppContext,
 } from './DemoViews';
+import { app as sampleApp } from './demoData';
 
 type DemoView = 'overview' | 'traffic-sources' | 'traffic-campaigns' | 'traffic-trends'
-    | 'behavior-pages' | 'behavior-paths' | 'behavior-devices' | 'funnels' | 'heatmaps' | 'sessions' | 'insights' | 'reports'
+    | 'behavior-pages' | 'behavior-paths' | 'behavior-devices' | 'behavior-versions' | 'funnels' | 'heatmaps' | 'sessions' | 'insights' | 'reports'
     | 'monitoring-errors' | 'monitoring-performance' | 'monitoring-forms' | 'monitoring-rage-clicks' | 'team' | 'settings';
 
-interface NavLeaf { id: DemoView; label: string }
+interface NavLeaf { id: DemoView; label: string; appLabel?: string }
 interface NavEntry { label: string; icon: React.ElementType; id?: DemoView; children?: NavLeaf[] }
 
 const navStructure: NavEntry[] = [
@@ -37,9 +39,10 @@ const navStructure: NavEntry[] = [
     },
     {
         label: 'Behavior', icon: Users, children: [
-            { id: 'behavior-pages', label: 'Pages' },
+            { id: 'behavior-pages', label: 'Pages', appLabel: 'Screens' },
             { id: 'behavior-paths', label: 'Paths' },
             { id: 'behavior-devices', label: 'Devices' },
+            { id: 'behavior-versions', label: 'Versions' },
         ],
     },
     {
@@ -57,6 +60,31 @@ const navStructure: NavEntry[] = [
     { id: 'reports', icon: FileBarChart, label: 'Reports' },
 ];
 
+// The same split as lib/platform.ts: pages that only make sense for one kind of property.
+const WEB_ONLY: DemoView[] = [
+    'traffic-sources', 'traffic-campaigns', 'monitoring-errors', 'monitoring-performance',
+    'monitoring-forms', 'monitoring-rage-clicks', 'heatmaps', 'sessions',
+];
+const APP_ONLY: DemoView[] = ['behavior-versions'];
+
+const fits = (view: DemoView, app: boolean) => !(app ? WEB_ONLY : APP_ONLY).includes(view);
+
+/** The sidebar for a website or the app: drops what doesn't fit, renames Pages to Screens. */
+function navFor(app: boolean): NavEntry[] {
+    return navStructure.flatMap(item => {
+        if (!item.children) return item.id && !fits(item.id, app) ? [] : [item];
+        const children = item.children
+            .filter(c => fits(c.id, app))
+            .map(c => ({ ...c, label: app && c.appLabel ? c.appLabel : c.label }));
+        return children.length ? [{ ...item, children }] : [];
+    });
+}
+
+const PROPERTIES = [
+    { app: false, name: 'demo-site.com', icon: Globe },
+    { app: true, name: sampleApp.name, icon: Smartphone },
+] as const;
+
 const viewComponents: Record<DemoView, React.ComponentType> = {
     'overview': OverviewView,
     'traffic-sources': TrafficSourcesView,
@@ -65,6 +93,7 @@ const viewComponents: Record<DemoView, React.ComponentType> = {
     'behavior-pages': BehaviorPagesView,
     'behavior-paths': BehaviorPathsView,
     'behavior-devices': BehaviorDevicesView,
+    'behavior-versions': VersionsView,
     'monitoring-errors': ErrorsView,
     'monitoring-performance': PerformanceView,
     'monitoring-forms': FormsView,
@@ -101,12 +130,28 @@ export default function DemoPage() {
     const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
     const [comparisonEnabled, setComparisonEnabled] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
+    // The demo has two properties, like an account with a website and an app.
+    const [appSelected, setAppSelected] = useState(false);
+    const [switcherOpen, setSwitcherOpen] = useState(false);
 
-    // Landing page links open a specific view, e.g. /demo?view=sessions
+    // Landing page links open a specific view, e.g. /demo?view=sessions or /demo?property=app
     useEffect(() => {
-        const view = new URLSearchParams(window.location.search).get('view');
-        if (view && view in viewComponents) setActiveView(view as DemoView);
+        const params = new URLSearchParams(window.location.search);
+        const app = params.get('property') === 'app';
+        const view = params.get('view');
+        setAppSelected(app);
+        if (view && view in viewComponents && fits(view as DemoView, app)) setActiveView(view as DemoView);
     }, []);
+
+    const selectProperty = (app: boolean) => {
+        setSwitcherOpen(false);
+        if (app === appSelected) return;
+        setAppSelected(app);
+        // A page the other kind of property doesn't have falls back to the overview.
+        if (!fits(activeView, app)) setActiveView('overview');
+    };
+    const nav = navFor(appSelected);
+    const current = PROPERTIES[appSelected ? 1 : 0];
 
     useEffect(() => {
         const check = () => setIsMobile(window.innerWidth < 1024);
@@ -182,19 +227,50 @@ export default function DemoPage() {
                 </div>
 
                 {!collapsed && (
-                    <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--color-sidebar-border)', flexShrink: 0 }}>
-                        <div style={{
-                            width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                            padding: '7px 10px', background: 'var(--color-bg-primary)',
-                            border: '1px solid var(--color-border)', borderRadius: '6px',
-                            fontSize: '0.8125rem', color: 'var(--color-text-primary)',
-                        }}>
+                    <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--color-sidebar-border)', flexShrink: 0, position: 'relative' }}>
+                        <button type="button" onClick={() => setSwitcherOpen(o => !o)} aria-expanded={switcherOpen} aria-haspopup="listbox"
+                            style={{
+                                width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                padding: '7px 10px', background: 'var(--color-bg-primary)', cursor: 'pointer',
+                                border: '1px solid var(--color-border)', borderRadius: '6px',
+                                fontSize: '0.8125rem', color: 'var(--color-text-primary)',
+                            }}>
                             <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <Globe size={13} />
-                                demo-site.com
+                                <current.icon size={13} />
+                                {current.name}
                             </span>
                             <ChevronDown size={12} />
-                        </div>
+                        </button>
+                        {switcherOpen && (
+                            <div role="listbox" aria-label="Property" style={{
+                                position: 'absolute', left: 12, right: 12, top: 'calc(100% - 6px)', zIndex: 60,
+                                background: 'var(--color-bg-card)', border: '1px solid var(--color-border)',
+                                borderRadius: '6px', boxShadow: 'var(--shadow-md)', padding: '4px 0',
+                            }}>
+                                {(['Websites', 'Apps'] as const).map((heading, i) => {
+                                    const p = PROPERTIES[i];
+                                    const selected = p.app === appSelected;
+                                    return (
+                                        <div key={heading}>
+                                            <div style={{
+                                                padding: '6px 10px 2px', fontSize: '0.6875rem', fontWeight: 600,
+                                                textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--color-text-muted)',
+                                            }}>{heading}</div>
+                                            <button type="button" role="option" aria-selected={selected} onClick={() => selectProperty(p.app)}
+                                                style={{
+                                                    width: '100%', display: 'flex', alignItems: 'center', gap: 6, padding: '7px 10px',
+                                                    background: selected ? 'var(--color-bg-hover)' : 'transparent', border: 'none',
+                                                    cursor: 'pointer', fontSize: '0.8125rem', color: 'var(--color-text-primary)', textAlign: 'left',
+                                                }}>
+                                                <p.icon size={13} />
+                                                <span style={{ flex: 1 }}>{p.name}</span>
+                                                {selected && <Check size={13} />}
+                                            </button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
                     </div>
                 )}
 
@@ -202,7 +278,7 @@ export default function DemoPage() {
                     flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: collapsed ? '8px 4px' : '8px 0',
                 }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                        {navStructure.map(item => {
+                        {nav.map(item => {
                             const Icon = item.icon;
                             if (item.children) {
                                 const expanded = expandedSections.includes(item.label);
@@ -289,7 +365,7 @@ export default function DemoPage() {
                 <div className="demo-banner">
                     <span>This is a demo with sample data.</span>
                     <Link href="/register" className="demo-banner-link">
-                        Track your own site <ArrowRight size={14} aria-hidden="true" />
+                        {appSelected ? 'Track your own app' : 'Track your own site'} <ArrowRight size={14} aria-hidden="true" />
                     </Link>
                 </div>
 
@@ -357,7 +433,10 @@ export default function DemoPage() {
                 </header>
 
                 <div className="dash-content">
-                    <ActiveComponent />
+                    <DemoAppContext.Provider value={appSelected}>
+                        {/* Keyed so per-view state (selected tab, open insight) resets on a switch */}
+                        <ActiveComponent key={appSelected ? 'app' : 'web'} />
+                    </DemoAppContext.Provider>
                 </div>
             </main>
 

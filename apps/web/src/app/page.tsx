@@ -15,13 +15,14 @@ const SessionsView = dynamic(() => import('./demo/DemoViews').then(mod => mod.Se
 const FunnelsView = dynamic(() => import('./demo/DemoViews').then(mod => mod.FunnelsView), { ssr: false });
 const HeatmapsView = dynamic(() => import('./demo/DemoViews').then(mod => mod.HeatmapsView), { ssr: false });
 const InsightsView = dynamic(() => import('./demo/DemoViews').then(mod => mod.InsightsView), { ssr: false });
+const AppOverviewView = dynamic(() => import('./demo/DemoViews').then(mod => mod.AppOverviewView), { ssr: false });
 
 /* ─── DATA ─── */
 
 // The install flow as the dashboard runs it (dashboard/domains/new)
 const journey = [
-    { title: 'Add your site', body: 'Enter your domain in the dashboard and Thravic creates a tracking ID for it.' },
-    { title: 'Paste the script', body: 'Copy one tag into your site’s head. There are instructions for HTML, WordPress, Shopify, Webflow and Next.js.' },
+    { title: 'Add your site', body: 'Enter your domain, or your app’s bundle ID, in the dashboard and Thravic creates a tracking ID for it.' },
+    { title: 'Paste the script', body: 'Copy one tag into your site’s head. There are instructions for HTML, WordPress, Shopify, Webflow and Next.js. Mobile apps install the React Native SDK instead.' },
     { title: 'Verify it', body: 'Thravic checks the script is live. Data appears within a few minutes of your first visitor.' },
     { title: 'Find it and fix it', body: 'Replays, heatmaps and funnels show where people struggle. Ship a fix, then compare periods to see if it worked.' },
 ];
@@ -46,6 +47,11 @@ const stories = [
         label: 'AI insights', View: InsightsView, view: 'insights',
         title: 'A daily read on what changed.',
         body: 'Each day Thravic reports what moved on your site, ranks it by priority and suggests what to do about it, with a short forecast of where traffic is heading.',
+    },
+    {
+        label: 'the sample app', View: AppOverviewView, view: 'overview', href: '/demo?property=app',
+        title: 'Your app, next to your website.',
+        body: 'Add a React Native or Expo app and see its screens, sessions, versions and devices in the same dashboard. Paths, funnels and insights work the same way they do for your site.',
     },
 ];
 
@@ -77,17 +83,17 @@ type Tier = { id: string; name: string; price: string; period?: string; descript
 const pricingTiers: Tier[] = [
     {
         id: 'free', name: 'Hobby', price: 'Free', description: 'For personal projects',
-        features: ['1 website', '5k events/month', 'Core analytics & UTM', '30-day retention'],
+        features: ['1 site or app', '5k events/month', 'Core analytics & UTM', '30-day retention'],
         cta: 'Get Started Free', highlighted: false
     },
     {
         id: 'pro', name: 'Pro', price: '₦45,000', period: '/mo', description: 'For startups & businesses',
-        features: ['3 websites', '100k events/month', 'Heatmaps & recordings', 'Funnels & AI insights', 'CSV export & team', '1-year retention'],
+        features: ['3 sites or apps', '100k events/month', 'Heatmaps & recordings', 'Funnels & AI insights', 'CSV export & team', '1-year retention'],
         cta: 'Upgrade to Pro', highlighted: true
     },
     {
         id: 'agency', name: 'Agency', price: '₦125,000', period: '/mo', description: 'For agencies & scale',
-        features: ['20 websites', '500k events/month', 'Everything in Pro', 'Unlimited team members', '2-year retention', 'Priority support'],
+        features: ['20 sites or apps', '500k events/month', 'Everything in Pro', 'Unlimited team members', '2-year retention', 'Priority support'],
         cta: 'Upgrade to Agency', highlighted: false
     }
 ];
@@ -281,6 +287,7 @@ export default function HomePage() {
                         <li>One script tag</li>
                         <li>~6 KB gzipped</li>
                         <li>Form inputs masked in replays</li>
+                        <li>React Native SDK for apps</li>
                     </ul>
 
                     {/* Product preview: the real demo dashboard, cropped to its first screen */}
@@ -339,7 +346,7 @@ export default function HomePage() {
                                 <div className="lp-story-grid-text lp-story-copy">
                                     <h3>{story.title}</h3>
                                     <p>{story.body}</p>
-                                    <Link href={`/demo?view=${story.view}`} className="lp-text-link">
+                                    <Link href={story.href ?? `/demo?view=${story.view}`} className="lp-text-link">
                                         Open {story.label} in the demo <ArrowRight size={14} />
                                     </Link>
                                 </div>

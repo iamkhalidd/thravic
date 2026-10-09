@@ -256,3 +256,132 @@ export const rageClicks = [
     { element: 'img.hero-screenshot', path: '/', count: 38, avg: 3.6 },
     { element: 'a#docs-link', path: '/features', count: 17, avg: 3.1 },
 ];
+
+// ── The sample mobile app ──
+// The demo's second property: a React Native app. Its screens arrive as page
+// views on app://com.pulse.fitness/<Screen>, so the dashboard shows the path.
+
+const APP_USERS = [610, 640, 590, 700, 920, 980, 760, 720, 750, 810, 1040, 1110, 880, 840];
+const APP_SCREEN_VIEWS = [4100, 4350, 3900, 4800, 6400, 6900, 5200, 4900, 5100, 5600, 7300, 7900, 6100, 5800];
+const APP_PREVIOUS = [540, 560, 530, 600, 780, 820, 650, 630, 640, 690, 870, 900, 740, 720];
+
+export const app = {
+    name: 'Pulse',
+    bundleId: 'com.pulse.fitness',
+    trafficData: lastDays(14).map((date, i) => ({
+        date,
+        visitors: APP_USERS[i],
+        pageviews: APP_SCREEN_VIEWS[i],
+        sessions: Math.round(APP_USERS[i] * 2.4),
+        previousVisitors: APP_PREVIOUS[i],
+    })),
+    metrics: {
+        uniqueVisitors: 6420,
+        pageviews: 78350,
+        sessions: 25360,
+        bounceRate: 12.4,
+        avgSessionDuration: 386,
+    },
+    metricChange: {
+        uniqueVisitors: 14.8,
+        pageviews: 21.3,
+        sessions: 16.2,
+        bounceRate: -4.6,
+        avgSessionDuration: 8.9,
+    },
+    versions: [
+        { label: '2.4.0', value: 13240 },
+        { label: '2.3.1', value: 7810 },
+        { label: '2.3.0', value: 2650 },
+        { label: '2.2.4', value: 1180 },
+        { label: 'Unknown', value: 480 },
+    ],
+    osVersions: [
+        { label: 'iOS 19.1', value: 8120 },
+        { label: 'Android 16', value: 6340 },
+        { label: 'iOS 18.6', value: 4210 },
+        { label: 'Android 15', value: 3980 },
+        { label: 'Android 14', value: 1720 },
+        { label: 'iOS 17.7', value: 990 },
+    ],
+    devices: [
+        { label: 'Mobile', value: 22810 },
+        { label: 'Tablet', value: 2550 },
+    ],
+    deviceModels: [
+        { label: 'iPhone', value: 12460 },
+        { label: 'Samsung Galaxy S25', value: 3120 },
+        { label: 'Google Pixel 9', value: 2240 },
+        { label: 'iPad', value: 1870 },
+        { label: 'Samsung Galaxy A56', value: 1510 },
+        { label: 'Xiaomi 15', value: 980 },
+    ],
+    systems: [
+        { label: 'iOS', value: 14330 },
+        { label: 'Android', value: 11030 },
+    ],
+    screens: [
+        { path: '/Home', pageviews: 21400, avgTime: 38, entries: 18900, exits: 6200, bounceRate: 11.2 },
+        { path: '/Workout', pageviews: 14800, avgTime: 412, entries: 2100, exits: 3900, bounceRate: 6.4 },
+        { path: '/Library', pageviews: 11200, avgTime: 74, entries: 1400, exits: 1800, bounceRate: 9.8 },
+        { path: '/Progress', pageviews: 8900, avgTime: 96, entries: 900, exits: 2600, bounceRate: 14.1 },
+        { path: '/Profile', pageviews: 5300, avgTime: 41, entries: 380, exits: 1900, bounceRate: 18.6 },
+        { path: '/Paywall', pageviews: 4600, avgTime: 22, entries: 120, exits: 2900, bounceRate: 47.3 },
+        { path: '/Settings', pageviews: 2100, avgTime: 35, entries: 60, exits: 900, bounceRate: 21.5 },
+        { path: '/Onboarding', pageviews: 1850, avgTime: 64, entries: 1500, exits: 410, bounceRate: 16.9 },
+    ],
+    flows: [
+        { from: '/Home', to: '/Workout', count: 6900 },
+        { from: '/Home', to: '/Library', count: 4100 },
+        { from: '/Library', to: '/Workout', count: 2800 },
+        { from: '/Workout', to: '/Progress', count: 2300 },
+        { from: '/Library', to: '/Paywall', count: 1900 },
+        { from: '/Onboarding', to: '/Home', count: 1350 },
+    ],
+    entries: [
+        { path: '/Home', count: 18900 },
+        { path: '/Workout', count: 2100 },
+        { path: '/Onboarding', count: 1500 },
+        { path: '/Library', count: 1400 },
+    ],
+    exits: [
+        { path: '/Home', count: 6200 },
+        { path: '/Workout', count: 3900 },
+        { path: '/Paywall', count: 2900 },
+        { path: '/Progress', count: 2600 },
+    ],
+    realtime: {
+        activeVisitors: 43,
+        pageviewsLast30Min: 512,
+        activePages: [
+            { path: '/Workout', count: 19 },
+            { path: '/Home', count: 11 },
+            { path: '/Library', count: 7 },
+            { path: '/Progress', count: 4 },
+            { path: '/Paywall', count: 2 },
+        ],
+    },
+    funnels: [
+        { id: 'subscribe', name: 'First open to subscription', stepsCount: 4, description: 'Onboarding to paid' },
+        { id: 'workout', name: 'Workout completion', stepsCount: 3, description: 'Start to finish' },
+    ],
+    funnelSteps: [
+        { name: 'Onboarding', visitors: 1500 },
+        { name: 'First workout', visitors: 1080 },
+        { name: 'Paywall', visitors: 610 },
+        { name: 'Subscribed (custom event)', visitors: 142 },
+    ],
+    insights: [
+        { id: 'a1', type: 'funnel', priority: 'high' as const, title: 'Most people leave at the paywall', description: '77% of users who reach /Paywall close it without subscribing, the largest drop in your subscription funnel.', recommendation: 'Try showing the paywall after a second workout, when users have seen more value.' },
+        { id: 'a2', type: 'page', priority: 'medium' as const, title: 'Version 2.4.0 sessions are longer', description: 'Sessions on 2.4.0 average 7m 10s, against 5m 40s on 2.3.1.', recommendation: 'Remind users still on 2.3.x to update.' },
+        { id: 'a3', type: 'opportunity', priority: 'medium' as const, title: 'Library leads to workouts', description: '68% of users who open /Library start a workout in the same session.', recommendation: 'Surface the library on the home screen.' },
+        { id: 'a4', type: 'traffic', priority: 'low' as const, title: 'Android is growing faster than iOS', description: 'Android sessions rose 24% this period; iOS rose 11%.', recommendation: 'Check your Android release notes and store listing are up to date.' },
+    ],
+    forecast: [
+        { offset: 1, predicted: 6200 },
+        { offset: 2, predicted: 6450 },
+        { offset: 3, predicted: 7600 },
+        { offset: 4, predicted: 8100 },
+        { offset: 5, predicted: 6300 },
+    ],
+};

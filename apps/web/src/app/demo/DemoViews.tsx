@@ -3,7 +3,7 @@
 // The demo pages, built from the same components and classes as the real
 // dashboard pages (app/dashboard/*), fed with sample data instead of the API.
 
-import { useState } from 'react';
+import { createContext, useContext, useState } from 'react';
 import {
     Users, Eye, Activity, MousePointer2, Clock, Trophy, Globe, Search,
     TrendingUp, TrendingDown, CheckCircle, Target, Percent, Monitor, Smartphone,
@@ -21,7 +21,20 @@ import * as data from './demoData';
 
 const DEVICE_ICONS = { desktop: Monitor, mobile: Smartphone, tablet: Tablet } as const;
 
+/**
+ * True while the demo shows its sample app instead of demo-site.com. The views
+ * read it the way the real dashboard pages read isApp(selectedDomain).
+ */
+export const DemoAppContext = createContext(false);
+
+/** The selected property's sample data: the app's, or the website's. */
+function useProperty() {
+    const app = useContext(DemoAppContext);
+    return { app, d: app ? data.app : data };
+}
+
 function OnlineBadge() {
+    const { d } = useProperty();
     return (
         <span title="Visitors in the last 5 minutes" style={{
             display: 'inline-flex', alignItems: 'center', gap: 6, marginLeft: 6,
@@ -29,7 +42,7 @@ function OnlineBadge() {
             fontSize: '0.75rem', fontWeight: 500, color: 'var(--color-text-secondary)',
         }}>
             <span aria-hidden="true" style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--color-success)' }} />
-            {data.realtime.activeVisitors} online
+            {d.realtime.activeVisitors} online
         </span>
     );
 }
@@ -75,48 +88,59 @@ function minutesAgo(minutes: number): string {
 
 // ── Overview ──
 export function OverviewView() {
-    const m = data.metrics;
-    const c = data.metricChange;
+    const { app, d } = useProperty();
+    const m = d.metrics;
+    const c = d.metricChange;
+    const views = app ? 'Screen views' : 'Pageviews';
+    const top = app
+        ? data.app.screens.map(p => ({ label: p.path, value: p.pageviews }))
+        : data.topPages.map(p => ({ label: p.path, value: p.views }));
     return (
         <div className="page-stack">
-            <PageHeader title="Overview" subtitle="demo-site.com" badge={<OnlineBadge />} />
+            <PageHeader title="Overview" subtitle={app ? `${data.app.name} · iOS & Android` : 'demo-site.com'} badge={<OnlineBadge />} />
 
             <div className="stat-grid">
-                <StatCard label="Visitors" icon={Users} value={m.uniqueVisitors.toLocaleString()} change={c.uniqueVisitors} />
-                <StatCard label="Pageviews" icon={Eye} value={m.pageviews.toLocaleString()} change={c.pageviews} />
+                <StatCard label={app ? 'Users' : 'Visitors'} icon={Users} value={m.uniqueVisitors.toLocaleString()} change={c.uniqueVisitors} />
+                <StatCard label={views} icon={Eye} value={m.pageviews.toLocaleString()} change={c.pageviews} />
                 <StatCard label="Sessions" icon={Activity} value={m.sessions.toLocaleString()} change={c.sessions} />
                 <StatCard label="Bounce rate" icon={MousePointer2} value={`${m.bounceRate.toFixed(1)}%`} change={c.bounceRate} lowerIsBetter />
                 <StatCard label="Avg. session" icon={Clock} value={duration(m.avgSessionDuration)} change={c.avgSessionDuration} />
             </div>
 
             <div className="split-grid">
-                <ChartCard title="Traffic" subtitle="Visitors and pageviews per day">
+                <ChartCard title={app ? 'Usage' : 'Traffic'} subtitle={app ? 'Users and screen views per day' : 'Visitors and pageviews per day'}>
                     <TimeSeriesChart
-                        data={data.trafficData}
+                        data={d.trafficData}
                         xKey="date"
                         height={260}
                         series={[
-                            { key: 'visitors', label: 'Visitors' },
-                            { key: 'pageviews', label: 'Pageviews' },
+                            { key: 'visitors', label: app ? 'Users' : 'Visitors' },
+                            { key: 'pageviews', label: views },
                         ]}
                     />
                 </ChartCard>
-                <ChartCard title="Sources" subtitle="Sessions by channel">
-                    <BarList items={data.channels} />
-                </ChartCard>
+                {app ? (
+                    <ChartCard title="Versions" subtitle="Sessions by app version">
+                        <BarList items={data.app.versions} />
+                    </ChartCard>
+                ) : (
+                    <ChartCard title="Sources" subtitle="Sessions by channel">
+                        <BarList items={data.channels} />
+                    </ChartCard>
+                )}
             </div>
 
             <div className="split-grid">
-                <ChartCard title="Top pages" subtitle="Pageviews">
-                    <BarList items={data.topPages.map(p => ({ label: p.path, value: p.views }))} />
+                <ChartCard title={app ? 'Top screens' : 'Top pages'} subtitle={views}>
+                    <BarList items={top} />
                 </ChartCard>
-                <ChartCard title="Right now" subtitle="Visitors in the last 5 minutes">
+                <ChartCard title="Right now" subtitle={app ? 'Users in the last 5 minutes' : 'Visitors in the last 5 minutes'}>
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-                        <span className="stat-value" style={{ fontSize: '2rem' }}>{data.realtime.activeVisitors}</span>
-                        <span className="stat-hint">{data.realtime.pageviewsLast30Min} pageviews in the last 30 minutes</span>
+                        <span className="stat-value" style={{ fontSize: '2rem' }}>{d.realtime.activeVisitors}</span>
+                        <span className="stat-hint">{d.realtime.pageviewsLast30Min} {views.toLowerCase()} in the last 30 minutes</span>
                     </div>
                     <BarList
-                        items={data.realtime.activePages.map(p => ({ label: p.path, value: p.count }))}
+                        items={d.realtime.activePages.map(p => ({ label: p.path, value: p.count }))}
                         limit={5}
                         showShare={false}
                     />
@@ -200,11 +224,18 @@ const TREND_METRICS = [
     { value: 'pageviews', label: 'Pageviews' },
     { value: 'sessions', label: 'Sessions' },
 ] as const;
+const APP_TREND_METRICS = [
+    { value: 'visitors', label: 'Users' },
+    { value: 'pageviews', label: 'Screen views' },
+    { value: 'sessions', label: 'Sessions' },
+] as const;
 
 export function TrendsView() {
+    const { app, d } = useProperty();
+    const metrics = app ? APP_TREND_METRICS : TREND_METRICS;
     const [metric, setMetric] = useState<'visitors' | 'pageviews' | 'sessions'>('visitors');
-    const label = TREND_METRICS.find(t => t.value === metric)!.label;
-    const rows = data.trafficData;
+    const label = metrics.find(t => t.value === metric)!.label;
+    const rows = d.trafficData;
     const half = Math.floor(rows.length / 2);
     const first = rows.slice(0, half).reduce((s, r) => s + r[metric], 0);
     const second = rows.slice(half).reduce((s, r) => s + r[metric], 0);
@@ -216,8 +247,8 @@ export function TrendsView() {
         <div className="page-stack">
             <PageHeader
                 title="Trends"
-                subtitle="How traffic changes across the selected period."
-                actions={<Segmented label="Metric" options={TREND_METRICS} value={metric} onChange={setMetric} />}
+                subtitle={app ? 'How usage changes across the selected period.' : 'How traffic changes across the selected period.'}
+                actions={<Segmented label="Metric" options={metrics} value={metric} onChange={setMetric} />}
             />
             <div className="stat-grid">
                 <StatCard
@@ -241,16 +272,19 @@ export function TrendsView() {
 
 // ── Behavior: pages ──
 export function BehaviorPagesView() {
-    const max = Math.max(...data.behaviorPages.map(p => p.pageviews));
+    const { app } = useProperty();
+    const rows = app ? data.app.screens : data.behaviorPages;
+    const noun = app ? 'screen' : 'page';
+    const max = Math.max(...rows.map(p => p.pageviews));
     return (
         <div className="page-stack">
-            <PageHeader title="Pages" subtitle="Views, time on page, entries and exits for each page." />
-            <ChartCard title="All pages" subtitle={`${data.behaviorPages.length} pages`} flush>
+            <PageHeader title={app ? 'Screens' : 'Pages'} subtitle={`Views, time on ${noun}, entries and exits for each ${noun}.`} />
+            <ChartCard title={app ? 'All screens' : 'All pages'} subtitle={`${rows.length} ${noun}s`} flush>
                 <div className="dash-table-wrap" style={{ marginTop: 12, overflowX: 'auto' }}>
                     <table className="data-table">
                         <thead>
                             <tr>
-                                <th style={{ paddingLeft: 20 }}>Page</th>
+                                <th style={{ paddingLeft: 20 }}>{app ? 'Screen' : 'Page'}</th>
                                 <th className="num">Views ↓</th>
                                 <th className="num">Avg. time</th>
                                 <th className="num">Entries</th>
@@ -259,7 +293,7 @@ export function BehaviorPagesView() {
                             </tr>
                         </thead>
                         <tbody>
-                            {data.behaviorPages.map(p => (
+                            {rows.map(p => (
                                 <tr key={p.path}>
                                     <td style={{ paddingLeft: 20, maxWidth: 360, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={p.path}>{p.path}</td>
                                     <td className="num">
@@ -291,18 +325,20 @@ export function BehaviorPagesView() {
 
 // ── Behavior: paths ──
 export function BehaviorPathsView() {
+    const { app, d } = useProperty();
+    const noun = app ? 'screen' : 'page';
     return (
         <div className="page-stack">
-            <PageHeader title="User paths" subtitle="How visitors move from one page to the next." />
-            <ChartCard title="Top user flows" subtitle="Page-to-page moves">
-                <BarList items={data.flows.map(f => ({ label: `${f.from} → ${f.to}`, value: f.count }))} labelHeader="From → to" valueHeader="Moves" />
+            <PageHeader title="User paths" subtitle={`How ${app ? 'users' : 'visitors'} move from one ${noun} to the next.`} />
+            <ChartCard title="Top user flows" subtitle={app ? 'Screen-to-screen moves' : 'Page-to-page moves'}>
+                <BarList items={d.flows.map(f => ({ label: `${f.from} → ${f.to}`, value: f.count }))} labelHeader="From → to" valueHeader="Moves" />
             </ChartCard>
             <div className="dash-grid-2">
-                <ChartCard title="Top entry pages" subtitle="Where sessions start">
-                    <BarList items={data.entries.map(e => ({ label: e.path, value: e.count }))} />
+                <ChartCard title={`Top entry ${noun}s`} subtitle="Where sessions start">
+                    <BarList items={d.entries.map(e => ({ label: e.path, value: e.count }))} />
                 </ChartCard>
-                <ChartCard title="Top exit pages" subtitle="Where sessions end">
-                    <BarList items={data.exits.map(e => ({ label: e.path, value: e.count }))} />
+                <ChartCard title={`Top exit ${noun}s`} subtitle="Where sessions end">
+                    <BarList items={d.exits.map(e => ({ label: e.path, value: e.count }))} />
                 </ChartCard>
             </div>
         </div>
@@ -311,35 +347,67 @@ export function BehaviorPathsView() {
 
 // ── Behavior: devices ──
 export function BehaviorDevicesView() {
+    const { app, d } = useProperty();
     const icons: Record<string, React.ReactNode> = {
         Mobile: <Smartphone size={14} />, Desktop: <Monitor size={14} />, Tablet: <Tablet size={14} />,
     };
     return (
         <div className="page-stack">
-            <PageHeader title="Devices" subtitle="Sessions by device type, browser and operating system." />
+            <PageHeader title="Devices" subtitle={app ? 'Sessions by device type, model and operating system.' : 'Sessions by device type, browser and operating system.'} />
             <div className="dash-grid-3">
                 <ChartCard title="Device type" subtitle="Sessions">
-                    <BarList items={data.devices.map(d => ({ ...d, icon: icons[d.label] }))} />
+                    <BarList items={d.devices.map(x => ({ ...x, icon: icons[x.label] }))} />
                 </ChartCard>
-                <ChartCard title="Browsers" subtitle="Sessions">
-                    <BarList items={data.browsers} />
+                <ChartCard title={app ? 'Device models' : 'Browsers'} subtitle="Sessions">
+                    <BarList items={app ? data.app.deviceModels : data.browsers} />
                 </ChartCard>
                 <ChartCard title="Operating systems" subtitle="Sessions">
-                    <BarList items={data.systems} />
+                    <BarList items={d.systems} />
                 </ChartCard>
             </div>
         </div>
     );
 }
 
+// ── Behavior: versions (apps only) ──
+export function VersionsView() {
+    return (
+        <div className="page-stack">
+            <PageHeader title="Versions" subtitle="Which versions of your app people are using." />
+            <div className="dash-grid-2">
+                <ChartCard title="App versions" subtitle="Sessions">
+                    <BarList items={data.app.versions} labelHeader="Version" valueHeader="Sessions" />
+                    <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', margin: '10px 0 0' }}>
+                        &ldquo;Unknown&rdquo; is sessions without a version: pass <code>appVersion</code> to <code>Thravic.init</code> to see it.
+                    </p>
+                </ChartCard>
+                <ChartCard title="Operating systems" subtitle="Sessions">
+                    <BarList items={data.app.osVersions} labelHeader="OS" valueHeader="Sessions" />
+                </ChartCard>
+            </div>
+        </div>
+    );
+}
+
+/** The app overview on its own, for the landing page (which has no demo shell). */
+export function AppOverviewView() {
+    return (
+        <DemoAppContext.Provider value={true}>
+            <OverviewView />
+        </DemoAppContext.Provider>
+    );
+}
+
 // ── Funnels ──
 export function FunnelsView() {
-    const steps = data.funnelSteps;
+    const { app, d } = useProperty();
+    const steps = d.funnelSteps;
+    const people = app ? 'Users' : 'Visitors';
     const first = steps[0].visitors;
     const last = steps[steps.length - 1].visitors;
     return (
         <div className="page-stack">
-            <PageHeader title="Funnels" subtitle="See where visitors drop off on the way to a goal." />
+            <PageHeader title="Funnels" subtitle={`See where ${people.toLowerCase()} drop off on the way to a goal.`} />
             <div className="split-grid" style={{ alignItems: 'start' }}>
                 <div className="page-stack" style={{ minWidth: 0 }}>
                     <div className="stat-grid">
@@ -348,13 +416,13 @@ export function FunnelsView() {
                         <StatCard label="Dropped" icon={TrendingDown} value={(first - last).toLocaleString()} />
                         <StatCard label="Conversion" icon={Percent} value={`${((last / first) * 100).toFixed(1)}%`} hint="Entered to completed" />
                     </div>
-                    <ChartCard flush title={data.funnels[0].name} subtitle="Visitors who reached each step in the selected period">
+                    <ChartCard flush title={d.funnels[0].name} subtitle={`${people} who reached each step in the selected period`}>
                         <div style={{ overflowX: 'auto' }}>
                             <table className="data-table" style={{ marginTop: 6 }}>
                                 <thead>
                                     <tr>
                                         <th style={{ paddingLeft: 20 }}>Step</th>
-                                        <th className="num">Visitors</th>
+                                        <th className="num">{people}</th>
                                         <th className="num">Step conversion</th>
                                         <th className="num" style={{ paddingRight: 20 }}>Drop-off</th>
                                     </tr>
@@ -387,9 +455,9 @@ export function FunnelsView() {
                     </ChartCard>
                 </div>
 
-                <ChartCard flush title="Your funnels" subtitle={`${data.funnels.length} funnels`}>
+                <ChartCard flush title="Your funnels" subtitle={`${d.funnels.length} funnels`}>
                     <ul style={{ listStyle: 'none', margin: '10px 0 0', padding: 0, borderTop: '1px solid var(--color-border)' }}>
-                        {data.funnels.map((f, i) => (
+                        {d.funnels.map((f, i) => (
                             <li key={f.id} style={{
                                 display: 'flex', flexDirection: 'column', gap: 1, padding: '8px 16px',
                                 borderBottom: '1px solid var(--color-border)',
@@ -631,33 +699,35 @@ const PRIORITY_BADGE = { high: 'badge badge-error', medium: 'badge badge-warning
 const PRIORITY_LABEL = { high: 'High', medium: 'Medium', low: 'Low' } as const;
 
 export function InsightsView() {
-    const [open, setOpen] = useState<string | null>(data.insights[0].id);
-    const last = data.trafficData[data.trafficData.length - 1];
+    const { app, d } = useProperty();
+    const [open, setOpen] = useState<string | null>(d.insights[0].id);
+    const last = d.trafficData[d.trafficData.length - 1];
+    const views = app ? 'Screen views' : 'Pageviews';
     const chartData = [
-        ...data.trafficData.map((r, i, all) => {
+        ...d.trafficData.map((r, i, all) => {
             const window = all.slice(Math.max(0, i - 6), i + 1);
             return { date: r.date, actual: r.pageviews, trend: Math.round(window.reduce((s, w) => s + w.pageviews, 0) / window.length) };
         }),
-        ...data.forecast.map(f => {
+        ...d.forecast.map(f => {
             const d = new Date(`${last.date}T00:00:00Z`);
             d.setUTCDate(d.getUTCDate() + f.offset);
             return { date: d.toISOString().slice(0, 10), forecast: f.predicted };
         }),
     ];
     const counts = { high: 0, medium: 0, low: 0 };
-    data.insights.forEach(i => { counts[i.priority]++; });
+    d.insights.forEach(i => { counts[i.priority]++; });
 
     return (
         <div className="page-stack">
-            <PageHeader title="AI insights" subtitle="A daily report on what changed on your site and what to do about it" />
+            <PageHeader title="AI insights" subtitle={`A daily report on what changed in your ${app ? 'app' : 'site'} and what to do about it`} />
             <div className="split-grid">
-                <ChartCard title="Traffic forecast" subtitle="Pageviews per day, with the trend and a 5-day forecast">
+                <ChartCard title={app ? 'Usage forecast' : 'Traffic forecast'} subtitle={`${views} per day, with the trend and a 5-day forecast`}>
                     <TimeSeriesChart
                         data={chartData}
                         xKey="date"
                         height={300}
                         series={[
-                            { key: 'actual', label: 'Pageviews' },
+                            { key: 'actual', label: views },
                             { key: 'trend', label: '7-day average', muted: true },
                             { key: 'forecast', label: 'Forecast', muted: true },
                         ]}
@@ -674,9 +744,9 @@ export function InsightsView() {
                     </ul>
                 </ChartCard>
             </div>
-            <ChartCard title="All insights" subtitle={`${data.insights.length} from today's report`} flush>
+            <ChartCard title="All insights" subtitle={`${d.insights.length} from today's report`} flush>
                 <ul style={{ listStyle: 'none', margin: '10px 0 0', padding: 0 }}>
-                    {data.insights.map(insight => {
+                    {d.insights.map(insight => {
                         const Icon = INSIGHT_ICONS[insight.type] || Sparkles;
                         const isOpen = open === insight.id;
                         return (
