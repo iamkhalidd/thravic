@@ -49,7 +49,8 @@ const stories = [
     },
 ];
 
-const alsoIncluded = [
+const alsoIncluded: { name: string; detail: string; href?: string }[] = [
+    { name: 'Mobile apps', detail: 'Screens, sessions and versions from React Native and Expo apps.', href: '/docs/react-native' },
     { name: 'Traffic sources', detail: 'Channels, referrers, search engines and social networks.' },
     { name: 'UTM campaigns', detail: 'Sessions, visitors and pageviews for every UTM-tagged link.' },
     { name: 'Pages and paths', detail: 'Entry and exit pages, and how people move between them.' },
@@ -369,7 +370,10 @@ export default function HomePage() {
                             {alsoIncluded.map(item => (
                                 <div key={item.name}>
                                     <dt>{item.name}</dt>
-                                    <dd>{item.detail}</dd>
+                                    <dd>
+                                        {item.detail}
+                                        {item.href && <> <Link href={item.href} style={{ color: 'inherit', textDecoration: 'underline' }}>Setup guide</Link></>}
+                                    </dd>
                                 </div>
                             ))}
                         </dl>

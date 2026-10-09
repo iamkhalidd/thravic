@@ -37,6 +37,8 @@ export const SITE_KEYWORDS = [
     'privacy-friendly analytics',
     'user behavior analytics',
     'Hotjar alternative',
+    'mobile app analytics',
+    'React Native analytics',
 ];
 
 // Only production should be indexed. Vercel preview deployments and local
@@ -50,6 +52,7 @@ export const PUBLIC_ROUTES: { path: string; priority: number; changeFrequency: '
     { path: '/', priority: 1, changeFrequency: 'weekly' },
     { path: '/demo', priority: 0.9, changeFrequency: 'monthly' },
     { path: '/about', priority: 0.7, changeFrequency: 'monthly' },
+    { path: '/docs/react-native', priority: 0.7, changeFrequency: 'monthly' },
     { path: '/contact', priority: 0.6, changeFrequency: 'yearly' },
     { path: '/register', priority: 0.6, changeFrequency: 'yearly' },
     { path: '/login', priority: 0.4, changeFrequency: 'yearly' },

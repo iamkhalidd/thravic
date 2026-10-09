@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "description": "Thravic analytics for React Native and Expo apps: screens, sessions and custom events.",
   "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "react-native": "src/index.ts",
