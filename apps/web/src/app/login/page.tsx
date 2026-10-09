@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { ThemedLogo } from '@/components/ThemedLogo';
 import { useRouter } from 'next/navigation';
-import { BarChart3, Mail, Lock, ArrowRight, ArrowLeft } from 'lucide-react';
+import { Mail, Lock, ArrowRight, ArrowLeft } from 'lucide-react';
 import { auth } from '@/lib/api';
 import ShaderBackdrop from '@/components/ShaderBackdrop';
 
@@ -95,8 +96,7 @@ export default function LoginPage() {
                     marginBottom: 'var(--space-xl)',
                     textDecoration: 'none'
                 }}>
-                    <BarChart3 size={32} style={{ color: 'var(--color-accent-primary)' }} />
-                    <span style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--color-text-primary)' }}>Thravic</span>
+                    <ThemedLogo height={34} />
                 </Link>
 
                 {/* Card */}

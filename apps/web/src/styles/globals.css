@@ -454,6 +454,20 @@ a.card:hover {
     }
 }
 
+/* ThemedLogo.tsx: ink wordmark on the light theme, cream on the dark theme */
+.logo-dark {
+    display: inline-flex;
+}
+.logo-light {
+    display: none;
+}
+[data-theme="light"] .logo-dark {
+    display: none;
+}
+[data-theme="light"] .logo-light {
+    display: inline-flex;
+}
+
 @keyframes backdrop-in {
     from { opacity: 0; }
     to { opacity: 1; }

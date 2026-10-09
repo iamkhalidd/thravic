@@ -2,10 +2,11 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { BarChart3, ArrowRight, Check, Menu, X } from 'lucide-react';
+import { ArrowRight, Check, Menu, X } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import ShaderBackdrop from '@/components/ShaderBackdrop';
+import { ThemedLogo } from '@/components/ThemedLogo';
 import { formatPlanPrice, payments, planPeriod } from '@/lib/api';
 
 // Dynamically import Recharts-based views to prevent SSR hydration mismatches
@@ -188,14 +189,7 @@ export default function HomePage() {
             <nav style={s.nav}>
                 <div style={s.navInner}>
                     <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: '10px', textDecoration: 'none', color: 'var(--color-text-primary)' }}>
-                        <div style={{
-                            width: '24px', height: '24px', borderRadius: '6px',
-                            background: 'var(--color-text-primary)', display: 'flex',
-                            alignItems: 'center', justifyContent: 'center',
-                        }}>
-                            <BarChart3 size={14} style={{ color: 'var(--color-bg-primary)' }} />
-                        </div>
-                        <span style={{ fontSize: '0.9375rem', fontWeight: 600, letterSpacing: '-0.02em' }}>Thravic</span>
+                        <ThemedLogo height={24} />
                     </Link>
 
                         <div className="desktop-only" style={{ display: 'flex', gap: '24px' }}>
@@ -467,14 +461,7 @@ export default function HomePage() {
                     <div className="lp-grid-footer" style={{ marginBottom: '64px' }}>
                         <div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-                                <div style={{
-                                    width: '20px', height: '20px', borderRadius: '4px',
-                                    background: 'var(--color-text-primary)', display: 'flex',
-                                    alignItems: 'center', justifyContent: 'center',
-                                }}>
-                                    <BarChart3 size={12} style={{ color: 'var(--color-bg-primary)' }} />
-                                </div>
-                                <span style={{ fontSize: '0.875rem', fontWeight: 600, letterSpacing: '-0.02em', color: 'var(--color-text-primary)' }}>Thravic</span>
+                                <ThemedLogo height={22} />
                             </div>
                         </div>
                         {[

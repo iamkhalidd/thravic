@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { BarChart3, Mail, ArrowLeft, CheckCircle } from 'lucide-react';
+import { ThemedLogo } from '@/components/ThemedLogo';
+import { Mail, ArrowLeft, CheckCircle } from 'lucide-react';
 import { auth } from '@/lib/api';
 
 export default function ForgotPasswordPage() {
@@ -55,8 +56,7 @@ export default function ForgotPasswordPage() {
                     marginBottom: 'var(--space-xl)',
                     textDecoration: 'none'
                 }}>
-                    <BarChart3 size={32} style={{ color: 'var(--color-accent-primary)' }} />
-                    <span style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--color-text-primary)' }}>Thravic</span>
+                    <ThemedLogo height={34} />
                 </Link>
 
                 {/* Card */}

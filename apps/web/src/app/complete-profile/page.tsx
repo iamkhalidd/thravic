@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { ThemedLogo } from '@/components/ThemedLogo';
 import { useRouter } from 'next/navigation';
-import { BarChart3, ShieldAlert } from 'lucide-react';
+import { ShieldAlert } from 'lucide-react';
 import { auth } from '@/lib/api';
 import { CountrySelect } from '@/components/CountrySelect';
 import { countryError, dateOfBirthError, latestAdultBirthDate, phoneError } from '@/lib/profile';
@@ -102,8 +103,7 @@ export default function CompleteProfilePage() {
         <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--color-bg-primary)', padding: '16px' }}>
             <div style={{ width: '100%', maxWidth: '440px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--space-sm)', marginBottom: 'var(--space-xl)' }}>
-                    <BarChart3 size={32} style={{ color: 'var(--color-accent-primary)' }} />
-                    <span style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--color-text-primary)' }}>Thravic</span>
+                    <ThemedLogo height={34} />
                 </div>
 
                 <div className="card" style={{ padding: 'var(--space-xl)' }}>

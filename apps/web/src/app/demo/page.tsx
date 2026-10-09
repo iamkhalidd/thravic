@@ -5,6 +5,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { ThemedLogo } from '@/components/ThemedLogo';
 import {
     LayoutDashboard, Globe, Users, Target, MousePointer2, Video, Sparkles, FileBarChart,
     Settings, ChevronDown, ChevronRight, ArrowRight, TrendingUp, Calendar, PanelLeftClose,
@@ -162,13 +163,7 @@ export default function DemoPage() {
                 }}>
                     {!collapsed && (
                         <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: '8px', textDecoration: 'none', color: 'var(--color-text-primary)' }}>
-                            <div style={{
-                                width: '28px', height: '28px', background: 'var(--color-accent-primary)', borderRadius: '6px',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                            }}>
-                                <TrendingUp size={15} color="white" />
-                            </div>
-                            <span style={{ fontWeight: 700, fontSize: '1rem', whiteSpace: 'nowrap' }}>Thravic</span>
+                            <ThemedLogo height={22} />
                         </Link>
                     )}
                     <button

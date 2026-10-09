@@ -2,8 +2,9 @@
 
 import { useState, Suspense } from 'react';
 import Link from 'next/link';
+import { ThemedLogo } from '@/components/ThemedLogo';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { BarChart3, Lock, ArrowRight, CheckCircle, AlertCircle } from 'lucide-react';
+import { Lock, ArrowRight, CheckCircle, AlertCircle } from 'lucide-react';
 import { auth } from '@/lib/api';
 
 function ResetPasswordForm() {
@@ -259,8 +260,7 @@ export default function ResetPasswordPage() {
                     marginBottom: 'var(--space-xl)',
                     textDecoration: 'none'
                 }}>
-                    <BarChart3 size={32} style={{ color: 'var(--color-accent-primary)' }} />
-                    <span style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--color-text-primary)' }}>Thravic</span>
+                    <ThemedLogo height={34} />
                 </Link>
 
                 <Suspense fallback={
