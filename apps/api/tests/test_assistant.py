@@ -191,3 +191,10 @@ async def test_unknown_lookups_are_refused():
     clock = Clock(NOW, 0, None)
     result = await assistant_service.run_lookup("drop_tables", {}, DOMAIN, clock)
     assert "error" in result
+
+
+def test_dashes_become_commas():
+    text = "Traffic is up — mostly from Google – and steady 9–5 on weekdays."
+    assert assistant_service.plain_dashes(text) == (
+        "Traffic is up, mostly from Google, and steady 9-5 on weekdays."
+    )
