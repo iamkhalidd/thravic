@@ -39,7 +39,10 @@ export default function SubscriptionsPage() {
     const [editSub, setEditSub] = useState<Subscription | null>(null);
     const [editForm, setEditForm] = useState({ plan: '' });
     const [extendDays, setExtendDays] = useState(30);
+    const [grant, setGrant] = useState({ plan: '', days: 30 });
     const [plans, setPlans] = useState<{ id: string; name: string }[]>([]);
+
+    const paidPlans = plans.filter(p => p.id !== 'free');
 
     useEffect(() => {
         api.get('/api/admin/plans').then(data => setPlans(data.plans || [])).catch(console.error);
@@ -66,6 +69,7 @@ export default function SubscriptionsPage() {
     const handleEdit = (sub: Subscription) => {
         setEditSub(sub);
         setEditForm({ plan: sub.plan });
+        setGrant({ plan: sub.plan !== 'free' ? sub.plan : (paidPlans.find(p => p.id === 'pro') || paidPlans[0])?.id || '', days: 30 });
     };
 
     const handleSave = async () => {
@@ -81,6 +85,17 @@ export default function SubscriptionsPage() {
         if (!editSub) return;
         try {
             await api.post(`/api/admin/subscriptions/${editSub.id}/extend`, { days: extendDays });
+            setEditSub(null);
+            loadData();
+        } catch (err: any) { alert(err.message); }
+    };
+
+    // Give a paid plan for a set time from today (friends testing, trials). It
+    // ends on its own, with the usual reminder emails, unlike a plan change.
+    const handleGrant = async () => {
+        if (!editSub || !grant.plan) return;
+        try {
+            await api.post(`/api/admin/subscriptions/${editSub.id}/grant`, grant);
             setEditSub(null);
             loadData();
         } catch (err: any) { alert(err.message); }
@@ -190,7 +205,27 @@ export default function SubscriptionsPage() {
                                     {plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                                 </select>
                                 <p style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginTop: '4px' }}>
-                                    Limits and features come from the plan&apos;s definition (Plans page).
+                                    Limits and features come from the plan&apos;s definition (Plans page). A plan set here has no end date.
+                                </p>
+                            </div>
+                            <div>
+                                <label htmlFor="grant-plan" style={{ display: 'block', fontSize: '13px', color: 'var(--color-text-secondary)', marginBottom: '4px' }}>
+                                    Grant a plan for a set time
+                                </label>
+                                <div style={{ display: 'flex', gap: 'var(--space-sm)', alignItems: 'center', flexWrap: 'wrap' }}>
+                                    <select id="grant-plan" className="input" style={{ width: '140px' }} value={grant.plan}
+                                        onChange={e => setGrant({ ...grant, plan: e.target.value })}>
+                                        {paidPlans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                    </select>
+                                    <span style={{ fontSize: '13px', color: 'var(--color-text-muted)' }}>for</span>
+                                    <input id="grant-days" aria-label="Days" className="input" type="number" min={1} max={365} style={{ width: '80px' }}
+                                        value={grant.days} onChange={e => setGrant({ ...grant, days: parseInt(e.target.value) || 0 })} />
+                                    <span style={{ fontSize: '13px', color: 'var(--color-text-muted)' }}>days</span>
+                                    <button className="btn btn-ghost btn-sm" onClick={handleGrant}
+                                        disabled={!grant.plan || grant.days < 1 || grant.days > 365}>Grant</button>
+                                </div>
+                                <p style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginTop: '4px' }}>
+                                    Starts today and ends on its own (they get reminder emails first), then the account goes back to free.
                                 </p>
                             </div>
                             {editSub.plan !== 'free' && (

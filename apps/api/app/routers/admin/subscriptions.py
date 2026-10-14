@@ -239,6 +239,65 @@ async def extend_subscription(
         raise SimpleError("Failed to extend subscription", 500) from None
 
 
+@router.post("/{subscription_id}/grant")
+async def grant_subscription(
+    subscription_id: str, request: Request, admin: AdminUser = Depends(admin_auth)
+):
+    """Give an account a paid plan for a set number of days, starting now (trials,
+    friends testing the product). Unlike changing the plan, which never ends, this
+    sets a period end, so access lapses on its own after the grace days and the
+    owner gets the usual reminder emails before it does."""
+    try:
+        body = await _json_body(request)
+        plan = body.get("plan")
+        days = body.get("days")
+        if not isinstance(plan, str) or not plan or plan == "free":
+            raise SimpleError("plan must be a paid plan", 400)
+        if not isinstance(days, int) or isinstance(days, bool) or not 1 <= days <= MAX_EXTEND_DAYS:
+            raise SimpleError(f"days must be a whole number from 1 to {MAX_EXTEND_DAYS}", 400)
+        if not await plan_catalog.find(plan):
+            raise SimpleError(f'Unknown plan "{plan}"', 400)
+
+        sub = await query_one(
+            """
+            UPDATE subscriptions
+            SET plan = $2, status = 'active',
+                current_period_start = NOW(),
+                current_period_end = NOW() + make_interval(days => $3),
+                updated_at = NOW()
+            WHERE id = $1
+            RETURNING *
+            """,
+            subscription_id,
+            plan,
+            days,
+        )
+        if not sub:
+            raise SimpleError("Subscription not found", 404)
+
+        await query("UPDATE users SET subscription = $1 WHERE id = $2", plan, sub["user_id"])
+
+        await log_action(
+            admin_id=admin.user_id,
+            action="subscription.grant",
+            target_type="subscription",
+            target_id=subscription_id,
+            details={
+                "plan": plan,
+                "days": days,
+                "current_period_end": sub["current_period_end"].isoformat(),
+            },
+            ip_address=client_ip(request),
+        )
+        sub["state"], sub["grace_ends_at"] = _state(sub)
+        return jsjson(sub)
+    except SimpleError:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        log.error(f"Subscription grant error: {exc}")
+        raise SimpleError("Failed to grant plan", 500) from None
+
+
 @router.post("/{subscription_id}/cancel")
 async def cancel_subscription(
     subscription_id: str, request: Request, admin: AdminUser = Depends(admin_auth)

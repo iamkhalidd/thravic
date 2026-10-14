@@ -659,6 +659,61 @@ async def test_extending_refuses_what_it_cannot_do(
     assert response.status_code == status
 
 
+@pytest.mark.parametrize(
+    "period_end",
+    [
+        None,  # on the free plan, or a grant that never ended
+        NOW - 20 * DAY,  # a paid period that lapsed
+    ],
+)
+async def test_an_admin_can_grant_a_plan_for_a_month(
+    seeded_domain, db_pool, make_plan, period_end
+):
+    plan = await make_plan()
+    owner = await _owner(db_pool, seeded_domain)
+    await _subscribe(db_pool, owner, "free" if period_end is None else plan, period_end)
+
+    response = await _admin_post(
+        f"/api/admin/subscriptions/{await _sub_id(db_pool, owner)}/grant",
+        {"plan": plan, "days": 30},
+    )
+
+    assert response.status_code == 200, response.json()
+    assert response.json()["state"] == "active"
+    period = await _period(db_pool, owner)
+    assert period["plan"] == plan
+    assert _close_to(period["current_period_start"], NOW)
+    assert _close_to(period["current_period_end"], NOW + 30 * DAY)
+    assert (await plan_service.for_user(owner)).name == plan
+    async with db_pool.acquire() as conn:
+        assert await conn.fetchval("SELECT subscription FROM users WHERE id = $1", owner) == plan
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"plan": "free", "days": 30},
+        {"plan": "no-such-plan", "days": 30},
+        {"days": 30},
+        {"plan": "PLAN", "days": 0},
+        {"plan": "PLAN", "days": 400},
+        {"plan": "PLAN", "days": "30"},
+    ],
+)
+async def test_granting_refuses_what_it_cannot_do(seeded_domain, db_pool, make_plan, body):
+    plan = await make_plan()
+    owner = await _owner(db_pool, seeded_domain)
+    await _subscribe(db_pool, owner, "free", None)
+    body = {k: (plan if v == "PLAN" else v) for k, v in body.items()}
+
+    response = await _admin_post(
+        f"/api/admin/subscriptions/{await _sub_id(db_pool, owner)}/grant", body
+    )
+
+    assert response.status_code == 400
+    assert (await _period(db_pool, owner))["plan"] == "free"
+
+
 async def test_the_admin_list_shows_each_subscriptions_state(seeded_domain, db_pool, make_plan):
     plan = await make_plan()
     owner = await _owner(db_pool, seeded_domain)
