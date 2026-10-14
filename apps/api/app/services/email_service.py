@@ -275,7 +275,7 @@ def _render(
 <tr><td class="outer" align="center" style="padding:56px 16px;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;">
     <tr><td style="padding:0 4px 28px;">
-      <a href="{_esc(base)}" style="text-decoration:none;"><img src="{base}/email/logo.png" width="112" height="24" alt="thravic." style="display:block;border:0;width:112px;height:24px;"></a>
+      <a href="{_esc(base)}" style="text-decoration:none;"><img src="{base}/email/logo.png?v=2" width="140" height="36" alt="thravic." style="display:block;border:0;width:140px;height:36px;"></a>
     </td></tr>
     <tr><td class="card" bgcolor="{CARD_BG}" style="background-color:{CARD_BG};background-color:rgba(17,17,19,0.88);border:1px solid {CARD_BORDER};border-radius:16px;padding:40px;">
       <h1 style="margin:0 0 20px;font-family:{FONT};font-size:22px;line-height:1.3;font-weight:600;color:{HEADING};">{_esc(heading)}</h1>
