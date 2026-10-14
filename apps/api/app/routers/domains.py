@@ -443,6 +443,10 @@ async def delete_domain(domainId: str, user: AuthUser = Depends(require_auth)):
             raise SimpleError("Domain not found", 404)
 
         await domain_service.remove(domainId)
+        # The freed slot may let a paused site collect again; drop the cached
+        # answers so it resumes now instead of after the cache expires.
+        remaining = await query("SELECT id FROM domains WHERE user_id = $1", domain["user_id"])
+        await plan_service.forget_paused_sites([str(r["id"]) for r in remaining])
         return jsjson({"message": "Domain deleted successfully"})
     except SimpleError:
         raise

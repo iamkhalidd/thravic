@@ -217,7 +217,12 @@ async def verify(domain_id: str) -> dict[str, Any] | None:
 
 
 async def remove(domain_id: str) -> None:
-    await query("DELETE FROM domains WHERE id = $1", domain_id)
+    """Delete the property and, through ON DELETE CASCADE, everything collected
+    for it. Drops the cached tracking lookup so the collector stops accepting its
+    events now rather than when the cache expires."""
+    row = await query_one("DELETE FROM domains WHERE id = $1 RETURNING tracking_id", domain_id)
+    if row:
+        await _forget_tracking_lookup(row["tracking_id"])
 
 
 async def count_by_user(user_id: str) -> int:

@@ -25,11 +25,12 @@ export function DomainProvider({ children }: { children: ReactNode }) {
         try {
             const result = await domains.list();
             if (result.data?.domains) {
-                setDomainList(result.data.domains);
-                // Auto-select first domain if none selected
-                if (!selectedDomainId && result.data.domains.length > 0) {
-                    setSelectedDomainId(result.data.domains[0].id);
-                }
+                const list = result.data.domains;
+                setDomainList(list);
+                // Keep the selection if it still exists; otherwise (first load, or the
+                // selected site was deleted) fall back to the first site, or none.
+                setSelectedDomainId(current =>
+                    current && list.some(d => d.id === current) ? current : list[0]?.id ?? null);
             }
         } catch (error) {
             console.error('Failed to load domains:', error);
