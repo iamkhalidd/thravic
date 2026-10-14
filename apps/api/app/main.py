@@ -34,6 +34,7 @@ from .redis_client import close_redis, init_redis
 from .routers import admin as admin_routes
 from .routers import analytics as analytics_routes
 from .routers import announcements as announcement_routes
+from .routers import assistant as assistant_routes
 from .routers import auth as auth_routes
 from .routers import collect as collect_routes
 from .routers import contact as contact_routes
@@ -157,6 +158,10 @@ app.include_router(
 )
 app.include_router(
     insight_routes.router, prefix="/api/insights", tags=["insights"],
+    dependencies=PROFILE_REQUIRED,
+)
+app.include_router(
+    assistant_routes.router, prefix="/api/assistant", tags=["assistant"],
     dependencies=PROFILE_REQUIRED,
 )
 app.include_router(

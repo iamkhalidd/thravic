@@ -17,6 +17,7 @@ import {
 import { useDomain } from '@/contexts/DomainContext';
 import { PageHeader } from '@/components/PageHeader';
 import { ChartCard } from '@/components/ChartCard';
+import { ASK_EVENT } from '@/components/AskThravic';
 import { TimeSeriesChart } from '@/components/charts/TimeSeriesChart';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
@@ -371,12 +372,27 @@ export default function InsightsPage() {
                                                     </div>
                                                 </div>
                                             ))}
-                                            <Link
-                                                href={insight.link}
-                                                style={{ fontSize: '0.8125rem', display: 'inline-flex', alignItems: 'center', gap: 4, alignSelf: 'flex-start' }}
-                                            >
-                                                See the data <ArrowRight size={14} aria-hidden="true" />
-                                            </Link>
+                                            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px 18px' }}>
+                                                <Link
+                                                    href={insight.link}
+                                                    style={{ fontSize: '0.8125rem', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                                                >
+                                                    See the data <ArrowRight size={14} aria-hidden="true" />
+                                                </Link>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => window.dispatchEvent(new CustomEvent(ASK_EVENT, {
+                                                        detail: `Tell me more about this insight: "${insight.title}". What is behind it and what should I do?`,
+                                                    }))}
+                                                    style={{
+                                                        fontSize: '0.8125rem', display: 'inline-flex', alignItems: 'center', gap: 4,
+                                                        padding: 0, background: 'none', border: 'none', cursor: 'pointer',
+                                                        color: 'var(--color-text-secondary)', font: 'inherit',
+                                                    }}
+                                                >
+                                                    <Sparkles size={13} aria-hidden="true" /> Ask about this
+                                                </button>
+                                            </div>
                                         </div>
                                     )}
                                 </li>

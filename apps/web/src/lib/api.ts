@@ -818,6 +818,33 @@ export const insights = {
     }
 };
 
+// Ask Thravic - plain-language questions about one site: /api/assistant/{domainId}
+export interface AssistantUsage { used: number; limit: number; left: number }
+export interface AssistantMessage { role: 'user' | 'assistant'; content: string }
+export interface AssistantContext {
+    path: string;
+    pageTitle?: string;
+    startDate?: string;
+    endDate?: string;
+    tzOffset?: number; // new Date().getTimezoneOffset()
+}
+
+export const assistant = {
+    async usage(domainId: string) {
+        return apiRequest<AssistantUsage>(`/api/assistant/${domainId}/usage`);
+    },
+    async ask(domainId: string, question: string, history: AssistantMessage[], context: AssistantContext) {
+        return apiRequest<{
+            answer: string;
+            links: Array<{ label: string; href: string }>;
+            usage: AssistantUsage;
+        }>(`/api/assistant/${domainId}/ask`, {
+            method: 'POST',
+            body: JSON.stringify({ question, history, context }),
+        });
+    },
+};
+
 // Payments API (Paystack)
 // GET /api/payments/plans: the admin-managed plans, active ones only.
 // `bullets` are generated from the plan's real limits and features plus the

@@ -49,6 +49,7 @@ import { UsageWidget } from '@/components/UsageWidget';
 import { ImpersonationBanner } from '@/components/ImpersonationBanner';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { RouteErrorBoundary } from '@/components/RouteErrorBoundary';
+import { AskThravic } from '@/components/AskThravic';
 
 // Pages that read useApiRange().compare; elsewhere the Compare button would do nothing
 const COMPARE_PAGES = ['/dashboard', '/dashboard/traffic/trends', '/dashboard/traffic/sources', '/dashboard/behavior/pages'];
@@ -657,6 +658,7 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
 
                     {/* Right: actions — Live and Export desktop only, theme always */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                        <AskThravic pathname={pathname} />
                         <ThemeToggle />
                         
                         {/* Live — desktop only; on, the open page re-fetches as the API pushes new events */}
