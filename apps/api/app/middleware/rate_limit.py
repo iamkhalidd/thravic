@@ -102,12 +102,15 @@ def default_rules() -> list[RateLimitRule]:
             message="Event rate limit exceeded, slow down.",
             path_prefix="/api/collect",
         ),
-        # 4. Admin — 30 req / 15 min per IP
+        # 4. Admin — 300 req / 15 min per IP. Every /api/admin route already needs
+        # an admin token and admin sign-in is covered by the auth rule above, so
+        # this only caps a signed-in admin. Each dashboard page fires several
+        # requests; at the old 30 a few clicks locked the dashboard for 15 min.
         RateLimitRule(
             name="admin",
             prefix="rl:admin:",
             window_ms=15 * 60 * 1000,
-            max_requests=30,
+            max_requests=300,
             message="Too many admin requests, please slow down.",
             path_prefix="/api/admin",
         ),
