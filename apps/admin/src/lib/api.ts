@@ -29,10 +29,21 @@ export function getAccessToken() {
     return accessToken;
 }
 
+// How long a 429 asks us to wait, if it is short enough to wait out. The API
+// counts signed-in requests per minute, so a brief burst clears in seconds.
+const MAX_RATE_LIMIT_WAIT_S = 10;
+
+function rateLimitWaitMs(response: Response): number | null {
+    const seconds = Number(response.headers.get('Retry-After'));
+    if (!Number.isFinite(seconds) || seconds <= 0 || seconds > MAX_RATE_LIMIT_WAIT_S) return null;
+    return seconds * 1000;
+}
+
 // Main API fetch
 export async function adminFetch<T = any>(
     endpoint: string,
-    options: RequestInit = {}
+    options: RequestInit = {},
+    rateLimitRetried = false
 ): Promise<T> {
     const url = `${API_BASE}${endpoint}`;
 
@@ -49,6 +60,13 @@ export async function adminFetch<T = any>(
         ...options,
         headers,
     });
+
+    // Rate limited: wait it out once rather than leaving the page empty
+    const waitMs = response.status === 429 && !rateLimitRetried ? rateLimitWaitMs(response) : null;
+    if (waitMs !== null) {
+        await new Promise(resolve => setTimeout(resolve, waitMs));
+        return adminFetch<T>(endpoint, options, true);
+    }
 
     // Handle 401 — try refresh
     if (response.status === 401 && refreshToken) {

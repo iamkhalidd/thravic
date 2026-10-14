@@ -38,10 +38,21 @@ function clearTokens() {
     localStorage.removeItem('refreshToken');
 }
 
+// How long a 429 asks us to wait, if it is short enough to wait out. The API
+// counts signed-in requests per minute, so a brief burst clears in seconds.
+const MAX_RATE_LIMIT_WAIT_S = 10;
+
+function rateLimitWaitMs(response: Response): number | null {
+    const seconds = Number(response.headers.get('Retry-After'));
+    if (!Number.isFinite(seconds) || seconds <= 0 || seconds > MAX_RATE_LIMIT_WAIT_S) return null;
+    return seconds * 1000;
+}
+
 // API request helper
 async function apiRequest<T>(
     endpoint: string,
-    options: RequestInit = {}
+    options: RequestInit = {},
+    rateLimitRetried = false
 ): Promise<ApiResponse<T>> {
     const { accessToken } = getTokens();
 
@@ -63,6 +74,12 @@ async function apiRequest<T>(
         const data = await response.json();
 
         if (!response.ok) {
+            // Rate limited: wait it out once rather than leaving the page empty
+            const waitMs = response.status === 429 && !rateLimitRetried ? rateLimitWaitMs(response) : null;
+            if (waitMs !== null) {
+                await new Promise(resolve => setTimeout(resolve, waitMs));
+                return apiRequest(endpoint, options, true);
+            }
             // Try to refresh token on 401
             if (response.status === 401 && getTokens().refreshToken) {
                 const refreshed = await refreshToken();

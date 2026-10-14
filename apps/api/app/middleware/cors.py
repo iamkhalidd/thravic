@@ -28,7 +28,7 @@ COLLECT_PREFIX = "/api/collect"
 WHITELIST_METHODS = "GET,POST,PUT,DELETE,PATCH"
 WHITELIST_HEADERS = "Content-Type, Authorization, X-Requested-With"
 # Express joins the array with ',' and no spaces; matching that byte-for-byte
-EXPOSED_HEADERS = "RateLimit-Limit,RateLimit-Remaining,RateLimit-Reset"
+EXPOSED_HEADERS = "RateLimit-Limit,RateLimit-Remaining,RateLimit-Reset,Retry-After"
 
 PREFLIGHT_MAX_AGE = "600"
 

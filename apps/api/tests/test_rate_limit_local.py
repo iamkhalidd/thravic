@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 
+import jwt
 import pytest
 from starlette.responses import Response
 
@@ -25,6 +26,7 @@ from app.middleware.rate_limit import (
     default_rules,
     reset_local_windows,
 )
+from app.security import get_jwt_secret
 
 
 class _FakeRequest:
@@ -45,6 +47,13 @@ class _Clock:
 
     def advance(self, seconds: float) -> None:
         self.now += seconds
+
+
+def _signed_in(path: str, user_id: str, ip: str = "127.0.0.1", secret: str | None = None):
+    request = _FakeRequest(path, ip)
+    token = jwt.encode({"userId": user_id}, secret or get_jwt_secret(), algorithm="HS256")
+    request.headers["authorization"] = f"Bearer {token}"
+    return request
 
 
 async def _ok(_request) -> Response:
@@ -125,6 +134,49 @@ async def test_every_matching_rule_counts_a_request():
     reset_local_windows()
     await middleware.dispatch(_FakeRequest("/api/auth/login"), _ok)
     assert LOCAL_WINDOWS.size() == 2
+
+
+async def test_signed_in_users_behind_one_ip_have_their_own_budget():
+    """An office sharing one IP must not share one budget."""
+    middleware = RateLimitMiddleware(app=None)
+    rule = next(r for r in default_rules() if r.name == "user")
+
+    for _ in range(rule.max_requests + 1):
+        await middleware.dispatch(_signed_in("/api/domains", "u1"), _ok)
+    assert (await middleware.dispatch(_signed_in("/api/domains", "u1"), _ok)).status_code == 429
+
+    response = await middleware.dispatch(_signed_in("/api/domains", "u2"), _ok)
+    assert response.status_code == 200
+
+
+async def test_signed_in_traffic_does_not_use_up_the_ip_budget():
+    """A busy dashboard must not lock out the anonymous pages on the same IP."""
+    middleware = RateLimitMiddleware(app=None)
+    global_rule = next(r for r in default_rules() if r.name == "global")
+
+    for _ in range(global_rule.max_requests + 5):
+        await middleware.dispatch(_signed_in("/api/domains", f"user-{_ % 50}"), _ok)
+
+    response = await middleware.dispatch(_FakeRequest("/api/contact"), _ok)
+    assert response.status_code == 200
+
+
+async def test_a_forged_token_is_treated_as_anonymous():
+    middleware = RateLimitMiddleware(app=None)
+    global_rule = next(r for r in default_rules() if r.name == "global")
+
+    for _ in range(global_rule.max_requests):
+        await middleware.dispatch(_signed_in("/api/domains", "u1", secret="not-the-secret"), _ok)
+
+    response = await middleware.dispatch(
+        _signed_in("/api/domains", "u1", secret="not-the-secret"), _ok
+    )
+    assert response.status_code == 429
+
+
+async def test_the_user_window_clears_within_a_minute():
+    rule = next(r for r in default_rules() if r.name == "user")
+    assert rule.window_seconds == 60
 
 
 # ── The counter itself ───────────────────────────────────────────────────────

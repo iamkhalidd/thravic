@@ -1,9 +1,16 @@
-"""Rate limiting — mirrors the four Express `express-rate-limit` tiers.
+"""Rate limiting.
 
-Express registers several limiters, and a request can be counted by more than one
-(for example `/api/auth/login` is matched by both the global and the auth
-limiter). This middleware evaluates every matching rule in registration order and
-rejects on the first breach, so thresholds behave identically.
+Anonymous traffic is counted per IP, as the Express `express-rate-limit` tiers
+were. Signed-in traffic (the dashboard and the admin app) is counted per account
+in a one-minute window instead: a page load fires a burst of calls and the
+dashboard polls, so a per-IP 15-minute budget ran out during normal use and kept
+the whole dashboard blank until the window ended. It also punished teams that
+share one office IP. A short window lets bursts through and clears any block
+within a minute, while still stopping a runaway loop.
+
+A request can be counted by more than one rule (for example `/api/auth/login` is
+matched by both the global and the auth rule). Every matching rule is evaluated
+in order and the first breach rejects.
 
 Redis is used for counters, with the same key prefixes as the Express limiters, so
 existing buckets carry over across the cutover. When Redis is unavailable the
@@ -18,7 +25,9 @@ from __future__ import annotations
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from typing import Literal
 
+import jwt
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
@@ -26,6 +35,7 @@ from starlette.responses import Response
 from .. import cache
 from ..config import get_settings
 from ..json_response import jsjson
+from ..security import get_jwt_secret
 
 CallNext = Callable[[Request], Awaitable[Response]]
 
@@ -36,6 +46,24 @@ def get_client_ip(request: Request) -> str:
     if forwarded:
         return forwarded.split(",")[0].strip()
     return request.client.host if request.client else "unknown"
+
+
+def get_signed_in_user_id(request: Request) -> str | None:
+    """The user id from a valid access token, or None for anonymous callers.
+
+    Only the signature and expiry are checked (no database or revocation
+    lookup), which is all a rate-limit key needs. A forged or expired token
+    counts as anonymous and falls under the per-IP rules.
+    """
+    header = request.headers.get("authorization")
+    if not header or not header.startswith("Bearer "):
+        return None
+    try:
+        payload = jwt.decode(header[7:].strip(), get_jwt_secret(), algorithms=["HS256"])
+    except Exception:
+        return None
+    user_id = payload.get("userId")
+    return str(user_id) if user_id else None
 
 
 @dataclass(frozen=True)
@@ -50,10 +78,22 @@ class RateLimitRule:
     path_prefix: str
     exact_paths: tuple[str, ...] | None = None
     skip_path_prefix: str | None = None
+    # "user" counts per account and applies only to signed-in requests; "ip"
+    # counts per address. `anonymous_only` limits an ip rule to callers without
+    # a valid token, so signed-in traffic is counted by the user rule instead.
+    key: Literal["ip", "user"] = "ip"
+    anonymous_only: bool = False
 
     @property
     def window_seconds(self) -> int:
         return max(self.window_ms // 1000, 1)
+
+    def applies_to(self, path: str, user_id: str | None) -> bool:
+        if self.key == "user" and user_id is None:
+            return False
+        if self.anonymous_only and user_id is not None:
+            return False
+        return self.matches(path)
 
     def matches(self, path: str) -> bool:
         if self.exact_paths is not None:
@@ -66,10 +106,10 @@ class RateLimitRule:
 
 
 def default_rules() -> list[RateLimitRule]:
-    """The limiter stack from `index.ts`, in the same order."""
+    """The limiter stack, evaluated in this order."""
     settings = get_settings()
     return [
-        # 1. Global — 300 req / 15 min per IP, skipping /api/collect
+        # 1. Global — 300 req / 15 min per IP for anonymous callers, skipping /api/collect
         RateLimitRule(
             name="global",
             prefix="rl:global:",
@@ -78,6 +118,7 @@ def default_rules() -> list[RateLimitRule]:
             message="Too many requests, please try again later.",
             path_prefix="/api/",
             skip_path_prefix="/api/collect",
+            anonymous_only=True,
         ),
         # 2. Auth — 10 req / 15 min per IP (brute-force protection)
         RateLimitRule(
@@ -102,17 +143,18 @@ def default_rules() -> list[RateLimitRule]:
             message="Event rate limit exceeded, slow down.",
             path_prefix="/api/collect",
         ),
-        # 4. Admin — 300 req / 15 min per IP. Every /api/admin route already needs
-        # an admin token and admin sign-in is covered by the auth rule above, so
-        # this only caps a signed-in admin. Each dashboard page fires several
-        # requests; at the old 30 a few clicks locked the dashboard for 15 min.
+        # 4. Signed in — 240 req / min per account, covering the dashboard and
+        # the admin app (every /api/admin route needs a token). Admin sign-in is
+        # still capped by the auth rule above.
         RateLimitRule(
-            name="admin",
-            prefix="rl:admin:",
-            window_ms=15 * 60 * 1000,
-            max_requests=300,
-            message="Too many admin requests, please slow down.",
-            path_prefix="/api/admin",
+            name="user",
+            prefix="rl:user:",
+            window_ms=60 * 1000,
+            max_requests=240,
+            message="Too many requests, please slow down.",
+            path_prefix="/api/",
+            skip_path_prefix="/api/collect",
+            key="user",
         ),
     ]
 
@@ -189,21 +231,21 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: CallNext) -> Response:
         path = request.url.path
         ip = get_client_ip(request)
+        user_id = get_signed_in_user_id(request)
 
         # Track the last matching rule so the informational headers reflect the
         # same limiter Express would have reported (later middleware wins).
         last_state: tuple[RateLimitRule, int, int] | None = None
 
         for rule in self.rules:
-            if not rule.matches(path):
+            if not rule.applies_to(path, user_id):
                 continue
 
-            result = await cache.increment_with_ttl(
-                f"{rule.prefix}{ip}", rule.window_seconds
-            )
+            bucket = f"{rule.prefix}{user_id if rule.key == 'user' else ip}"
+            result = await cache.increment_with_ttl(bucket, rule.window_seconds)
             if result is None:
                 # Redis unavailable — count in-process instead of skipping the rule.
-                result = LOCAL_WINDOWS.increment(f"{rule.prefix}{ip}", rule.window_seconds)
+                result = LOCAL_WINDOWS.increment(bucket, rule.window_seconds)
 
             count, remaining_ttl = result
             last_state = (rule, count, remaining_ttl)
@@ -217,6 +259,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                         "RateLimit-Remaining": "0",
                         "RateLimit-Reset": str(remaining_ttl),
                         "RateLimit-Policy": f"{rule.max_requests};w={rule.window_seconds}",
+                        "Retry-After": str(max(remaining_ttl, 1)),
                     },
                 )
 

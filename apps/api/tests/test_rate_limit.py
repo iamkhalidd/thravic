@@ -19,12 +19,14 @@ from __future__ import annotations
 
 import os
 
+import jwt
 import pytest
 from starlette.responses import Response
 
 from app import cache
 from app.middleware.rate_limit import RateLimitMiddleware, default_rules
 from app.redis_client import init_redis
+from app.security import get_jwt_secret
 
 
 class _FakeClient:
@@ -75,40 +77,37 @@ async def test_increment_with_ttl_actually_increments_and_sets_a_window():
     assert 0 < ttl <= 60
 
 
-async def test_admin_rule_rejects_only_after_its_limit():
+def _signed_in(path: str, user_id: str, ip: str = "127.0.0.1") -> _FakeRequest:
+    request = _FakeRequest(path, ip)
+    token = jwt.encode({"userId": user_id}, get_jwt_secret(), algorithm="HS256")
+    request.headers["authorization"] = f"Bearer {token}"
+    return request
+
+
+async def test_user_rule_rejects_only_after_its_limit():
     middleware = RateLimitMiddleware(app=None)
-    rule = next(r for r in default_rules() if r.name == "admin")
+    rule = next(r for r in default_rules() if r.name == "user")
 
     for attempt in range(1, rule.max_requests + 1):
-        response = await middleware.dispatch(_FakeRequest("/api/admin/users"), _ok)
+        response = await middleware.dispatch(_signed_in("/api/admin/users", "u1"), _ok)
         assert response.status_code == 200, f"rejected too early on attempt {attempt}"
 
-    response = await middleware.dispatch(_FakeRequest("/api/admin/users"), _ok)
+    response = await middleware.dispatch(_signed_in("/api/admin/users", "u1"), _ok)
     assert response.status_code == 429
-    assert response.body == b'{"error":"Too many admin requests, please slow down."}'
+    assert response.body == b'{"error":"Too many requests, please slow down."}'
     assert response.headers["ratelimit-limit"] == str(rule.max_requests)
     assert response.headers["ratelimit-remaining"] == "0"
+    assert 0 < int(response.headers["retry-after"]) <= 60
 
 
-async def test_admin_rule_counts_a_different_ip_separately():
-    middleware = RateLimitMiddleware(app=None)
-
-    for _ in range(35):
-        await middleware.dispatch(_FakeRequest("/api/admin/users", ip="10.0.0.1"), _ok)
-
-    # A different caller must still be served.
-    response = await middleware.dispatch(_FakeRequest("/api/admin/users", ip="10.0.0.2"), _ok)
-    assert response.status_code == 200
-
-
-async def test_non_admin_paths_are_not_counted_by_the_admin_rule():
+async def test_signed_in_requests_are_counted_per_account_not_per_ip():
     client = cache.get_client()
     middleware = RateLimitMiddleware(app=None)
 
-    await middleware.dispatch(_FakeRequest("/api/domains"), _ok)
+    await middleware.dispatch(_signed_in("/api/domains", "u1"), _ok)
 
-    assert await client.get("rl:admin:127.0.0.1") is None
-    assert await client.get("rl:global:127.0.0.1") == "1"
+    assert await client.get("rl:user:u1") == "1"
+    assert await client.get("rl:global:127.0.0.1") is None
 
 
 async def test_auth_rule_matches_only_its_exact_paths():
