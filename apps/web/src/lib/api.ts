@@ -52,7 +52,8 @@ function rateLimitWaitMs(response: Response): number | null {
 async function apiRequest<T>(
     endpoint: string,
     options: RequestInit = {},
-    rateLimitRetried = false
+    rateLimitRetried = false,
+    authRetried = false
 ): Promise<ApiResponse<T>> {
     const { accessToken } = getTokens();
 
@@ -78,14 +79,21 @@ async function apiRequest<T>(
             const waitMs = response.status === 429 && !rateLimitRetried ? rateLimitWaitMs(response) : null;
             if (waitMs !== null) {
                 await new Promise(resolve => setTimeout(resolve, waitMs));
-                return apiRequest(endpoint, options, true);
+                return apiRequest(endpoint, options, true, authRetried);
             }
-            // Try to refresh token on 401
-            if (response.status === 401 && getTokens().refreshToken) {
-                const refreshed = await refreshToken();
-                if (refreshed) {
-                    // Retry the request
-                    return apiRequest(endpoint, options);
+            if (response.status === 401) {
+                // Another request may have renewed the token while this one was
+                // in flight; if so, just try again with the new one.
+                const current = getTokens();
+                if (current.accessToken && current.accessToken !== accessToken && !authRetried) {
+                    return apiRequest(endpoint, options, rateLimitRetried, true);
+                }
+                if (current.refreshToken && !authRetried && await refreshToken()) {
+                    return apiRequest(endpoint, options, rateLimitRetried, true);
+                }
+                if (!getTokens().accessToken) {
+                    sessionEnded();
+                    return { error: SESSION_ENDED, details: data };
                 }
             }
             return { error: data.error || 'Request failed', details: data };
@@ -97,8 +105,31 @@ async function apiRequest<T>(
     }
 }
 
-// Refresh access token
-async function refreshToken(): Promise<boolean> {
+const SESSION_ENDED = 'Your session has ended. Please sign in again.';
+
+// The session is gone for good (refresh token expired or revoked): send a
+// dashboard user to sign in, rather than leaving them on a page whose every
+// action fails.
+function sessionEnded() {
+    if (typeof window !== 'undefined' && window.location.pathname.startsWith('/dashboard')) {
+        window.location.href = '/login';
+    }
+}
+
+// Refresh tokens are single use: renewing one retires it. The dashboard fires
+// several requests at once, so when the access token expires they all get a
+// 401 together; they share one renewal here, otherwise every one after the
+// first would be refused and wipe out the new tokens the first one saved.
+let refreshing: Promise<boolean> | null = null;
+
+function refreshToken(): Promise<boolean> {
+    if (!refreshing) {
+        refreshing = renewTokens().finally(() => { refreshing = null; });
+    }
+    return refreshing;
+}
+
+async function renewTokens(): Promise<boolean> {
     const { refreshToken: token } = getTokens();
     if (!token) return false;
 
@@ -110,6 +141,9 @@ async function refreshToken(): Promise<boolean> {
         });
 
         if (!response.ok) {
+            // Another tab may have renewed it first (they share storage): that
+            // tab's tokens are good, so keep them.
+            if (getTokens().refreshToken !== token) return true;
             clearTokens();
             return false;
         }
@@ -118,7 +152,7 @@ async function refreshToken(): Promise<boolean> {
         setTokens(data.accessToken, data.refreshToken);
         return true;
     } catch {
-        clearTokens();
+        // A network blip is not a lost session; keep the tokens for next time.
         return false;
     }
 }

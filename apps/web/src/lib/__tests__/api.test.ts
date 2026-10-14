@@ -143,6 +143,45 @@ describe('webhooks.create', () => {
     });
 });
 
+describe('expired tokens', () => {
+    it('renews once for requests that fail together, and keeps the new tokens', async () => {
+        localStorage.setItem('refreshToken', 'refresh');
+        let refreshes = 0;
+        fetchMock.mockImplementation(async (url: string, init: RequestInit) => {
+            if (url.endsWith('/api/auth/refresh')) {
+                refreshes += 1;
+                // Refresh tokens are single use, like the API's.
+                return refreshes === 1
+                    ? jsonResponse({ accessToken: 'new-access', refreshToken: 'new-refresh' })
+                    : jsonResponse({ error: 'Invalid refresh token' }, 401);
+            }
+            const auth = (init.headers as Record<string, string>).Authorization;
+            return auth === 'Bearer new-access'
+                ? jsonResponse({ success: true, usage: { percentUsed: 1 } })
+                : jsonResponse({ error: 'Invalid or expired token' }, 401);
+        });
+
+        const results = await Promise.all([payments.getUsage(), payments.getUsage(), payments.getUsage()]);
+
+        expect(refreshes).toBe(1);
+        expect(results.every(r => r.data?.usage.percentUsed === 1)).toBe(true);
+        expect(localStorage.getItem('accessToken')).toBe('new-access');
+        expect(localStorage.getItem('refreshToken')).toBe('new-refresh');
+    });
+
+    it('says the session ended when it cannot be renewed', async () => {
+        localStorage.setItem('refreshToken', 'refresh');
+        fetchMock
+            .mockResolvedValueOnce(jsonResponse({ error: 'Invalid or expired token' }, 401))
+            .mockResolvedValueOnce(jsonResponse({ error: 'Invalid refresh token' }, 401));
+
+        const result = await payments.getUsage();
+
+        expect(result.error).toBe('Your session has ended. Please sign in again.');
+        expect(localStorage.getItem('accessToken')).toBeNull();
+    });
+});
+
 describe('payments.getUsage', () => {
     it('reads the usage endpoint', async () => {
         fetchMock.mockResolvedValueOnce(jsonResponse({ success: true, usage: { eventsThisMonth: 5, eventsLimit: 100, percentUsed: 5 } }));
