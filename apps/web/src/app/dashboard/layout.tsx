@@ -437,6 +437,17 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                                             color: 'var(--color-accent-primary)', fontSize: '0.8125rem',
                                         }}
                                     >+ Add website or app</Link>
+                                    {/* Only the owner can delete; the card lives on the Tracking page. */}
+                                    {currentDomain?.isOwner && (
+                                        <Link
+                                            href="/dashboard/tracking#delete-property"
+                                            onClick={() => setDomainDropdownOpen(false)}
+                                            style={{
+                                                display: 'block', padding: '8px 12px',
+                                                color: 'var(--color-error)', fontSize: '0.8125rem',
+                                            }}
+                                        >Delete this {isApp(currentDomain) ? 'app' : 'site'}</Link>
+                                    )}
                                 </div>
                             )}
                         </div>

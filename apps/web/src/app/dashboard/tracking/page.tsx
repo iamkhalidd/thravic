@@ -212,7 +212,7 @@ export default function TrackingPage() {
 
             {/* Only the owner can delete; the API refuses team members too. */}
             {selectedDomain?.isOwner && (
-                <div className="card" style={{ borderColor: 'var(--color-error)' }}>
+                <div id="delete-property" className="card" style={{ borderColor: 'var(--color-error)', scrollMarginTop: 16 }}>
                     <h2 className="card-title" style={{ color: 'var(--color-error)' }}>Delete this {kind}</h2>
                     <p className="card-subtitle" style={{ marginBottom: 12 }}>
                         Removes <strong>{selectedDomain.domain}</strong> and everything collected for it: {app ? 'screens, sessions' : 'page views, sessions, replays, heatmaps'},
