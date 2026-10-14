@@ -2,10 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { Loader, Trash2 } from 'lucide-react';
 import { useDomain } from '@/contexts/DomainContext';
-import { isApp } from '@/lib/platform';
 import { useSubscription, type PlanFeature } from '@/hooks/useSubscription';
 import { PageHeader } from '@/components/PageHeader';
 import { ChartCard } from '@/components/ChartCard';
@@ -37,15 +34,8 @@ export default function TrackingPage() {
     const [saving, setSaving] = useState<DomainSwitch | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [keeping, setKeeping] = useState(false);
-    const router = useRouter();
-    // Deleting asks for the domain (or bundle ID) to be typed, so a slip can't do it.
-    const [confirmingDelete, setConfirmingDelete] = useState(false);
-    const [deleteConfirmation, setDeleteConfirmation] = useState('');
-    const [deleting, setDeleting] = useState(false);
-    const [deleteError, setDeleteError] = useState<string | null>(null);
 
     useEffect(() => {
-        setConfirmingDelete(false);
         if (!selectedDomainId) return;
         setSettings(null);
         setError(null);
@@ -81,28 +71,10 @@ export default function TrackingPage() {
         setKeeping(false);
     };
 
-    const app = isApp(selectedDomain);
-    const kind = app ? 'app' : 'site';
-
-    const deleteProperty = async () => {
-        if (!selectedDomain || deleteConfirmation.trim() !== selectedDomain.domain) return;
-        setDeleting(true);
-        setDeleteError(null);
-        const { error } = await domains.delete(selectedDomain.id);
-        if (error) {
-            setDeleteError(error);
-            setDeleting(false);
-            return;
-        }
-        // The context moves the selection to another site, or to none.
-        await refresh();
-        router.push('/dashboard');
-    };
-
     return (
         <div className="page-stack">
             <PageHeader
-                title="Tracking"
+                title="Site settings"
                 subtitle={<>Choose what is collected from <strong style={{ fontWeight: 500, color: 'var(--color-text-primary)' }}>{selectedDomain?.domain || 'your site'}</strong>.</>}
             />
 
@@ -209,66 +181,6 @@ export default function TrackingPage() {
                 Anything switched off stops being stored straight away.
                 If your site sets these options in <code>window.__TF_CONFIG__</code>, the browser follows that instead, but nothing switched off here is stored either way.
             </p>
-
-            {/* Only the owner can delete; the API refuses team members too. */}
-            {selectedDomain?.isOwner && (
-                <div id="delete-property" className="card" style={{ borderColor: 'var(--color-error)', scrollMarginTop: 16 }}>
-                    <h2 className="card-title" style={{ color: 'var(--color-error)' }}>Delete this {kind}</h2>
-                    <p className="card-subtitle" style={{ marginBottom: 12 }}>
-                        Removes <strong>{selectedDomain.domain}</strong> and everything collected for it: {app ? 'screens, sessions' : 'page views, sessions, replays, heatmaps'},
-                        funnels and webhooks. This can&apos;t be undone. Added it by mistake? This is the place.
-                        It also frees a slot on your plan.
-                    </p>
-                    {!confirmingDelete ? (
-                        <button
-                            type="button"
-                            className="btn"
-                            onClick={() => { setConfirmingDelete(true); setDeleteConfirmation(''); setDeleteError(null); }}
-                            style={{ background: 'transparent', color: 'var(--color-error)', border: '1px solid var(--color-error)' }}
-                        >
-                            <Trash2 size={16} />
-                            Delete {kind}
-                        </button>
-                    ) : (
-                        <form
-                            onSubmit={e => { e.preventDefault(); deleteProperty(); }}
-                            style={{ display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 360 }}
-                        >
-                            <label htmlFor="delete-property-confirm" style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)' }}>
-                                Type <strong style={{ color: 'var(--color-text-primary)' }}>{selectedDomain.domain}</strong> to confirm
-                            </label>
-                            <input
-                                id="delete-property-confirm"
-                                className="input"
-                                autoComplete="off"
-                                spellCheck={false}
-                                value={deleteConfirmation}
-                                onChange={e => setDeleteConfirmation(e.target.value)}
-                                aria-invalid={!!deleteError}
-                                aria-describedby={deleteError ? 'delete-property-error' : undefined}
-                                autoFocus
-                            />
-                            {deleteError && (
-                                <p id="delete-property-error" role="alert" style={{ color: 'var(--color-error)', fontSize: '0.8125rem', margin: 0 }}>{deleteError}</p>
-                            )}
-                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                                <button
-                                    type="submit"
-                                    className="btn"
-                                    disabled={deleting || deleteConfirmation.trim() !== selectedDomain.domain}
-                                    style={{ background: 'var(--color-error)', color: '#fff', border: '1px solid var(--color-error)' }}
-                                >
-                                    {deleting ? <Loader size={16} className="spin" /> : <Trash2 size={16} />}
-                                    {deleting ? 'Deleting…' : `Delete ${kind}`}
-                                </button>
-                                <button type="button" className="btn btn-ghost" onClick={() => setConfirmingDelete(false)} disabled={deleting}>
-                                    Cancel
-                                </button>
-                            </div>
-                        </form>
-                    )}
-                </div>
-            )}
         </div>
     );
 }

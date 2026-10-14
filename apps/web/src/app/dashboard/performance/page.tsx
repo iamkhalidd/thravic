@@ -91,7 +91,7 @@ export default function PerformancePage() {
     if (!selectedDomainId && !domainLoading) {
         return (
             <div className="page-stack">
-                <PageHeader title="Performance" subtitle="Core Web Vitals and page load times from real visitors" />
+                <PageHeader title="Page speed" subtitle="Core Web Vitals and page load times from real visitors" />
                 <div className="card empty-note">Select a website to see its performance.</div>
             </div>
         );
@@ -112,7 +112,7 @@ export default function PerformancePage() {
     return (
         <div className="page-stack">
             <PageHeader
-                title="Performance"
+                title="Page speed"
                 subtitle={busy || loadError
                     ? 'Core Web Vitals and page load times from real visitors'
                     : `Core Web Vitals and page load times from ${samples.toLocaleString()} visitor sample${samples === 1 ? '' : 's'}`}

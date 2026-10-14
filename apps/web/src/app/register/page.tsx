@@ -70,25 +70,27 @@ export default function RegisterPage() {
             isolation: 'isolate'
         }}>
             <ShaderBackdrop />
-            {/* Back to Home Link */}
-            <Link href="/" style={{
+            {/* Back to home: icon only, named for screen readers */}
+            <Link href="/" aria-label="Back to home" title="Back to home" style={{
                 position: 'absolute',
                 top: 'var(--space-lg)',
                 left: 'var(--space-lg)',
                 display: 'flex',
                 alignItems: 'center',
-                gap: 'var(--space-xs)',
+                justifyContent: 'center',
+                width: 36,
+                height: 36,
+                borderRadius: '50%',
+                border: '1px solid var(--color-border)',
+                background: 'var(--color-bg-card)',
                 color: 'var(--color-text-secondary)',
                 textDecoration: 'none',
-                fontSize: '0.875rem',
-                fontWeight: 500,
                 transition: 'color 0.2s'
             }}
             onMouseEnter={(e) => e.currentTarget.style.color = 'var(--color-text-primary)'}
             onMouseLeave={(e) => e.currentTarget.style.color = 'var(--color-text-secondary)'}
             >
-                <ArrowLeft size={16} />
-                Back to home
+                <ArrowLeft size={18} aria-hidden="true" />
             </Link>
             <div style={{
                 width: '100%',

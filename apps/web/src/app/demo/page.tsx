@@ -7,8 +7,9 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ThemedLogo } from '@/components/ThemedLogo';
 import {
-    LayoutDashboard, Globe, Users, Target, MousePointer2, Video, Sparkles, FileBarChart,
-    Settings, ChevronDown, ChevronRight, ArrowRight, TrendingUp, Calendar, PanelLeftClose,
+    LayoutDashboard, Globe, Target, MousePointer2, Video, Sparkles, FileBarChart,
+    Settings, ChevronDown, ArrowRight, Megaphone, FileText, Route, MonitorSmartphone,
+    MousePointerClick, FileInput, AlertTriangle, TrendingUp, Calendar, PanelLeftClose,
     PanelLeftOpen, Gauge, UsersRound, Menu, RefreshCw, Download, Smartphone, Check,
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -25,39 +26,48 @@ type DemoView = 'overview' | 'traffic-sources' | 'traffic-campaigns' | 'traffic-
     | 'behavior-pages' | 'behavior-paths' | 'behavior-devices' | 'behavior-versions' | 'funnels' | 'heatmaps' | 'sessions' | 'insights' | 'reports'
     | 'monitoring-errors' | 'monitoring-performance' | 'monitoring-forms' | 'monitoring-rage-clicks' | 'team' | 'settings';
 
-interface NavLeaf { id: DemoView; label: string; appLabel?: string }
-interface NavEntry { label: string; icon: React.ElementType; id?: DemoView; children?: NavLeaf[] }
+interface NavLeaf { id: DemoView; label: string; icon: React.ElementType; appLabel?: string }
+/** A sidebar section; the first one has no heading. */
+interface NavEntry { label: string; children: NavLeaf[] }
 
 const navStructure: NavEntry[] = [
-    { id: 'overview', icon: LayoutDashboard, label: 'Dashboard' },
     {
-        label: 'Traffic', icon: Globe, children: [
-            { id: 'traffic-sources', label: 'Sources' },
-            { id: 'traffic-campaigns', label: 'Campaigns' },
-            { id: 'traffic-trends', label: 'Trends' },
+        label: '', children: [
+            { id: 'overview', icon: LayoutDashboard, label: 'Overview' },
+            { id: 'insights', icon: Sparkles, label: 'AI insights' },
+            { id: 'reports', icon: FileBarChart, label: 'Reports' },
         ],
     },
     {
-        label: 'Behavior', icon: Users, children: [
-            { id: 'behavior-pages', label: 'Pages', appLabel: 'Screens' },
-            { id: 'behavior-paths', label: 'Paths' },
-            { id: 'behavior-devices', label: 'Devices' },
-            { id: 'behavior-versions', label: 'Versions' },
+        label: 'Traffic', children: [
+            { id: 'traffic-sources', icon: Globe, label: 'Sources' },
+            { id: 'traffic-campaigns', icon: Megaphone, label: 'Campaigns' },
+            { id: 'traffic-trends', icon: TrendingUp, label: 'Trends' },
         ],
     },
     {
-        label: 'Monitoring', icon: Gauge, children: [
-            { id: 'monitoring-errors', label: 'Errors' },
-            { id: 'monitoring-performance', label: 'Performance' },
-            { id: 'monitoring-forms', label: 'Forms' },
-            { id: 'monitoring-rage-clicks', label: 'Rage Clicks' },
+        label: 'Activity', children: [
+            { id: 'behavior-pages', icon: FileText, label: 'Pages', appLabel: 'Screens' },
+            { id: 'behavior-paths', icon: Route, label: 'Page flow', appLabel: 'Screen flow' },
+            { id: 'funnels', icon: Target, label: 'Funnels' },
+            { id: 'behavior-devices', icon: MonitorSmartphone, label: 'Devices' },
+            { id: 'behavior-versions', icon: Smartphone, label: 'App versions' },
         ],
     },
-    { id: 'funnels', icon: Target, label: 'Funnels' },
-    { id: 'heatmaps', icon: MousePointer2, label: 'Heatmaps' },
-    { id: 'sessions', icon: Video, label: 'Sessions' },
-    { id: 'insights', icon: Sparkles, label: 'AI Insights' },
-    { id: 'reports', icon: FileBarChart, label: 'Reports' },
+    {
+        label: 'Recordings', children: [
+            { id: 'sessions', icon: Video, label: 'Session recordings' },
+            { id: 'heatmaps', icon: MousePointer2, label: 'Heatmaps' },
+            { id: 'monitoring-rage-clicks', icon: MousePointerClick, label: 'Rage clicks' },
+            { id: 'monitoring-forms', icon: FileInput, label: 'Forms' },
+        ],
+    },
+    {
+        label: 'Problems', children: [
+            { id: 'monitoring-errors', icon: AlertTriangle, label: 'Errors' },
+            { id: 'monitoring-performance', icon: Gauge, label: 'Page speed' },
+        ],
+    },
 ];
 
 // The same split as lib/platform.ts: pages that only make sense for one kind of property.
@@ -69,14 +79,13 @@ const APP_ONLY: DemoView[] = ['behavior-versions'];
 
 const fits = (view: DemoView, app: boolean) => !(app ? WEB_ONLY : APP_ONLY).includes(view);
 
-/** The sidebar for a website or the app: drops what doesn't fit, renames Pages to Screens. */
+/** The sidebar for a website or the app: drops what doesn't fit (and any section left empty), uses app wording. */
 function navFor(app: boolean): NavEntry[] {
-    return navStructure.flatMap(item => {
-        if (!item.children) return item.id && !fits(item.id, app) ? [] : [item];
-        const children = item.children
+    return navStructure.flatMap(section => {
+        const children = section.children
             .filter(c => fits(c.id, app))
             .map(c => ({ ...c, label: app && c.appLabel ? c.appLabel : c.label }));
-        return children.length ? [{ ...item, children }] : [];
+        return children.length ? [{ ...section, children }] : [];
     });
 }
 
@@ -123,7 +132,6 @@ const headerButton: React.CSSProperties = {
 
 export default function DemoPage() {
     const [activeView, setActiveView] = useState<DemoView>('overview');
-    const [expandedSections, setExpandedSections] = useState<string[]>(['Traffic', 'Behavior']);
     const [dateRange, setDateRange] = useState('14d');
     const [dateDropdownOpen, setDateDropdownOpen] = useState(false);
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -176,10 +184,6 @@ export default function DemoPage() {
         window.scrollTo({ top: 0 });
     };
 
-    const toggleSection = (label: string) => {
-        setExpandedSections(prev => prev.includes(label) ? prev.filter(s => s !== label) : [...prev, label]);
-    };
-
     const ActiveComponent = viewComponents[activeView];
     const currentDatePreset = datePresets.find(p => p.value === dateRange);
 
@@ -191,7 +195,7 @@ export default function DemoPage() {
         background: 'transparent', border: 'none', borderRadius: '6px',
         color: active ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
         cursor: 'pointer', fontSize: '0.8125rem', fontWeight: active ? 500 : 400,
-        transition: 'all 150ms ease', textAlign: 'left',
+        transition: 'all 150ms ease', textAlign: 'left', position: 'relative',
         whiteSpace: 'nowrap', overflow: 'hidden',
     });
 
@@ -277,67 +281,40 @@ export default function DemoPage() {
                 <nav aria-label="Demo dashboard" className="no-scrollbar" style={{
                     flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: collapsed ? '8px 4px' : '8px 0',
                 }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                        {nav.map(item => {
-                            const Icon = item.icon;
-                            if (item.children) {
-                                const expanded = expandedSections.includes(item.label);
-                                const active = item.children.some(c => c.id === activeView);
+                    {nav.map(section => (
+                        <div key={section.label || 'main'} role="group" aria-label={section.label || undefined}
+                            style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginTop: section.label ? 14 : 0 }}>
+                            {section.label && (collapsed ? (
+                                <div aria-hidden="true" style={{ height: 1, margin: '0 8px 4px', background: 'var(--color-sidebar-border)' }} />
+                            ) : (
+                                <div style={{
+                                    padding: '0 12px 4px', fontSize: '0.6875rem', fontWeight: 500,
+                                    textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--color-text-muted)',
+                                }}>{section.label}</div>
+                            ))}
+                            {section.children.map(item => {
+                                const Icon = item.icon;
+                                const active = item.id === activeView;
                                 return (
-                                    <div key={item.label}>
-                                        <button type="button" onClick={() => toggleSection(item.label)} aria-expanded={expanded}
-                                            style={navItemStyle(active)} title={collapsed ? item.label : undefined}>
-                                            <Icon size={18} style={{ flexShrink: 0 }} />
-                                            {!collapsed && (
-                                                <>
-                                                    <span style={{ flex: 1 }}>{item.label}</span>
-                                                    {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                                                </>
-                                            )}
-                                        </button>
-                                        {expanded && !collapsed && (
-                                            <div style={{ marginLeft: '15px', marginTop: '2px' }}>
-                                                {item.children.map(child => {
-                                                    const childActive = child.id === activeView;
-                                                    return (
-                                                        <button key={child.id} type="button" onClick={() => go(child.id)}
-                                                            aria-current={childActive ? 'page' : undefined}
-                                                            style={{
-                                                                display: 'block', width: '100%', textAlign: 'left',
-                                                                padding: '6px 12px 6px 28px', background: 'transparent', border: 'none', cursor: 'pointer',
-                                                                color: childActive ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
-                                                                fontSize: '0.8125rem', fontWeight: childActive ? 500 : 400,
-                                                                transition: 'all 150ms ease',
-                                                            }}>
-                                                            {child.label}
-                                                        </button>
-                                                    );
-                                                })}
-                                            </div>
-                                        )}
-                                    </div>
+                                    <button key={item.id} type="button" onClick={() => go(item.id)} aria-current={active ? 'page' : undefined}
+                                        className={`dash-nav-item${active ? ' is-active' : ''}`} style={navItemStyle(active)} title={collapsed ? item.label : undefined}>
+                                        <Icon size={18} style={{ flexShrink: 0 }} />
+                                        {!collapsed && <span>{item.label}</span>}
+                                    </button>
                                 );
-                            }
-                            const active = item.id === activeView;
-                            return (
-                                <button key={item.label} type="button" onClick={() => go(item.id!)} aria-current={active ? 'page' : undefined}
-                                    style={navItemStyle(active)} title={collapsed ? item.label : undefined}>
-                                    <Icon size={18} style={{ flexShrink: 0 }} />
-                                    {!collapsed && <span>{item.label}</span>}
-                                </button>
-                            );
-                        })}
-                    </div>
+                            })}
+                        </div>
+                    ))}
                 </nav>
 
                 <div style={{ borderTop: '1px solid var(--color-sidebar-border)', padding: collapsed ? '8px 4px' : '8px 0', flexShrink: 0 }}>
+                    <button type="button" onClick={() => go('settings')} style={navItemStyle(activeView === 'settings')} title={collapsed ? 'Site settings' : undefined}>
+                        <Settings size={18} style={{ flexShrink: 0 }} />
+                        {!collapsed && <span>Site settings</span>}
+                    </button>
                     <button type="button" onClick={() => go('team')} style={navItemStyle(activeView === 'team')} title={collapsed ? 'Team' : undefined}>
                         <UsersRound size={18} style={{ flexShrink: 0 }} />
                         {!collapsed && <span>Team</span>}
-                    </button>
-                    <button type="button" onClick={() => go('settings')} style={navItemStyle(activeView === 'settings')} title={collapsed ? 'Settings' : undefined}>
-                        <Settings size={18} style={{ flexShrink: 0 }} />
-                        {!collapsed && <span>Settings</span>}
                     </button>
                     <div style={{
                         display: 'flex', alignItems: 'center', gap: collapsed ? '0' : '8px',

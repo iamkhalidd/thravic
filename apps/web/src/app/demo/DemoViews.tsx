@@ -41,7 +41,7 @@ function OnlineBadge() {
             padding: '2px 10px', borderRadius: 999, border: '1px solid var(--color-border)',
             fontSize: '0.75rem', fontWeight: 500, color: 'var(--color-text-secondary)',
         }}>
-            <span aria-hidden="true" style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--color-success)' }} />
+            <span aria-hidden="true" className="dash-live-dot is-live" style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--color-success)' }} />
             {d.realtime.activeVisitors} online
         </span>
     );
@@ -329,7 +329,7 @@ export function BehaviorPathsView() {
     const noun = app ? 'screen' : 'page';
     return (
         <div className="page-stack">
-            <PageHeader title="User paths" subtitle={`How ${app ? 'users' : 'visitors'} move from one ${noun} to the next.`} />
+            <PageHeader title={app ? 'Screen flow' : 'Page flow'} subtitle={`How ${app ? 'users' : 'visitors'} move from one ${noun} to the next.`} />
             <ChartCard title="Top user flows" subtitle={app ? 'Screen-to-screen moves' : 'Page-to-page moves'}>
                 <BarList items={d.flows.map(f => ({ label: `${f.from} → ${f.to}`, value: f.count }))} labelHeader="From → to" valueHeader="Moves" />
             </ChartCard>
@@ -373,7 +373,7 @@ export function BehaviorDevicesView() {
 export function VersionsView() {
     return (
         <div className="page-stack">
-            <PageHeader title="Versions" subtitle="Which versions of your app people are using." />
+            <PageHeader title="App versions" subtitle="Which versions of your app people are using." />
             <div className="dash-grid-2">
                 <ChartCard title="App versions" subtitle="Sessions">
                     <BarList items={data.app.versions} labelHeader="Version" valueHeader="Sessions" />
@@ -636,7 +636,7 @@ export function SessionsView() {
     const rec = data.recordings.find(r => r.id === selected)!;
     return (
         <div className="page-stack">
-            <PageHeader title="Sessions" subtitle="Replay how visitors move through your site." />
+            <PageHeader title="Session recordings" subtitle="Replay how visitors move through your site." />
             <div className="split-grid" style={{ alignItems: 'start' }}>
                 <ChartCard
                     title={rec.url}
@@ -664,7 +664,7 @@ export function SessionsView() {
                                 <li key={r.id} style={{
                                     borderBottom: '1px solid var(--color-border)',
                                     background: active ? 'var(--color-bg-hover)' : undefined,
-                                    boxShadow: active ? 'inset 2px 0 0 var(--color-accent-primary)' : undefined,
+                                    boxShadow: active ? 'inset 2px 0 0 var(--brand)' : undefined,
                                 }}>
                                     <button type="button" onClick={() => { setSelected(r.id); setPlaying(false); }} aria-current={active ? 'true' : undefined}
                                         style={{
@@ -866,7 +866,7 @@ const STATUS_BADGE: Record<string, string> = { Good: 'badge badge-success', 'Nee
 export function PerformanceView() {
     return (
         <div className="page-stack">
-            <PageHeader title="Performance" subtitle="Core Web Vitals and page load times from 2,520 visitor samples" />
+            <PageHeader title="Page speed" subtitle="Core Web Vitals and page load times from 2,520 visitor samples" />
             <div className="stat-grid">
                 {data.vitals.map(v => {
                     const Icon = (VITAL_ICONS[v.key] || Gauge) as typeof Gauge;
@@ -981,7 +981,7 @@ export function RageClicksView() {
                                 <tr key={r.element}>
                                     <td style={{ paddingLeft: 20, fontFamily: 'var(--font-mono)', fontSize: '0.75rem', whiteSpace: 'nowrap' }}>{r.element}</td>
                                     <td className="muted">{r.path}</td>
-                                    <td className="num" style={{ fontWeight: 500 }}>{r.count}</td>
+                                    <td className="num" style={{ fontWeight: 600, color: 'var(--brand)' }}>{r.count}</td>
                                     <td className="num muted" style={{ paddingRight: 20 }}>{r.avg}</td>
                                 </tr>
                             ))}
@@ -1038,7 +1038,7 @@ export function SettingsView() {
     ];
     return (
         <div className="page-stack">
-            <PageHeader title="Settings" subtitle="demo-site.com" />
+            <PageHeader title="Site settings" subtitle="demo-site.com" />
             <ChartCard title="Tracking" subtitle="What the script collects on this site" flush>
                 <ul style={{ listStyle: 'none', margin: '10px 0 0', padding: 0 }}>
                     {rows.map(r => (

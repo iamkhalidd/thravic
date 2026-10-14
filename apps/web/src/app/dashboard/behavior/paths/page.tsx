@@ -46,7 +46,7 @@ export default function PathsPage() {
 
     return (
         <div className="page-stack">
-            <PageHeader title="User paths" subtitle="How visitors move from one page to the next." />
+            <PageHeader title="Page flow" subtitle="How visitors move from one page to the next." />
 
             {!selectedDomainId && !domainLoading ? (
                 <div className="card"><div className="empty-note">Select a site to see its user paths.</div></div>

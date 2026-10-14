@@ -23,6 +23,7 @@ import { auth, exportData, formatPlanPrice, payments, planPeriod, type ExportTyp
 import { useDomain } from '@/contexts/DomainContext';
 import { PageHeader } from '@/components/PageHeader';
 import { ChartCard } from '@/components/ChartCard';
+import { SitesSettings } from '@/components/SitesSettings';
 
 // Marketing copy for each plan. Names and prices are replaced by the API's
 // (the price checkout actually charges); these values are only the fallback.
@@ -85,7 +86,7 @@ function SettingsPageInner() {
     const router = useRouter();
 
     const [user, setUser] = useState<UserData | null>(null);
-    const [activeTab, setActiveTab] = useState<'account' | 'subscription' | 'notifications' | 'export'>('account');
+    const [activeTab, setActiveTab] = useState<'account' | 'sites' | 'subscription' | 'notifications' | 'export'>('account');
     const [loading, setLoading] = useState(true);
     const [plans, setPlans] = useState(fallbackPlans);
     const [meters, setMeters] = useState<UsageMeterData[] | null>(null);
@@ -189,7 +190,7 @@ function SettingsPageInner() {
 
     useEffect(() => {
         const tab = searchParams.get('tab');
-        if (tab === 'subscription' || tab === 'notifications' || tab === 'export') setActiveTab(tab);
+        if (tab === 'sites' || tab === 'subscription' || tab === 'notifications' || tab === 'export') setActiveTab(tab);
     }, [searchParams]);
 
     useEffect(() => {
@@ -330,6 +331,7 @@ function SettingsPageInner() {
 
     const tabs = [
         { id: 'account', label: 'Account' },
+        { id: 'sites', label: 'Sites' },
         { id: 'subscription', label: 'Plan & usage' },
         { id: 'notifications', label: 'Notifications' },
         { id: 'export', label: 'Export data' },
@@ -355,7 +357,7 @@ function SettingsPageInner() {
 
     return (
         <div className="page-stack">
-            <PageHeader title="Settings" subtitle="Your account, plan, notifications and data exports." />
+            <PageHeader title="Account" subtitle="Your profile, sites, plan, notifications and data exports." />
 
             <div className="segmented" role="tablist" aria-label="Settings sections" style={{ alignSelf: 'flex-start', maxWidth: '100%', overflowX: 'auto' }}>
                 {tabs.map(tab => (
@@ -375,6 +377,8 @@ function SettingsPageInner() {
             </div>
 
             <div id="settings-panel" role="tabpanel" aria-labelledby={`settings-tab-${activeTab}`} className="page-stack">
+
+                {activeTab === 'sites' && <SitesSettings />}
 
                 {/* ── Account Tab ── */}
                 {activeTab === 'account' && (

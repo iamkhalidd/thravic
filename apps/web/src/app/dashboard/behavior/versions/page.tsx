@@ -47,7 +47,7 @@ export default function VersionsPage() {
 
     return (
         <div className="page-stack">
-            <PageHeader title="Versions" subtitle="Which versions of your app people are using." />
+            <PageHeader title="App versions" subtitle="Which versions of your app people are using." />
 
             <div className="dash-grid-2">
                 <ChartCard title="App versions" subtitle="Sessions" loading={busy}>

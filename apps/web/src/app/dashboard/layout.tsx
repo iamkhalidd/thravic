@@ -8,7 +8,10 @@ import {
     LayoutDashboard,
     Globe,
     TrendingUp,
-    Users,
+    Megaphone,
+    FileText,
+    Route,
+    MonitorSmartphone,
     UsersRound,
     Webhook,
     SlidersHorizontal,
@@ -20,7 +23,6 @@ import {
     Settings,
     LogOut,
     ChevronDown,
-    ChevronRight,
     ChevronLeft,
     Calendar,
     RefreshCw,
@@ -51,45 +53,57 @@ import { RouteErrorBoundary } from '@/components/RouteErrorBoundary';
 // Pages that read useApiRange().compare; elsewhere the Compare button would do nothing
 const COMPARE_PAGES = ['/dashboard', '/dashboard/traffic/trends', '/dashboard/traffic/sources', '/dashboard/behavior/pages'];
 
-const navStructure = [
-    { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', exact: true },
-    {
-        label: 'Traffic', icon: Globe,
-        children: [
-            { href: '/dashboard/traffic/sources', label: 'Sources' },
-            { href: '/dashboard/traffic/campaigns', label: 'Campaigns' },
-            { href: '/dashboard/traffic/trends', label: 'Trends' }
-        ]
-    },
-    {
-        label: 'Behavior', icon: Users,
-        children: [
-            { href: '/dashboard/behavior/pages', label: 'Pages', appLabel: 'Screens' },
-            { href: '/dashboard/behavior/paths', label: 'Paths' },
-            { href: '/dashboard/behavior/devices', label: 'Devices' },
-            { href: '/dashboard/behavior/versions', label: 'Versions' }
-        ]
-    },
-    {
-        label: 'Monitoring', icon: Gauge,
-        children: [
-            { href: '/dashboard/errors', label: 'Errors' },
-            { href: '/dashboard/performance', label: 'Performance' },
-            { href: '/dashboard/forms', label: 'Forms' },
-            { href: '/dashboard/rage-clicks', label: 'Rage Clicks' },
-        ]
-    },
-    { href: '/dashboard/funnels', icon: Target, label: 'Funnels' },
-    { href: '/dashboard/heatmaps', icon: MousePointer2, label: 'Heatmaps' },
-    { href: '/dashboard/sessions', icon: Video, label: 'Sessions' },
-    { href: '/dashboard/insights', icon: Sparkles, label: 'AI Insights' },
-    { href: '/dashboard/reports', icon: FileBarChart, label: 'Reports' },
-];
-
 type NavEntry = {
     href?: string; label: string; appLabel?: string; icon?: any; exact?: boolean;
     children?: NavEntry[];
 };
+
+// Sections that are always open, so every page is one click away. The first
+// section has no heading.
+const navStructure: NavEntry[] = [
+    {
+        label: '',
+        children: [
+            { href: '/dashboard', icon: LayoutDashboard, label: 'Overview', exact: true },
+            { href: '/dashboard/insights', icon: Sparkles, label: 'AI insights' },
+            { href: '/dashboard/reports', icon: FileBarChart, label: 'Reports' },
+        ],
+    },
+    {
+        label: 'Traffic',
+        children: [
+            { href: '/dashboard/traffic/sources', icon: Globe, label: 'Sources' },
+            { href: '/dashboard/traffic/campaigns', icon: Megaphone, label: 'Campaigns' },
+            { href: '/dashboard/traffic/trends', icon: TrendingUp, label: 'Trends' },
+        ],
+    },
+    {
+        label: 'Activity',
+        children: [
+            { href: '/dashboard/behavior/pages', icon: FileText, label: 'Pages', appLabel: 'Screens' },
+            { href: '/dashboard/behavior/paths', icon: Route, label: 'Page flow', appLabel: 'Screen flow' },
+            { href: '/dashboard/funnels', icon: Target, label: 'Funnels' },
+            { href: '/dashboard/behavior/devices', icon: MonitorSmartphone, label: 'Devices' },
+            { href: '/dashboard/behavior/versions', icon: Smartphone, label: 'App versions' },
+        ],
+    },
+    {
+        label: 'Recordings',
+        children: [
+            { href: '/dashboard/sessions', icon: Video, label: 'Session recordings' },
+            { href: '/dashboard/heatmaps', icon: MousePointer2, label: 'Heatmaps' },
+            { href: '/dashboard/rage-clicks', icon: MousePointerClick, label: 'Rage clicks' },
+            { href: '/dashboard/forms', icon: FileInput, label: 'Forms' },
+        ],
+    },
+    {
+        label: 'Problems',
+        children: [
+            { href: '/dashboard/errors', icon: AlertTriangle, label: 'Errors' },
+            { href: '/dashboard/performance', icon: Gauge, label: 'Page speed' },
+        ],
+    },
+];
 
 /**
  * The sidebar for one kind of property. An app keeps the same sections, minus the
@@ -115,99 +129,40 @@ function switcherGroups(list: Domain[]): Array<[string | null, Domain[]]> {
     return [['Websites', sites], ['Apps', apps]].filter(([, items]) => items.length > 0) as Array<[string, Domain[]]>;
 }
 interface NavItemProps {
-    item: any;
+    item: NavEntry;
     pathname: string;
-    expandedSections: string[];
-    toggleSection: (label: string) => void;
     collapsed: boolean;
 }
 
-function NavItem({ item, pathname, expandedSections, toggleSection, collapsed }: NavItemProps) {
-    const hasChildren = item.children && item.children.length > 0;
-    const isExpanded = expandedSections.includes(item.label);
-    const isActive = item.href
-        ? (item.exact ? pathname === item.href : pathname.startsWith(item.href))
-        : item.children?.some((child: any) => pathname.startsWith(child.href));
-
+function NavItem({ item, pathname, collapsed }: NavItemProps) {
+    const href = item.href!;
+    const isActive = item.exact ? pathname === href : pathname.startsWith(href);
     const Icon = item.icon;
-
-    const baseItemStyle: React.CSSProperties = {
-        width: '100%',
-        display: 'flex',
-        alignItems: 'center',
-        gap: collapsed ? '0' : '10px',
-        padding: collapsed ? '10px 0' : '8px 12px',
-        justifyContent: collapsed ? 'center' : 'flex-start',
-        background: 'transparent',
-        border: 'none',
-        borderRadius: '6px',
-        color: isActive ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
-        cursor: 'pointer',
-        fontSize: '0.8125rem',
-        fontWeight: isActive ? 500 : 400,
-        textDecoration: 'none',
-        transition: 'all 150ms ease',
-        position: 'relative',
-        textAlign: 'left' as const,
-        whiteSpace: 'nowrap' as const,
-        overflow: 'hidden',
-    };
-
-    if (hasChildren) {
-        return (
-            <div>
-                <button
-                    onClick={() => toggleSection(item.label)}
-                    className={`dash-nav-item${isActive ? ' is-parent-active' : ''}`}
-                    style={baseItemStyle}
-                    title={collapsed ? item.label : undefined}
-                >
-                    <Icon size={18} style={{ flexShrink: 0 }} />
-                    {!collapsed && (
-                        <>
-                            <span style={{ flex: 1 }}>{item.label}</span>
-                            {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                        </>
-                    )}
-                </button>
-                {isExpanded && !collapsed && (
-                    <div style={{ marginLeft: '15px', marginTop: '2px' }}>
-                        {item.children.map((child: any) => {
-                            const childActive = pathname === child.href;
-                            return (
-                                <Link
-                                    key={child.href}
-                                    href={child.href}
-                                    className={`dash-nav-child${childActive ? ' is-active' : ''}`}
-                                    aria-current={childActive ? 'page' : undefined}
-                                    style={{
-                                        display: 'block',
-                                        padding: '6px 12px 6px 28px',
-                                        color: childActive ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
-                                        fontSize: '0.8125rem',
-                                        fontWeight: childActive ? 500 : 400,
-                                        textDecoration: 'none',
-                                        background: 'transparent',
-                                        transition: 'all 150ms ease',
-                                    }}
-                                >
-                                    {child.label}
-                                </Link>
-                            );
-                        })}
-                    </div>
-                )}
-            </div>
-        );
-    }
 
     return (
         <Link
-            href={item.href}
+            href={href}
             className={`dash-nav-item${isActive ? ' is-active' : ''}`}
             aria-current={isActive ? 'page' : undefined}
-            style={baseItemStyle}
             title={collapsed ? item.label : undefined}
+            style={{
+                width: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                gap: collapsed ? '0' : '10px',
+                padding: collapsed ? '8px 0' : '7px 12px',
+                justifyContent: collapsed ? 'center' : 'flex-start',
+                background: 'transparent',
+                borderRadius: '6px',
+                color: isActive ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
+                fontSize: '0.8125rem',
+                fontWeight: isActive ? 500 : 400,
+                textDecoration: 'none',
+                transition: 'all 150ms ease',
+                position: 'relative',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+            }}
         >
             <Icon size={18} style={{ flexShrink: 0 }} />
             {!collapsed && <span>{item.label}</span>}
@@ -222,7 +177,6 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
     const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
     const [user, setUser] = useState<{ name: string; email: string; subscription: string; avatar_url?: string } | null>(null);
     const [domainDropdownOpen, setDomainDropdownOpen] = useState(false);
-    const [expandedSections, setExpandedSections] = useState<string[]>(['Traffic', 'Behavior']);
     const { domains: domainList, selectedDomainId: selectedDomain, setSelectedDomainId: setSelectedDomain, selectedDomain: currentProperty } = useDomain();
     const { toast } = useToast();
     const appSelected = isApp(currentProperty);
@@ -293,12 +247,6 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
     const handleLogout = async () => {
         await auth.logout();
         router.push('/login');
-    };
-
-    const toggleSection = (label: string) => {
-        setExpandedSections(prev =>
-            prev.includes(label) ? prev.filter(s => s !== label) : [...prev, label]
-        );
     };
 
     const currentDomain = domainList.find(d => d.id === selectedDomain);
@@ -437,17 +385,6 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                                             color: 'var(--color-accent-primary)', fontSize: '0.8125rem',
                                         }}
                                     >+ Add website or app</Link>
-                                    {/* Only the owner can delete; the card lives on the Tracking page. */}
-                                    {currentDomain?.isOwner && (
-                                        <Link
-                                            href="/dashboard/tracking#delete-property"
-                                            onClick={() => setDomainDropdownOpen(false)}
-                                            style={{
-                                                display: 'block', padding: '8px 12px',
-                                                color: 'var(--color-error)', fontSize: '0.8125rem',
-                                            }}
-                                        >Delete this {isApp(currentDomain) ? 'app' : 'site'}</Link>
-                                    )}
                                 </div>
                             )}
                         </div>
@@ -459,18 +396,31 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                     flex: 1, overflowY: 'auto', overflowX: 'hidden',
                     padding: (sidebarCollapsed && !isMobile) ? '8px 4px' : '8px 0',
                 }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                        {nav.map(item => (
-                            <NavItem
-                                key={item.label}
-                                item={item}
-                                pathname={pathname}
-                                expandedSections={expandedSections}
-                                toggleSection={toggleSection}
-                                collapsed={sidebarCollapsed && !isMobile}
-                            />
-                        ))}
-                    </div>
+                    {nav.map(section => (
+                        <div
+                            key={section.label || 'main'}
+                            role="group"
+                            aria-label={section.label || undefined}
+                            style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginTop: section.label ? 14 : 0 }}
+                        >
+                            {section.label && ((sidebarCollapsed && !isMobile) ? (
+                                <div aria-hidden="true" style={{ height: 1, margin: '0 8px 4px', background: 'var(--color-sidebar-border)' }} />
+                            ) : (
+                                <div style={{
+                                    padding: '0 12px 4px', fontSize: '0.6875rem', fontWeight: 500,
+                                    textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--color-text-muted)',
+                                }}>{section.label}</div>
+                            ))}
+                            {section.children!.map(item => (
+                                <NavItem
+                                    key={item.href}
+                                    item={item}
+                                    pathname={pathname}
+                                    collapsed={sidebarCollapsed && !isMobile}
+                                />
+                            ))}
+                        </div>
+                    ))}
                 </nav>
 
                 {/* Bottom — Settings + User */}
@@ -479,26 +429,6 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                     padding: (sidebarCollapsed && !isMobile) ? '8px 4px' : '8px 0',
                     flexShrink: 0,
                 }}>
-                    {/* Team link */}
-                    <Link
-                        href="/dashboard/team"
-                        title={(sidebarCollapsed && !isMobile) ? 'Team' : undefined}
-                        style={{
-                            display: 'flex', alignItems: 'center',
-                            gap: (sidebarCollapsed && !isMobile) ? '0' : '10px',
-                            padding: (sidebarCollapsed && !isMobile) ? '10px 0' : '8px 12px',
-                            justifyContent: (sidebarCollapsed && !isMobile) ? 'center' : 'flex-start',
-                            color: pathname.startsWith('/dashboard/team') ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
-                            fontWeight: pathname.startsWith('/dashboard/team') ? 500 : 400,
-                            textDecoration: 'none', fontSize: '0.8125rem',
-                            background: 'transparent',
-                            whiteSpace: 'nowrap', overflow: 'hidden',
-                        }}
-                    >
-                        <UsersRound size={18} style={{ flexShrink: 0 }} />
-                        {!(sidebarCollapsed && !isMobile) && <span>Team</span>}
-                    </Link>
-
                     {/* Webhooks link */}
                     <Link
                         href="/dashboard/webhooks"
@@ -522,7 +452,7 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                     {/* Tracking link */}
                     <Link
                         href="/dashboard/tracking"
-                        title={(sidebarCollapsed && !isMobile) ? 'Tracking' : undefined}
+                        title={(sidebarCollapsed && !isMobile) ? 'Site settings' : undefined}
                         style={{
                             display: 'flex', alignItems: 'center',
                             gap: (sidebarCollapsed && !isMobile) ? '0' : '10px',
@@ -536,13 +466,33 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                         }}
                     >
                         <SlidersHorizontal size={18} style={{ flexShrink: 0 }} />
-                        {!(sidebarCollapsed && !isMobile) && <span>Tracking</span>}
+                        {!(sidebarCollapsed && !isMobile) && <span>Site settings</span>}
+                    </Link>
+
+                    {/* Team link */}
+                    <Link
+                        href="/dashboard/team"
+                        title={(sidebarCollapsed && !isMobile) ? 'Team' : undefined}
+                        style={{
+                            display: 'flex', alignItems: 'center',
+                            gap: (sidebarCollapsed && !isMobile) ? '0' : '10px',
+                            padding: (sidebarCollapsed && !isMobile) ? '10px 0' : '8px 12px',
+                            justifyContent: (sidebarCollapsed && !isMobile) ? 'center' : 'flex-start',
+                            color: pathname.startsWith('/dashboard/team') ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
+                            fontWeight: pathname.startsWith('/dashboard/team') ? 500 : 400,
+                            textDecoration: 'none', fontSize: '0.8125rem',
+                            background: 'transparent',
+                            whiteSpace: 'nowrap', overflow: 'hidden',
+                        }}
+                    >
+                        <UsersRound size={18} style={{ flexShrink: 0 }} />
+                        {!(sidebarCollapsed && !isMobile) && <span>Team</span>}
                     </Link>
 
                     {/* Settings link */}
                     <Link
                         href="/dashboard/settings"
-                        title={(sidebarCollapsed && !isMobile) ? 'Settings' : undefined}
+                        title={(sidebarCollapsed && !isMobile) ? 'Account' : undefined}
                         style={{
                             display: 'flex', alignItems: 'center',
                             gap: (sidebarCollapsed && !isMobile) ? '0' : '10px',
@@ -556,7 +506,7 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                         }}
                     >
                         <Settings size={18} style={{ flexShrink: 0 }} />
-                        {!(sidebarCollapsed && !isMobile) && <span>Settings</span>}
+                        {!(sidebarCollapsed && !isMobile) && <span>Account</span>}
                     </Link>
 
                     {!(sidebarCollapsed && !isMobile) && <UsageWidget />}

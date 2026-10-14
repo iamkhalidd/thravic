@@ -202,7 +202,7 @@ export default function SessionsPage() {
     return (
         <div className="page-stack">
             <PageHeader
-                title="Sessions"
+                title="Session recordings"
                 subtitle="Replay how visitors move through your site."
                 actions={
                     <>
