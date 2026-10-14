@@ -188,7 +188,7 @@ export default function ScreenReplay({ events }: { events: ReplayEvent[] }) {
                 <div style={{
                     height: '100%',
                     width: `${total ? Math.min(100, (current / total) * 100) : 0}%`,
-                    background: 'var(--color-accent-primary)',
+                    background: 'var(--brand)',
                     borderRadius: 'var(--radius-full)',
                 }} />
             </div>

@@ -303,7 +303,7 @@ export default function SessionsPage() {
                                             alignItems: 'center',
                                             borderBottom: '1px solid var(--color-border)',
                                             background: active ? 'var(--color-bg-hover)' : undefined,
-                                            boxShadow: active ? 'inset 2px 0 0 var(--color-accent-primary)' : undefined,
+                                            boxShadow: active ? 'inset 2px 0 0 var(--brand)' : undefined,
                                         }}
                                     >
                                         <button

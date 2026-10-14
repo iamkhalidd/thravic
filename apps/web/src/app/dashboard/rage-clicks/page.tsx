@@ -149,7 +149,7 @@ export default function RageClicksPage() {
                                                 {pathOf(click.url)}
                                             </div>
                                         </td>
-                                        <td className="num" style={{ fontWeight: 500 }}>{Number(click.count).toLocaleString()}</td>
+                                        <td className="num" style={{ fontWeight: 600, color: 'var(--brand)' }}>{Number(click.count).toLocaleString()}</td>
                                         <td className="num muted" style={{ paddingRight: 20 }}>
                                             {click.avg_click_count ?? '—'}
                                         </td>

@@ -158,6 +158,7 @@ function NavItem({ item, pathname, expandedSections, toggleSection, collapsed }:
             <div>
                 <button
                     onClick={() => toggleSection(item.label)}
+                    className={`dash-nav-item${isActive ? ' is-parent-active' : ''}`}
                     style={baseItemStyle}
                     title={collapsed ? item.label : undefined}
                 >
@@ -177,6 +178,8 @@ function NavItem({ item, pathname, expandedSections, toggleSection, collapsed }:
                                 <Link
                                     key={child.href}
                                     href={child.href}
+                                    className={`dash-nav-child${childActive ? ' is-active' : ''}`}
+                                    aria-current={childActive ? 'page' : undefined}
                                     style={{
                                         display: 'block',
                                         padding: '6px 12px 6px 28px',
@@ -199,7 +202,13 @@ function NavItem({ item, pathname, expandedSections, toggleSection, collapsed }:
     }
 
     return (
-        <Link href={item.href} style={baseItemStyle} title={collapsed ? item.label : undefined}>
+        <Link
+            href={item.href}
+            className={`dash-nav-item${isActive ? ' is-active' : ''}`}
+            aria-current={isActive ? 'page' : undefined}
+            style={baseItemStyle}
+            title={collapsed ? item.label : undefined}
+        >
             <Icon size={18} style={{ flexShrink: 0 }} />
             {!collapsed && <span>{item.label}</span>}
         </Link>

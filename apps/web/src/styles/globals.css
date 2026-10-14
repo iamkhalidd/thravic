@@ -27,11 +27,14 @@
      with a label or icon; never colour alone. */
   --color-success: #22c55e;
   --color-warning: #f59e0b;
+  /* Brand orange (the logo's dot): selection, focus and live signals */
+  --brand: #ff5a1f;
+  --brand-soft: rgba(255, 90, 31, 0.14);
   --color-error: #f87171;
 
   /* Charts: validated categorical slots (dark steps), hairline chrome */
   --chart-1: #3987e5;
-  --chart-2: #d95926;
+  --chart-2: #ff5a1f;
   --chart-3: #199e70;
   --chart-grid: rgba(255,255,255,0.06);
   --chart-axis: #737883;
@@ -96,10 +99,12 @@
 
   --color-success: #15803d;
   --color-warning: #b45309;
+  --brand: #f04d12;
+  --brand-soft: rgba(240, 77, 18, 0.12);
   --color-error: #dc2626;
 
   --chart-1: #2a78d6;
-  --chart-2: #eb6834;
+  --chart-2: #f04d12;
   --chart-3: #1baf7a;
   --chart-grid: rgba(0,0,0,0.06);
   --chart-axis: #6b7280;
@@ -280,7 +285,8 @@ a.card:hover {
 
 .input:focus {
   outline: none;
-  border-color: var(--color-accent-primary);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--brand-soft);
 }
 
 .input::placeholder {
@@ -1758,13 +1764,11 @@ a.card:hover {
    Landing: brand colour, hero replay, reveals
    ============================================ */
 :root {
-  --brand: #ff5a1f;
   --lp-block: rgba(255, 255, 255, 0.07);
   --lp-block-strong: rgba(255, 255, 255, 0.13);
 }
 
 [data-theme="light"] {
-  --brand: #f04d12;
   --lp-block: rgba(17, 24, 39, 0.06);
   --lp-block-strong: rgba(17, 24, 39, 0.11);
 }
@@ -2677,4 +2681,61 @@ a.card:hover {
   .lp-replay-progress { width: 45%; }
   .lp-shot:hover,
   .lp-plan:hover { transform: none; }
+}
+
+/* ============================================
+   Dashboard: brand orange, used sparingly
+   ============================================ */
+.dash-sidebar :focus-visible,
+.dash-main :focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+/* The page you're on: an orange bar and icon in the sidebar */
+.dash-nav-item.is-active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 22%;
+  bottom: 22%;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--brand);
+}
+
+.dash-nav-item.is-active > svg {
+  color: var(--brand);
+}
+
+.dash-nav-item.is-parent-active > svg {
+  color: var(--brand);
+}
+
+.dash-nav-child {
+  position: relative;
+}
+
+.dash-nav-child.is-active::before {
+  content: "";
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  margin-top: -2.5px;
+  border-radius: 50%;
+  background: var(--brand);
+}
+
+/* Visitors online right now */
+.dash-live-dot.is-live {
+  --pulse: rgba(34, 197, 94, 0.55);
+  animation: lp-pulse 1.6s ease-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dash-live-dot.is-live {
+    animation: none;
+  }
 }

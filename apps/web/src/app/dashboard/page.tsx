@@ -211,7 +211,7 @@ export default function DashboardPage() {
                         padding: '2px 10px', borderRadius: 999, border: '1px solid var(--color-border)',
                         fontSize: '0.75rem', fontWeight: 500, color: 'var(--color-text-secondary)',
                     }}>
-                        <span aria-hidden="true" style={{
+                        <span aria-hidden="true" className={`dash-live-dot${realtime?.activeVisitors ? ' is-live' : ''}`} style={{
                             width: 6, height: 6, borderRadius: '50%',
                             background: realtime?.activeVisitors ? 'var(--color-success)' : 'var(--color-text-muted)',
                         }} />
