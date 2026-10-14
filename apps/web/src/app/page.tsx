@@ -8,6 +8,9 @@ import { ThemeToggle } from '@/components/ThemeToggle';
 import ShaderBackdrop from '@/components/ShaderBackdrop';
 import { ThemedLogo } from '@/components/ThemedLogo';
 import { formatPlanPrice, payments, planPeriod } from '@/lib/api';
+import HeroReplay from './landing/HeroReplay';
+import Reveal from './landing/Reveal';
+import ScrollEffects from './landing/ScrollEffects';
 
 // Dynamically import Recharts-based views to prevent SSR hydration mismatches
 const OverviewView = dynamic(() => import('./demo/DemoViews').then(mod => mod.OverviewView), { ssr: false });
@@ -217,6 +220,7 @@ export default function HomePage() {
 
     return (
         <div style={s.page}>
+            <ScrollEffects />
             {/* ═══ NAV ═══ */}
             <nav style={s.nav}>
                 <div style={s.navInner}>
@@ -289,9 +293,10 @@ export default function HomePage() {
             {/* ═══ HERO ═══ */}
             <section style={s.hero}>
                 <ShaderBackdrop fade />
-                <div style={s.container}>
+                <div className="lp-hero-glow" aria-hidden="true" />
+                <div className="lp-hero-content" style={s.container}>
                     <h1 style={s.h1}>
-                        See why visitors leave, not just that they did.
+                        See why visitors <span className="lp-accent">leave</span>, not just that they did.
                     </h1>
 
                     <p style={s.heroSub}>
@@ -315,15 +320,9 @@ export default function HomePage() {
                         <li>React Native SDK for apps</li>
                     </ul>
 
-                    {/* Product preview: the real demo dashboard, cropped to its first screen */}
-                    <div className="lp-hero-preview">
-                        <Link href="/demo" className="lp-hero-preview-bar">
-                            <span>Live demo</span>
-                            <span>Sample data<span className="desktop-inline"> · Open the full demo</span> <ArrowRight size={12} /></span>
-                        </Link>
-                        <div className="lp-hero-preview-body">
-                            <OverviewView />
-                        </div>
+                    {/* A replay playing back, a rage click caught, the heatmap behind it */}
+                    <div className="lp-hero-stage">
+                        <HeroReplay />
                     </div>
                 </div>
             </section>
@@ -378,11 +377,24 @@ export default function HomePage() {
             <section id="features" className="lp-section">
                 <div style={s.container}>
                     <div className="lp-section-head">
-                        <h2 style={s.sectionTitle}>What you see once it&apos;s running</h2>
+                        <h2 style={s.sectionTitle}>What you see once it&apos;s <span className="lp-accent">running</span></h2>
                         <p style={s.sectionSub}>
                             Every view below is the real dashboard, filled with sample data.
                         </p>
                     </div>
+
+                    {/* The real demo dashboard, cropped to its first screen */}
+                    <Reveal minHeight={520}>
+                        <div className="lp-hero-preview">
+                            <Link href="/demo" className="lp-hero-preview-bar">
+                                <span><i className="lp-live-dot" aria-hidden="true" />Live demo</span>
+                                <span>Sample data<span className="desktop-inline"> · Open the full demo</span> <ArrowRight size={12} /></span>
+                            </Link>
+                            <div className="lp-hero-preview-body">
+                                <OverviewView />
+                            </div>
+                        </div>
+                    </Reveal>
 
                     <div className="lp-stories">
                         {stories.map((story, i) => (
@@ -395,11 +407,13 @@ export default function HomePage() {
                                     </Link>
                                 </div>
                                 <div className="lp-story-grid-mockup">
-                                    <div className="lp-shot" aria-hidden="true">
-                                        <div className="lp-shot-body">
-                                            <story.View />
+                                    <Reveal minHeight={400}>
+                                        <div className="lp-shot" aria-hidden="true">
+                                            <div className="lp-shot-body">
+                                                <story.View />
+                                            </div>
                                         </div>
-                                    </div>
+                                    </Reveal>
                                 </div>
                             </div>
                         ))}
@@ -489,9 +503,9 @@ export default function HomePage() {
             </section>
 
             {/* ═══ CTA ═══ */}
-            <section className="lp-section">
+            <section className="lp-section lp-cta-final">
                 <div style={{ ...s.container, textAlign: 'center' as const }}>
-                    <h2 style={s.sectionTitle}>Find out where your visitors drop off.</h2>
+                    <h2 style={s.sectionTitle}>Find out where your visitors <span className="lp-accent">drop off</span>.</h2>
                     <p style={{ ...s.sectionSub, marginBottom: '36px' }}>
                         Create a free account and paste the script. Data appears within a few minutes of your next visitor.
                     </p>
