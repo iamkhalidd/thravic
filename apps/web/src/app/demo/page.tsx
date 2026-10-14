@@ -10,7 +10,7 @@ import {
     LayoutDashboard, Globe, Target, MousePointer2, Video, Sparkles, FileBarChart,
     Settings, ChevronDown, ArrowRight, Megaphone, FileText, Route, MonitorSmartphone,
     MousePointerClick, FileInput, AlertTriangle, TrendingUp, Calendar, PanelLeftClose,
-    PanelLeftOpen, Gauge, UsersRound, Menu, RefreshCw, Download, Smartphone, Check,
+    Gauge, UsersRound, Menu, RefreshCw, Download, Smartphone, Check,
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import {
@@ -215,19 +215,32 @@ export default function DemoPage() {
                             <ThemedLogo height={22} />
                         </Link>
                     )}
-                    <button
-                        type="button"
-                        onClick={toggleSidebar}
-                        title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-                        aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-                        style={{
-                            padding: '4px', background: 'transparent', border: 'none', cursor: 'pointer',
-                            color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center',
-                            borderRadius: '4px', flexShrink: 0, marginLeft: collapsed ? '0' : 'auto',
-                        }}
-                    >
-                        {collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
-                    </button>
+                    {collapsed ? (
+                        // The favicon stands in for the wordmark and opens the sidebar again.
+                        <button
+                            type="button"
+                            onClick={toggleSidebar}
+                            title="Expand sidebar"
+                            aria-label="Expand sidebar"
+                            style={{ padding: 0, background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex' }}
+                        >
+                            <img src="/icon" alt="" width={28} height={28} style={{ borderRadius: '6px' }} />
+                        </button>
+                    ) : (
+                        <button
+                            type="button"
+                            onClick={toggleSidebar}
+                            title="Collapse sidebar"
+                            aria-label="Collapse sidebar"
+                            style={{
+                                padding: '4px', background: 'transparent', border: 'none', cursor: 'pointer',
+                                color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center',
+                                borderRadius: '4px', flexShrink: 0, marginLeft: 'auto',
+                            }}
+                        >
+                            <PanelLeftClose size={16} />
+                        </button>
+                    )}
                 </div>
 
                 {!collapsed && (

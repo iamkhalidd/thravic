@@ -279,14 +279,17 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                         </Link>
                     )}
                     {sidebarCollapsed && !isMobile && (
-                        <div style={{
-                            width: '28px', height: '28px', background: 'var(--color-accent-primary)',
-                            borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        }}>
-                            <TrendingUp size={15} color="white" />
-                        </div>
+                        // The favicon (app/icon.tsx) stands in for the wordmark and opens the sidebar again.
+                        <button
+                            onClick={toggleSidebar}
+                            title="Expand sidebar"
+                            aria-label="Expand sidebar"
+                            style={{ padding: 0, background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex' }}
+                        >
+                            <img src="/icon" alt="" width={28} height={28} style={{ borderRadius: '6px' }} />
+                        </button>
                     )}
-                    <button
+                    {(!sidebarCollapsed || isMobile) && <button
                         onClick={toggleSidebar}
                         title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
                         style={{
@@ -303,7 +306,7 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                         }}
                     >
                         {sidebarCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
-                    </button>
+                    </button>}
                 </div>
 
                 {/* Domain Selector */}
