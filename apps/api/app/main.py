@@ -23,6 +23,7 @@ from .db import close_database, init_database
 from .jobs import init_jobs, shutdown_jobs
 from .json_response import js_iso_datetime, jsjson
 from .logging import configure_logging, create_logger
+from .middleware.admin_auth import AdminUser, admin_auth
 from .middleware.cors import ThravicCORSMiddleware
 from .middleware.error_handler import register_exception_handlers
 from .middleware.profile_gate import profile_gate
@@ -207,13 +208,15 @@ app.include_router(tracker_routes.router, tags=["tracker"])
 # Unlike every other email call site, this one sees provider failures (Express's
 # `sendEmail` throws), so it uses the raising variant and answers 500 with the
 # error and stack, exactly as Express did.
+#
+# Admin-only: left open, anyone could make the API send mail from our domain to
+# any address and burn the sender's reputation. Without `?to=` it mails the
+# signed-in admin.
 @app.get("/api/test-email")
-async def test_email(request: Request):
-    to = request.query_params.get("to") or settings.SMTP_USER or ""
+async def test_email(request: Request, admin: AdminUser = Depends(admin_auth)):
+    to = request.query_params.get("to") or admin.email
     if not to:
-        return jsjson(
-            {"error": "No recipient — set ?to=email or SMTP_USER env"}, status_code=400
-        )
+        return jsjson({"error": "No recipient — set ?to=email"}, status_code=400)
 
     now = js_iso_datetime(datetime.now(UTC))
     try:
