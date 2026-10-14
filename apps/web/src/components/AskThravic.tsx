@@ -224,11 +224,12 @@ export function AskThravic({ pathname }: { pathname: string }) {
                 aria-expanded={open}
                 aria-controls="ask-thravic"
                 title="Ask Thravic (Ctrl+K)"
+                className={open ? undefined : 'ask-glow'}
                 style={{
                     display: 'flex', alignItems: 'center', gap: '6px',
                     padding: '5px 10px',
                     background: open ? 'var(--color-bg-hover)' : 'var(--color-bg-primary)',
-                    border: `1px solid ${open ? 'var(--color-accent-primary)' : 'var(--color-border)'}`,
+                    border: `1px solid ${open ? 'var(--color-accent-primary)' : 'var(--brand)'}`,
                     borderRadius: '6px', cursor: 'pointer',
                     fontSize: '0.8125rem', color: 'var(--color-text-primary)',
                     whiteSpace: 'nowrap',
