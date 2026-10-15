@@ -83,7 +83,7 @@ export default function GdprPage() {
                     <p style={s.p}>Thravic processes personal data only where a lawful basis exists, including:</p>
                     <ul style={s.list}>
                         <li style={s.listItem}><strong>Legitimate Interests</strong> &ndash; for analytics, performance monitoring, and service improvement</li>
-                        <li style={s.listItem}><strong>Consent</strong> &ndash; where required (e.g., cookie consent banners implemented by Customers)</li>
+                        <li style={s.listItem}><strong>Consent</strong> &ndash; where required (e.g., consent prompts shown by Customers on their websites)</li>
                         <li style={s.listItem}><strong>Legal Obligations</strong> &ndash; where processing is necessary to comply with applicable laws</li>
                     </ul>
                 </section>
@@ -207,16 +207,16 @@ export default function GdprPage() {
                 {/* 12. Cookies */}
                 <section style={s.section}>
                     <h2 style={s.h2}><Cookie size={24} color="#f59e0b" /> 12. Cookies and Tracking Technologies</h2>
-                    <p style={s.p}>Thravic may use cookies or similar technologies to:</p>
+                    <p style={s.p}>Thravic does not use cookies. The tracker keeps a few small values in the visitor&rsquo;s browser storage instead, such as a random visitor ID and visit ID, to:</p>
                     <ul style={s.list}>
-                        <li style={s.listItem}>Track sessions</li>
-                        <li style={s.listItem}>Measure user interactions</li>
-                        <li style={s.listItem}>Improve analytics accuracy</li>
+                        <li style={s.listItem}>Group page views into visits</li>
+                        <li style={s.listItem}>Avoid counting a returning visitor twice</li>
+                        <li style={s.listItem}>Remember the visitor&rsquo;s consent answer</li>
                     </ul>
+                    <p style={s.p}>These values stay on the visitor&rsquo;s device, are kept separately for each website and cannot be used to follow a visitor across websites. The full list is in our <Link href="/cookies" style={{ color: 'var(--color-accent-primary)', textDecoration: 'underline' }}>Cookie Policy</Link>.</p>
                     <p style={s.p}>Customers are responsible for:</p>
                     <ul style={s.list}>
-                        <li style={s.listItem}>Implementing cookie consent banners</li>
-                        <li style={s.listItem}>Obtaining user consent where required under GDPR and ePrivacy Directive</li>
+                        <li style={s.listItem}>Asking visitors for consent where the laws that apply to them require it, including under GDPR and the ePrivacy Directive</li>
                     </ul>
                 </section>
 

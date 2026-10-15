@@ -174,7 +174,7 @@ export default function PrivacyPage() {
                 <section style={s.section}>
                     <h2 style={s.h2}>8. Types of Personal Data</h2>
                     <ul style={s.list}>
-                        <li style={s.listItem}>Online identifiers (e.g., IP address, cookie identifiers)</li>
+                        <li style={s.listItem}>Online identifiers (e.g., IP address, random visitor IDs kept in browser storage)</li>
                         <li style={s.listItem}>Device information</li>
                         <li style={s.listItem}>Behavioral interaction data</li>
                     </ul>

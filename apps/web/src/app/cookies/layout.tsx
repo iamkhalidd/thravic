@@ -4,7 +4,7 @@ import { pageMetadata } from '@/lib/site';
 export const metadata: Metadata = pageMetadata(
     '/cookies',
     'Cookie Policy',
-    'The cookies and similar technologies Thravic uses, what each one is for and how to control them.',
+    'Thravic uses no cookies. The small values it keeps in browser storage, what each one is for and how to clear them.',
 );
 
 export default function Layout({ children }: { children: React.ReactNode }) {

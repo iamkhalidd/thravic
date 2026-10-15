@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { BarChart3, ArrowLeft, Shield, Lock, Cookie, Eye, Bell, Users, Settings, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Shield, Cookie, HardDrive, Globe, Users, Trash2, Bell } from 'lucide-react';
 
 const s = {
     page: { minHeight: '100vh', background: 'var(--color-bg-primary)', color: 'var(--color-text-primary)', padding: '80px 24px' },
@@ -17,7 +17,7 @@ const s = {
     list: { paddingLeft: '24px', marginBottom: '20px' },
     listItem: { color: 'var(--color-text-secondary)', marginBottom: '12px', lineHeight: 1.7 },
     card: { background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--color-border)', borderRadius: '16px', padding: '32px', marginBottom: '48px' },
-    badge: { display: 'inline-block', padding: '4px 12px', borderRadius: '6px', fontSize: '0.8125rem', fontWeight: 500, marginTop: '8px' },
+    code: { fontFamily: 'var(--font-mono, monospace)', fontSize: '0.875em', color: 'var(--color-text-primary)' },
 };
 
 export default function CookiePolicyPage() {
@@ -42,192 +42,100 @@ export default function CookiePolicyPage() {
                         <Cookie size={24} style={{ color: 'var(--color-bg-primary)' }} />
                     </div>
                     <h1 style={s.h1}>Cookie Policy</h1>
-                    <p style={s.subtitle}>Last Updated: March 17, 2026</p>
+                    <p style={s.subtitle}>Last Updated: October 15, 2026</p>
                 </header>
 
-                {/* 1. Introduction */}
+                {/* Short version */}
+                <div style={s.card}>
+                    <h2 style={{ ...s.h2, marginBottom: '12px' }}><Shield size={24} color="#34B1AA" /> The short version</h2>
+                    <p style={{ ...s.p, marginBottom: 0 }}>
+                        Thravic does not use cookies. Not on thravic.com, not in the dashboard and not in the tracker that runs on our customers&rsquo; websites. We keep a few small values in your browser&rsquo;s own storage instead, and this page lists every one of them.
+                    </p>
+                </div>
+
+                {/* 1. Cookies and browser storage */}
                 <section style={s.section}>
-                    <h2 style={s.h2}><BarChart3 size={24} color="#34B1AA" /> 1. Introduction</h2>
+                    <h2 style={s.h2}><Cookie size={24} color="#f59e0b" /> 1. Cookies and browser storage</h2>
                     <p style={s.p}>
-                        This Cookie Policy explains how Thravic (&ldquo;Thravic,&rdquo; &ldquo;we,&rdquo; &ldquo;our,&rdquo; or &ldquo;us&rdquo;) uses cookies and similar tracking technologies in connection with our website and analytics services (the &ldquo;Services&rdquo;).
+                        Cookies are small files a website saves in your browser. They are sent back to the website with every request, and they are often used to follow people across different sites.
                     </p>
                     <p style={s.p}>
-                        It also explains how website visitors (&ldquo;Users&rdquo;) can control and manage their cookie preferences.
+                        Browser storage (called local storage and session storage) also keeps small values in your browser, but it stays on your device. It is never sent anywhere on its own, and one website cannot read another website&rsquo;s storage. Session storage is cleared when you close the tab.
                     </p>
                     <p style={s.p}>
                         This policy should be read alongside our <Link href="/privacy" style={{ color: 'var(--color-accent-primary)', textDecoration: 'underline' }}>Privacy Policy</Link>.
                     </p>
                 </section>
 
-                {/* 2. What Are Cookies? */}
+                {/* 2. Thravic website and dashboard */}
                 <section style={s.section}>
-                    <h2 style={s.h2}><Cookie size={24} color="#f59e0b" /> 2. What Are Cookies?</h2>
+                    <h2 style={s.h2}><HardDrive size={24} color="var(--color-accent-primary)" /> 2. On thravic.com and the dashboard</h2>
+                    <p style={s.p}>When you use our website or dashboard, we keep these values in your browser:</p>
+                    <ul style={s.list}>
+                        <li style={s.listItem}><strong>Sign-in:</strong> <code style={s.code}>accessToken</code> and <code style={s.code}>refreshToken</code> keep you signed in. They are removed when you sign out.</li>
+                        <li style={s.listItem}><strong>Settings:</strong> <code style={s.code}>theme</code> (light or dark), <code style={s.code}>tf_sidebar_collapsed</code> (sidebar open or closed) and <code style={s.code}>tf_live</code> (Live view settings).</li>
+                        <li style={s.listItem}><strong>Ask Thravic:</strong> your chat with the assistant is kept in session storage for that tab only, so it is gone when you close the tab.</li>
+                        <li style={s.listItem}><strong>Support access:</strong> when our team views an account to help with a problem, a note of this is kept in session storage for that tab.</li>
+                    </ul>
+                    <p style={s.p}>None of these are used for advertising, and none of them follow you to other websites.</p>
+                </section>
+
+                {/* 3. Tracker */}
+                <section style={s.section}>
+                    <h2 style={s.h2}><Users size={24} color="var(--color-accent-primary)" /> 3. On websites that use Thravic</h2>
                     <p style={s.p}>
-                        Cookies are small text files stored on a user&rsquo;s device (computer, tablet, or mobile) when visiting a website.
+                        Our customers add the Thravic tracker to their own websites to count visits. The tracker sets no cookies. It keeps these values in the visitor&rsquo;s browser, on that website only:
                     </p>
-                    <p style={s.p}>Cookies are widely used to:</p>
                     <ul style={s.list}>
-                        <li style={s.listItem}>Enable core website functionality</li>
-                        <li style={s.listItem}>Improve user experience</li>
-                        <li style={s.listItem}>Analyze website traffic and performance</li>
+                        <li style={s.listItem}><strong>Visitor ID</strong> (<code style={s.code}>_tf_vid</code>): a random ID, so a returning visitor is not counted twice. It contains no name, email or other personal detail.</li>
+                        <li style={s.listItem}><strong>Visit ID</strong> (<code style={s.code}>_tf_sid</code>): a random ID for the current visit, so pages viewed in one visit are grouped together.</li>
+                        <li style={s.listItem}><strong>Waiting events</strong> (<code style={s.code}>_tf_queue</code>): events that could not be sent yet, for example while the visitor was offline. They are sent and removed once the connection is back.</li>
+                        <li style={s.listItem}><strong>Consent answers</strong> (<code style={s.code}>_tf_consent</code>, <code style={s.code}>_tf_rec_consent</code>): the visitor&rsquo;s answer when a website asks for permission, so they are not asked again.</li>
+                        <li style={s.listItem}><strong>Session recording</strong> (<code style={s.code}>_tf_rec</code>, <code style={s.code}>_tf_rec_sample</code>): only when the website owner has turned recording on. These remember whether the current visit is being recorded.</li>
                     </ul>
-                    <p style={s.p}>In addition to cookies, we may use similar technologies such as:</p>
-                    <ul style={s.list}>
-                        <li style={s.listItem}>Local storage</li>
-                        <li style={s.listItem}>Session storage</li>
-                        <li style={s.listItem}>Tracking scripts</li>
-                    </ul>
+                    <p style={s.p}>
+                        Because the values are kept per website, the tracker cannot follow a visitor from one website to another. Each website owner decides whether they need to ask visitors for permission under the laws that apply to them, and we give them the tools to do so.
+                    </p>
                 </section>
 
-                {/* 3. How Thravic Uses Cookies */}
+                {/* 4. Other companies */}
                 <section style={s.section}>
-                    <h2 style={s.h2}><Shield size={24} color="#34B1AA" /> 3. How Thravic Uses Cookies</h2>
-                    <p style={s.p}>Thravic uses cookies in a privacy-first and minimal manner, strictly for analytics and service functionality.</p>
-                    <p style={s.p}><strong>We do not use cookies for:</strong></p>
+                    <h2 style={s.h2}><Globe size={24} color="#34B1AA" /> 4. Other companies</h2>
                     <ul style={s.list}>
-                        <li style={s.listItem}>Advertising</li>
-                        <li style={s.listItem}>Behavioral profiling across unrelated websites</li>
-                        <li style={s.listItem}>Selling user data</li>
+                        <li style={s.listItem}><strong>Google Fonts:</strong> our pages load their fonts from Google. Like any web request, this sends your IP address to Google, but Google Fonts sets no cookies.</li>
+                        <li style={s.listItem}><strong>Google and GitHub sign-in:</strong> if you choose to sign in with Google or GitHub, you are sent to their website for a moment. They may set their own cookies on their own website, under their own policies.</li>
+                        <li style={s.listItem}><strong>Paystack:</strong> when you pay for a plan, the payment happens on Paystack. Paystack may set its own cookies on its own website, under its own policy.</li>
                     </ul>
+                    <p style={s.p}>We do not use advertising networks, social media buttons or any other third-party trackers.</p>
                 </section>
 
-                {/* 4. Types of Cookies */}
+                {/* 5. Clearing */}
                 <section style={s.section}>
-                    <h2 style={s.h2}><Settings size={24} color="var(--color-accent-primary)" /> 4. Types of Cookies We Use</h2>
-
-                    <div style={s.card}>
-                        <h3 style={s.h3}>4.1 Strictly Necessary Cookies</h3>
-                        <p style={s.p}>These cookies are essential for the operation of the Services. They enable core functionality such as:</p>
-                        <ul style={s.list}>
-                            <li style={s.listItem}>Secure access to dashboards</li>
-                            <li style={s.listItem}>Session management</li>
-                            <li style={s.listItem}>Fraud prevention and system integrity</li>
-                        </ul>
-                        <span style={{ ...s.badge, background: 'rgba(34,197,94,0.1)', color: '#4ade80' }}>No consent required</span>
-                    </div>
-
-                    <div style={s.card}>
-                        <h3 style={s.h3}>4.2 Analytics Cookies</h3>
-                        <p style={s.p}>These cookies help us and our Customers understand how users interact with websites. They may collect:</p>
-                        <ul style={s.list}>
-                            <li style={s.listItem}>Page visits and session duration</li>
-                            <li style={s.listItem}>Click behavior and navigation flows</li>
-                            <li style={s.listItem}>Traffic sources (e.g., search, social, direct)</li>
-                        </ul>
-                        <p style={s.p}>These cookies are used to improve website performance, identify usability issues, and optimize user experience.</p>
-                        <p style={s.p}><strong>Important:</strong> Data collected is minimized and anonymized where possible. No cross-site tracking is performed.</p>
-                        <span style={{ ...s.badge, background: 'rgba(245,158,11,0.1)', color: '#f59e0b' }}>Consent required where applicable</span>
-                    </div>
-
-                    <div style={s.card}>
-                        <h3 style={s.h3}>4.3 Functional Cookies</h3>
-                        <p style={s.p}>These cookies enhance usability by remembering user preferences such as:</p>
-                        <ul style={s.list}>
-                            <li style={s.listItem}>Language settings</li>
-                            <li style={s.listItem}>UI preferences</li>
-                            <li style={s.listItem}>Consent choices</li>
-                        </ul>
-                        <span style={{ ...s.badge, background: 'rgba(52,177,170,0.1)', color: '#34B1AA' }}>Legitimate interest or consent</span>
-                    </div>
+                    <h2 style={s.h2}><Trash2 size={24} color="#ef4444" /> 5. How to clear it</h2>
+                    <p style={s.p}>
+                        You can remove everything listed here at any time by clearing your browser&rsquo;s site data, usually found under &ldquo;Cookies and site data&rdquo; in your browser settings. Private or incognito windows clear it automatically when closed.
+                    </p>
+                    <p style={s.p}>
+                        If you clear it on thravic.com you will be signed out and your settings will go back to the defaults. If you clear it on a website that uses Thravic, your next visit is simply counted as a new visitor.
+                    </p>
                 </section>
 
-                {/* 5. Third-Party Cookies */}
+                {/* 6. Updates */}
                 <section style={s.section}>
-                    <h2 style={s.h2}>5. Third-Party Cookies</h2>
-                    <p style={s.p}>Thravic does not use third-party cookies for advertising or marketing.</p>
-                    <p style={s.p}>However, limited third-party services (e.g., hosting or infrastructure providers) may support our platform. These providers are:</p>
-                    <ul style={s.list}>
-                        <li style={s.listItem}>Bound by strict data protection agreements</li>
-                        <li style={s.listItem}>Not permitted to use data for their own purposes</li>
-                    </ul>
+                    <h2 style={s.h2}><Bell size={24} color="#f59e0b" /> 6. Changes to this policy</h2>
+                    <p style={s.p}>If we ever change what we keep in your browser, we will update this page and the &ldquo;Last Updated&rdquo; date above.</p>
                 </section>
 
-                {/* 6. Cookie Duration */}
+                {/* 7. Contact */}
                 <section style={s.section}>
-                    <h2 style={s.h2}>6. Cookie Duration</h2>
-                    <p style={s.p}>Cookies may be classified based on how long they remain on a device:</p>
-                    <ul style={s.list}>
-                        <li style={s.listItem}><strong>Session Cookies:</strong> Deleted when the browser is closed</li>
-                        <li style={s.listItem}><strong>Persistent Cookies:</strong> Remain for a defined period or until manually deleted</li>
-                    </ul>
-                    <p style={s.p}>Retention periods are kept as short as necessary.</p>
-                </section>
-
-                {/* 7. Consent and Control */}
-                <section style={s.section}>
-                    <h2 style={s.h2}><Eye size={24} color="var(--color-accent-primary)" /> 7. Consent and Control</h2>
-
-                    <h3 style={s.h3}>7.1 Cookie Consent</h3>
-                    <p style={s.p}>In compliance with GDPR and the ePrivacy Directive:</p>
-                    <ul style={s.list}>
-                        <li style={s.listItem}>Non-essential cookies (e.g., analytics) are only set <strong>after user consent</strong></li>
-                        <li style={s.listItem}>Users are presented with a cookie banner or consent management tool (implemented by Customers)</li>
-                    </ul>
-
-                    <h3 style={s.h3}>7.2 Managing Cookies</h3>
-                    <p style={s.p}>Users can control or disable cookies through:</p>
-                    <ul style={s.list}>
-                        <li style={s.listItem}>Browser settings (e.g., block or delete cookies)</li>
-                        <li style={s.listItem}>Consent banners on websites using Thravic</li>
-                        <li style={s.listItem}>Privacy-focused browser extensions</li>
-                    </ul>
-
-                    <h3 style={s.h3}>7.3 Do Not Track (DNT)</h3>
-                    <p style={s.p}>Thravic respects browser-based &ldquo;Do Not Track&rdquo; (DNT) signals where technically feasible.</p>
-                </section>
-
-                {/* 8. Impact of Disabling Cookies */}
-                <section style={s.section}>
-                    <h2 style={s.h2}><AlertTriangle size={24} color="#ef4444" /> 8. Impact of Disabling Cookies</h2>
-                    <p style={s.p}>If cookies are disabled:</p>
-                    <ul style={s.list}>
-                        <li style={s.listItem}>Some parts of a website may not function properly</li>
-                        <li style={s.listItem}>Analytics data may be limited or unavailable</li>
-                        <li style={s.listItem}>User experience may be affected</li>
-                    </ul>
-                </section>
-
-                {/* 9. Responsibilities of Customers */}
-                <section style={s.section}>
-                    <h2 style={s.h2}><Users size={24} color="var(--color-accent-primary)" /> 9. Responsibilities of Customers</h2>
-                    <p style={s.p}>As Thravic acts as a data processor, Customers (website owners) are responsible for:</p>
-                    <ul style={s.list}>
-                        <li style={s.listItem}>Displaying cookie consent banners</li>
-                        <li style={s.listItem}>Obtaining valid user consent where required</li>
-                        <li style={s.listItem}>Providing clear cookie disclosures in their own privacy policies</li>
-                    </ul>
-                </section>
-
-                {/* 10. Updates */}
-                <section style={s.section}>
-                    <h2 style={s.h2}><Bell size={24} color="#f59e0b" /> 10. Updates to This Cookie Policy</h2>
-                    <p style={s.p}>We may update this Cookie Policy periodically to reflect:</p>
-                    <ul style={s.list}>
-                        <li style={s.listItem}>Changes in legal requirements</li>
-                        <li style={s.listItem}>Updates to our Services</li>
-                        <li style={s.listItem}>Improvements in our data practices</li>
-                    </ul>
-                    <p style={s.p}>Changes will be indicated by updating the &ldquo;Last Updated&rdquo; date.</p>
-                </section>
-
-                {/* 11. Contact */}
-                <section style={s.section}>
-                    <h2 style={s.h2}>11. Contact Information</h2>
-                    <p style={s.p}>For questions about this Cookie Policy or our data practices, contact:</p>
+                    <h2 style={s.h2}>7. Contact</h2>
+                    <p style={s.p}>Questions about this policy? Contact us:</p>
                     <p style={{ ...s.p, fontWeight: 600 }}>Email: thravic247@gmail.com</p>
                 </section>
 
-                {/* 12. Final Statement */}
-                <div style={s.card}>
-                    <h2 style={{ ...s.h2, marginBottom: '12px' }}><Shield size={24} color="#34B1AA" /> 12. Final Statement</h2>
-                    <p style={{ ...s.p, marginBottom: 0 }}>
-                        Thravic is designed with a privacy-first approach, ensuring that analytics insights are delivered responsibly, transparently, and in full respect of user choice and regulatory requirements.
-                    </p>
-                </div>
-
                 <footer style={{ marginTop: '80px', paddingTop: '40px', borderTop: '1px solid var(--color-border)', textAlign: 'center' }}>
                     <p style={{ color: 'var(--color-text-muted)', fontSize: '0.875rem' }}>
-                        Questions about our cookie practices? Contact us at thravic247@gmail.com
+                        Questions about this policy? Contact us at thravic247@gmail.com
                     </p>
                 </footer>
             </div>

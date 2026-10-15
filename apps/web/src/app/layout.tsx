@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import '@/styles/globals.css';
 import { ToastProvider, RouteErrorBoundary } from '@/components';
-import CookieConsentBanner from '@/components/CookieConsentBanner';
 import { ThemeProvider } from '@/components/ThemeProvider';
 import { ALLOW_INDEXING, SITE_DESCRIPTION, SITE_KEYWORDS, SITE_NAME, SITE_URL } from '@/lib/site';
 
@@ -127,7 +126,6 @@ export default function RootLayout({
                             {children}
                         </RouteErrorBoundary>
                     </ToastProvider>
-                    <CookieConsentBanner />
                 </ThemeProvider>
             </body>
         </html>
