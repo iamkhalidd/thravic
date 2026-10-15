@@ -42,12 +42,14 @@ def _sender() -> str:
 
 
 async def _send_via_resend(
-    api_key: str, to: str, subject: str, html_body: str, text: str = ""
+    api_key: str, to: str, subject: str, html_body: str, text: str = "", reply_to: str = ""
 ) -> tuple[bool, str]:
     """Returns `(ok, error_message)`; the message is empty on success."""
     payload: dict[str, Any] = {"from": _sender(), "to": [to], "subject": subject, "html": html_body}
     if text:
         payload["text"] = text
+    if reply_to:
+        payload["reply_to"] = reply_to
     try:
         async with httpx.AsyncClient(timeout=15) as client:
             response = await client.post(
@@ -65,7 +67,9 @@ async def _send_via_resend(
         return False, str(exc)
 
 
-def _send_via_smtp_sync(to: str, subject: str, html_body: str, text: str = "") -> tuple[bool, str]:
+def _send_via_smtp_sync(
+    to: str, subject: str, html_body: str, text: str = "", reply_to: str = ""
+) -> tuple[bool, str]:
     """Returns `(ok, error_message)`; the message is empty on success."""
     settings = get_settings()
     if not (settings.SMTP_HOST and settings.SMTP_USER and settings.SMTP_PASS):
@@ -75,6 +79,8 @@ def _send_via_smtp_sync(to: str, subject: str, html_body: str, text: str = "") -
     message["From"] = _sender()
     message["To"] = to
     message["Subject"] = subject
+    if reply_to:
+        message["Reply-To"] = reply_to
     # Plain text first, HTML as the preferred alternative
     if text:
         message.set_content(text)
@@ -96,16 +102,20 @@ def _send_via_smtp_sync(to: str, subject: str, html_body: str, text: str = "") -
         return False, str(exc)
 
 
-async def send_email(to: str, subject: str, html: str, text: str = "") -> None:
-    """Deliver an email using Resend, then SMTP, then the dev fallback."""
+async def send_email(to: str, subject: str, html: str, text: str = "", reply_to: str = "") -> None:
+    """Deliver an email using Resend, then SMTP, then the dev fallback.
+
+    `reply_to` makes the recipient's Reply button answer that address instead
+    of the no-reply sender.
+    """
     settings = get_settings()
 
     if settings.RESEND_API_KEY:
-        ok, _ = await _send_via_resend(settings.RESEND_API_KEY, to, subject, html, text)
+        ok, _ = await _send_via_resend(settings.RESEND_API_KEY, to, subject, html, text, reply_to)
         if ok:
             return
 
-    ok, _ = await anyio.to_thread.run_sync(_send_via_smtp_sync, to, subject, html, text)
+    ok, _ = await anyio.to_thread.run_sync(_send_via_smtp_sync, to, subject, html, text, reply_to)
     if ok:
         return
 

@@ -16,6 +16,7 @@ const s = {
     label: { fontSize: '0.875rem', fontWeight: 500, color: 'var(--color-text-secondary)' },
     input: { background: 'rgba(255, 255, 255, 0.05)', border: '1px solid var(--color-border)', borderRadius: '8px', padding: '12px 16px', color: 'var(--color-text-primary)', fontSize: '0.9375rem', outline: 'none', transition: 'border-color 0.2s' },
     selectWrapper: { position: 'relative' as const },
+    option: { background: 'var(--color-bg-primary)', color: 'var(--color-text-primary)' },
     select: { width: '100%', appearance: 'none' as const, background: 'rgba(255, 255, 255, 0.05)', border: '1px solid var(--color-border)', borderRadius: '8px', padding: '12px 16px', color: 'var(--color-text-primary)', fontSize: '0.9375rem', outline: 'none', cursor: 'pointer' },
     infoItem: { display: 'flex', gap: '16px', alignItems: 'flex-start' },
     iconBox: { width: '40px', height: '40px', borderRadius: '10px', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
@@ -99,7 +100,7 @@ export default function ContactPage() {
                                 <div style={s.iconBox}><Mail size={18} /></div>
                                 <div>
                                     <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', marginBottom: '4px' }}>General Support</div>
-                                    <div style={{ fontWeight: 500 }}>thravic247@gmail.com</div>
+                                    <div style={{ fontWeight: 500 }}>support@thravic.com</div>
                                 </div>
                             </div>
 
@@ -107,7 +108,7 @@ export default function ContactPage() {
                                 <div style={s.iconBox}><Mail size={18} /></div>
                                 <div>
                                     <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', marginBottom: '4px' }}>Sales & Partnerships</div>
-                                    <div style={{ fontWeight: 500 }}>thravic247@gmail.com</div>
+                                    <div style={{ fontWeight: 500 }}>hello@thravic.com</div>
                                 </div>
                             </div>
 
@@ -148,10 +149,10 @@ export default function ContactPage() {
                                 <label style={s.label}>Inquiry Type</label>
                                 <div style={s.selectWrapper}>
                                     <select style={s.select} value={formState.type} onChange={e => setFormState({...formState, type: e.target.value})}>
-                                        <option>Technical Support</option>
-                                        <option>Sales & Enterprise Pricing</option>
-                                        <option>Business Partnerships</option>
-                                        <option>Other</option>
+                                        <option style={s.option}>Technical Support</option>
+                                        <option style={s.option}>Sales & Enterprise Pricing</option>
+                                        <option style={s.option}>Business Partnerships</option>
+                                        <option style={s.option}>Other</option>
                                     </select>
                                     <ChevronDown size={16} style={{ position: 'absolute', right: '16px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', opacity: 0.5 }} />
                                 </div>

@@ -25,7 +25,7 @@ log = create_logger("Route:Contact")
 
 router = APIRouter()
 
-RECIPIENT = "thravic247@gmail.com"
+RECIPIENT = "info@thravic.com"
 
 # Zod's `.email()` regex is deliberately permissive; this approximates it.
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -136,7 +136,8 @@ async def submit(request: Request):
         log.info(f"New contact form submission from {data['email']} ({data['type']})")
 
         subject, html_body, text_body = contact_form_email(data)
-        await send_email(RECIPIENT, subject, html_body, text_body)
+        # Reply goes straight to the person who wrote in
+        await send_email(RECIPIENT, subject, html_body, text_body, reply_to=data["email"])
 
         return jsjson({"success": True, "message": "Message sent successfully"})
     except PayloadError:

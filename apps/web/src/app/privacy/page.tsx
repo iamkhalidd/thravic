@@ -327,7 +327,7 @@ export default function PrivacyPage() {
                 <section style={s.section}>
                     <h2 style={s.h2}>19. Contact Information</h2>
                     <p style={s.p}>For privacy-related inquiries:</p>
-                    <p style={{ ...s.p, fontWeight: 600 }}>Email: thravic247@gmail.com</p>
+                    <p style={{ ...s.p, fontWeight: 600 }}>Email: info@thravic.com</p>
                 </section>
 
                 <div style={s.card}>
@@ -339,7 +339,7 @@ export default function PrivacyPage() {
 
                 <footer style={{ marginTop: '80px', paddingTop: '40px', borderTop: '1px solid var(--color-border)', textAlign: 'center' }}>
                     <p style={{ color: 'var(--color-text-muted)', fontSize: '0.875rem' }}>
-                        Questions about our privacy practices? Contact us at thravic247@gmail.com
+                        Questions about our privacy practices? Contact us at info@thravic.com
                     </p>
                 </footer>
             </div>

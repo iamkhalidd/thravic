@@ -130,12 +130,12 @@ export default function CookiePolicyPage() {
                 <section style={s.section}>
                     <h2 style={s.h2}>7. Contact</h2>
                     <p style={s.p}>Questions about this policy? Contact us:</p>
-                    <p style={{ ...s.p, fontWeight: 600 }}>Email: thravic247@gmail.com</p>
+                    <p style={{ ...s.p, fontWeight: 600 }}>Email: info@thravic.com</p>
                 </section>
 
                 <footer style={{ marginTop: '80px', paddingTop: '40px', borderTop: '1px solid var(--color-border)', textAlign: 'center' }}>
                     <p style={{ color: 'var(--color-text-muted)', fontSize: '0.875rem' }}>
-                        Questions about this policy? Contact us at thravic247@gmail.com
+                        Questions about this policy? Contact us at info@thravic.com
                     </p>
                 </footer>
             </div>

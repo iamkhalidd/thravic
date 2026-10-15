@@ -225,7 +225,7 @@ export default function GdprPage() {
                     <h2 style={s.h2}>13. Data Protection Officer (DPO)</h2>
                     <p style={s.p}>At this stage, Thravic may not require a formal Data Protection Officer under GDPR Article 37.</p>
                     <p style={s.p}>However, privacy-related inquiries can be directed to:</p>
-                    <p style={{ ...s.p, fontWeight: 600 }}>Email: thravic247@gmail.com</p>
+                    <p style={{ ...s.p, fontWeight: 600 }}>Email: info@thravic.com</p>
                 </section>
 
                 {/* 14. Supervisory Authority */}
@@ -261,7 +261,7 @@ export default function GdprPage() {
 
                 <footer style={{ marginTop: '80px', paddingTop: '40px', borderTop: '1px solid var(--color-border)', textAlign: 'center' }}>
                     <p style={{ color: 'var(--color-text-muted)', fontSize: '0.875rem' }}>
-                        Questions about GDPR compliance? Contact us at thravic247@gmail.com
+                        Questions about GDPR compliance? Contact us at info@thravic.com
                     </p>
                 </footer>
             </div>
