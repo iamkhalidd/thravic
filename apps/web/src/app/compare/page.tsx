@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { pageMetadata } from '@/lib/site';
 import CompareTable from '../landing/CompareTable';
 import { docs } from '../docs/docsStyles';
@@ -19,47 +19,45 @@ export default function ComparePage() {
 
                 <h1 style={docs.h1}>Thravic, Clarity, Hotjar and Google Analytics</h1>
                 <p style={docs.lead}>
-                    All four are good tools. This page sets out what each one does so you can pick the one that fits,
-                    even if that isn&apos;t us.
+                    Clarity, Hotjar and Google Analytics each cover part of the picture. Thravic puts it in one place,
+                    priced for you.
                 </p>
 
                 <CompareTable />
 
                 <div style={{ maxWidth: '760px' }}>
-                    <h2 style={docs.h2}>When another tool is the better fit</h2>
+                    <h2 style={docs.h2}>Why teams pick Thravic</h2>
                     <ul style={{ paddingLeft: 20, margin: 0 }}>
                         <li style={docs.li}>
-                            <strong>Microsoft Clarity</strong> is free, with replays and heatmaps. If cost is the deciding factor
-                            and you&apos;re comfortable with its cookies, it&apos;s a strong choice.
+                            <strong>Instead of Microsoft Clarity:</strong> Clarity is free, but it sets cookies, so in many
+                            places it needs a consent banner before it records anything. Thravic sets no cookies, masks every
+                            form input, and adds traffic sources, UTM campaigns and Core Web Vitals in the same dashboard.
                         </li>
                         <li style={docs.li}>
-                            <strong>Google Analytics 4</strong> is free and goes deep on traffic and advertising, especially
-                            alongside Google Ads. It doesn&apos;t show replays or heatmaps.
+                            <strong>Instead of Google Analytics 4:</strong> GA4 tells you where visitors came from, but not
+                            what they did on the page. It has no replays and no heatmaps, so you need a second tool. Thravic
+                            shows both in one place.
                         </li>
                         <li style={docs.li}>
-                            <strong>Hotjar</strong> adds surveys and feedback widgets to replays and heatmaps, priced in US dollars.
+                            <strong>Instead of Hotjar:</strong> Hotjar is priced in US dollars and needs a card that works
+                            abroad. Thravic is priced in naira through Paystack, and paid plans never auto-renew.
+                        </li>
+                        <li style={docs.li}>
+                            <strong>Only Thravic:</strong> a daily AI summary of what changed, with suggested fixes, and your
+                            React Native and Expo apps in the same dashboard as your website.
                         </li>
                     </ul>
 
-                    <h2 style={docs.h2}>Where Thravic fits</h2>
-                    <ul style={{ paddingLeft: 20, margin: 0 }}>
-                        <li style={docs.li}>
-                            Replays, heatmaps, funnels and traffic analytics (sources, UTM campaigns, pages, errors and
-                            Core Web Vitals) in one dashboard, from one ~6 KB script.
-                        </li>
-                        <li style={docs.li}>
-                            No cookies. Every form input is masked in the browser, Do Not Track and Global Privacy Control are
-                            honored, and consent mode can hold tracking until a visitor opts in.
-                        </li>
-                        <li style={docs.li}>A daily AI read on what changed, ranked by priority, with suggested fixes.</li>
-                        <li style={docs.li}>React Native and Expo apps in the same dashboard as your website.</li>
-                        <li style={docs.li}>Prices in naira through Paystack, with no auto-renewing subscription.</li>
-                    </ul>
-
-                    <p style={{ ...docs.p, marginTop: 56 }}>
-                        <Link href="/demo" style={docs.link}>Open the live demo</Link> to see it with sample data,
-                        or <Link href="/register" style={docs.link}>start free</Link>.
-                    </p>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 20, marginTop: 48 }}>
+                        <Link href="/register" style={{
+                            background: 'var(--color-accent-primary)', color: 'var(--color-bg-primary)',
+                            padding: '12px 28px', borderRadius: '999px', textDecoration: 'none',
+                            fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 8,
+                        }}>
+                            Start free <ArrowRight size={18} />
+                        </Link>
+                        <Link href="/demo" style={docs.link}>Or open the live demo</Link>
+                    </div>
                 </div>
             </div>
         </div>

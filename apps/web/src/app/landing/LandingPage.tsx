@@ -497,7 +497,7 @@ export default function LandingPage({ initialTiers }: { initialTiers: Tier[] | n
                     <div className="lp-section-head">
                         <h2 style={s.sectionTitle}>How it compares</h2>
                         <p style={s.sectionSub}>
-                            Clarity and Google Analytics are free and good at what they do. Thravic puts replays, heatmaps,
+                            Clarity, Hotjar and Google Analytics each cover part of the picture. Thravic puts replays, heatmaps,
                             funnels and traffic in one dashboard, sets no cookies, and bills in naira.
                         </p>
                     </div>
