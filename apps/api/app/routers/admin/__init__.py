@@ -23,10 +23,13 @@ from . import (
     domains,
     events,
     export,
+    growth,
     plans,
     product_updates,
     promos,
     retention,
+    revenue,
+    session,
     settings,
     subscriptions,
     system,
@@ -49,12 +52,18 @@ _SUBROUTERS = (
     (plans, "/plans"),
     (promos, "/promos"),
     (product_updates, "/product-updates"),
+    (revenue, "/revenue"),
+    (growth, "/growth"),
 )
 
 for _module, _prefix in _SUBROUTERS:
     router.include_router(
         _module.router, prefix=_prefix, dependencies=[Depends(admin_auth)]
     )
+
+
+# Sign-in happens before there is an admin token, so it is outside admin_auth.
+router.include_router(session.router, prefix="/auth")
 
 
 @router.get("/me")

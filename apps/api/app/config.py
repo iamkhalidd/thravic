@@ -91,6 +91,13 @@ class Settings(BaseSettings):
     # Where the owner is told about sign-ups, new domains and subscriptions.
     # Empty turns these emails off.
     OWNER_NOTIFY_EMAIL: str = "info@thravic.com"
+    # Shared with the admin panel's server. When set, /api/admin only answers
+    # requests that carry it, so the panel's IP allowlist cannot be bypassed.
+    ADMIN_PROXY_SECRET: str | None = None
+    # The day boundary for "today" and daily charts in the admin panel.
+    REPORT_TIMEZONE: str = "Africa/Lagos"
+    # Error tracking. Leave blank to turn it off.
+    SENTRY_DSN: str | None = None
     GOOGLE_CLIENT_ID: str | None = None
     GOOGLE_CLIENT_SECRET: str | None = None
     GITHUB_CLIENT_ID: str | None = None

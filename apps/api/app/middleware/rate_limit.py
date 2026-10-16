@@ -132,7 +132,20 @@ def default_rules() -> list[RateLimitRule]:
                 "/api/auth/login",
                 "/api/auth/register",
                 "/api/auth/forgot-password",
+                "/api/admin/auth/login",
+                "/api/admin/auth/verify",
             ),
+        ),
+        # Browser crash reports from the web and admin apps — 20 / 15 min per IP,
+        # so a page stuck in an error loop cannot flood the logs.
+        RateLimitRule(
+            name="client_errors",
+            prefix="rl:clienterr:",
+            window_ms=15 * 60 * 1000,
+            max_requests=20,
+            message="Too many error reports.",
+            path_prefix="/api/client-errors",
+            exact_paths=("/api/client-errors",),
         ),
         # 3. Collection — 60 events / min per IP
         RateLimitRule(

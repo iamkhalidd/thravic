@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
-import { Search, ChevronLeft, ChevronRight, Edit, Trash2, Ban, KeyRound, LogIn, Download, Mail } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, Edit, Trash2, Ban, KeyRound, LogIn, Download, Mail, ShieldOff } from 'lucide-react';
+import { useConfirm } from '@/components/ConfirmDialog';
+import { MaskedEmail } from '@/components/MaskedEmail';
 
 interface User {
     id: string;
@@ -56,6 +58,7 @@ export default function UsersPage() {
     const [isSuperAdmin, setIsSuperAdmin] = useState(false);
     const [dateOfBirth, setDateOfBirth] = useState('');
     const [plans, setPlans] = useState<{ id: string; name: string }[]>([]);
+    const [confirmDialog, confirm] = useConfirm();
 
     useEffect(() => {
         api.get('/api/admin/plans').then(data => setPlans(data.plans || [])).catch(console.error);
@@ -140,10 +143,19 @@ export default function UsersPage() {
     // demoted first, so the button is only offered for user and suspended accounts.
     const handleToggleSuspend = async (user: User) => {
         const suspending = user.role !== 'suspended';
-        const prompt = suspending
-            ? `Suspend ${user.email}? They will be signed out within 15 minutes and cannot sign in until reactivated. They will be emailed.`
-            : `Reactivate ${user.email}? They will be able to sign in again and will be emailed.`;
-        if (!confirm(prompt)) return;
+        const ok = await confirm(suspending
+            ? {
+                title: `Suspend ${user.email}?`,
+                body: 'They will be signed out within 15 minutes and cannot sign in until reactivated. Their sites stop sending data. They will be emailed.',
+                confirmLabel: 'Suspend',
+                danger: true,
+            }
+            : {
+                title: `Reactivate ${user.email}?`,
+                body: 'They will be able to sign in again, and will be emailed.',
+                confirmLabel: 'Reactivate',
+            });
+        if (!ok) return;
         try {
             await api.post(`/api/admin/users/${user.id}/suspend`, {});
             loadUsers();
@@ -151,7 +163,20 @@ export default function UsersPage() {
     };
 
     const handleDelete = async (user: User) => {
-        if (!confirm(`Delete user ${user.email} and all their data? This is irreversible.`)) return;
+        const ok = await confirm({
+            title: `Delete ${user.email} for good?`,
+            body: (
+                <>
+                    This erases the account, every domain and every event it collected. Payment records stay for
+                    the accounts, with the person removed from them. It cannot be undone; export the data first if
+                    they asked for a copy.
+                </>
+            ),
+            confirmLabel: 'Delete everything',
+            danger: true,
+            typeToConfirm: user.email,
+        });
+        if (!ok) return;
         try {
             await api.delete(`/api/admin/users/${user.id}`);
             loadUsers();
@@ -200,6 +225,21 @@ export default function UsersPage() {
         }
     };
 
+    // For an admin who lost their phone. They set up a new app at their next sign-in.
+    const handleReset2fa = async (user: User) => {
+        const ok = await confirm({
+            title: `Reset two-step sign-in for ${user.email}?`,
+            body: 'Their authenticator app stops working for this panel. At their next sign-in they set it up again, which needs a code sent to their email.',
+            confirmLabel: 'Reset',
+            danger: true,
+        });
+        if (!ok) return;
+        try {
+            await api.post(`/api/admin/users/${user.id}/reset-2fa`, {});
+            alert('Two-step sign-in was reset.');
+        } catch (err: any) { alert(err.message); }
+    };
+
     const handleImpersonate = async (user: User) => {
         // Checked BEFORE the token is minted: a deployment missing this variable
         // used to open http://localhost:3000 and waste the impersonation token.
@@ -223,6 +263,7 @@ export default function UsersPage() {
 
     return (
         <div>
+            {confirmDialog}
             {/* Search and filters */}
             <div style={{ display: 'flex', gap: 'var(--space-md)', marginBottom: 'var(--space-lg)', alignItems: 'center' }}>
                 <form onSubmit={handleSearch} className="search-bar" style={{ flex: 1 }}>
@@ -270,7 +311,7 @@ export default function UsersPage() {
                             users.map((user) => (
                                 <tr key={user.id}>
                                     <td style={{ color: 'var(--color-text-primary)', fontWeight: 500 }}>{user.name}</td>
-                                    <td>{user.email}</td>
+                                    <td><MaskedEmail email={user.email} /></td>
                                     <td><span className="badge">{user.subscription}</span></td>
                                     <td><span className={`badge badge-${user.role || 'user'}`}>{user.role || 'user'}</span></td>
                                     <td><ProfileCell user={user} /></td>
@@ -307,6 +348,11 @@ export default function UsersPage() {
                                                     <Ban size={14} />
                                                 </button>
                                             ) : null}
+                                            {isSuperAdmin && (user.role === 'admin' || user.role === 'super_admin') && (
+                                                <button className="btn btn-ghost btn-sm" onClick={() => handleReset2fa(user)} title="Reset two-step sign-in" aria-label={`Reset two-step sign-in for ${user.email}`}>
+                                                    <ShieldOff size={14} />
+                                                </button>
+                                            )}
                                             <button className="btn btn-danger btn-sm" onClick={() => handleDelete(user)} title="Delete">
                                                 <Trash2 size={14} />
                                             </button>

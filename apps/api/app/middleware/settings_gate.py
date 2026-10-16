@@ -43,7 +43,7 @@ CallNext = Callable[[Request], Awaitable[Response]]
 
 def is_admin_route(path: str) -> bool:
     """Admin and health routes bypass the maintenance gate so you can turn it off."""
-    return path.startswith("/api/admin") or path == "/health"
+    return path.startswith("/api/admin") or path in ("/health", "/health/deep")
 
 
 class MaintenanceModeMiddleware(BaseHTTPMiddleware):

@@ -23,7 +23,7 @@ from ...logging import create_logger
 from ...middleware import profile_gate
 from ...middleware.admin_auth import AdminUser, admin_auth, super_admin_auth
 from ...security import get_jwt_secret
-from ...services import plan_catalog, plan_service
+from ...services import plan_catalog, plan_service, user_erasure
 from ...services.audit_service import log_action
 from ...services.email_service import (
     send_account_reactivated_email,
@@ -436,6 +436,32 @@ async def reset_password(
         raise SimpleError("Failed to reset password", 500) from None
 
 
+@router.post("/{user_id}/reset-2fa")
+async def reset_two_step(
+    user_id: str, request: Request, admin: AdminUser = Depends(super_admin_auth)
+):
+    """Disconnect an admin's authenticator app (a lost phone). Their next
+    sign-in sets it up again, which needs a code sent to their email."""
+    row = await query_one(
+        """
+        UPDATE users SET totp_secret = NULL, totp_enabled_at = NULL, totp_last_step = NULL
+        WHERE id = $1 RETURNING id, email
+        """,
+        user_id,
+    )
+    if not row:
+        raise SimpleError("User not found", 404)
+    await log_action(
+        admin_id=admin.user_id,
+        action="user.reset_2fa",
+        target_type="user",
+        target_id=user_id,
+        details={"email": row["email"]},
+        ip_address=client_ip(request),
+    )
+    return jsjson({"message": "Two-step sign-in was reset"})
+
+
 @router.delete("/{user_id}")
 async def delete_user(
     user_id: str, request: Request, admin: AdminUser = Depends(super_admin_auth)
@@ -445,15 +471,16 @@ async def delete_user(
         if not user:
             raise SimpleError("User not found", 404)
 
-        # Related rows go with it through the FK constraints.
-        await query("DELETE FROM users WHERE id = $1", user_id)
+        # Sites and their data go with it; see services/user_erasure.py.
+        await user_erasure.erase_user(user_id)
 
+        # Logged after the erase, so this entry keeps only a masked address.
         await log_action(
             admin_id=admin.user_id,
             action="user.delete",
             target_type="user",
             target_id=user_id,
-            details={"email": user["email"]},
+            details={"email": user_erasure.mask_email(user["email"])},
             ip_address=client_ip(request),
         )
 

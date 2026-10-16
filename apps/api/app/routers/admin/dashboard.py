@@ -11,6 +11,7 @@ from ...errors import SimpleError
 from ...js_compat import js_parse_int_or_nan, js_to_locale_string
 from ...json_response import jsjson
 from ...logging import create_logger
+from ...services import revenue_service
 from ...services.plan_service import entitled
 
 log = create_logger("Admin:Dashboard")
@@ -29,8 +30,13 @@ async def stats():
     try:
         users_count = await query_one("SELECT COUNT(*) as count FROM users")
         domains_count = await query_one("SELECT COUNT(*) as count FROM domains")
+        # "Today" starts at midnight in the report time zone (Lagos), not UTC.
         events_today = await query_one(
-            "SELECT COUNT(*) as count FROM events WHERE created_at >= CURRENT_DATE"
+            """
+            SELECT COUNT(*) as count FROM events
+            WHERE created_at >= date_trunc('day', NOW() AT TIME ZONE $1) AT TIME ZONE $1
+            """,
+            revenue_service.report_tz_name(),
         )
         active_subscriptions = await query_one(
             f"""
@@ -45,38 +51,23 @@ async def stats():
             """
         )
 
-        # MRR is read from the plans table so pricing changes apply immediately.
-        mrr_row = await query_one(
-            f"""
-            SELECT COALESCE(SUM(p.price), 0) as total
-            FROM subscriptions s
-            JOIN plans p ON p.id = s.plan
-            WHERE {entitled('s')} AND s.plan != 'free'
-            """
-        )
-
-        plan_distribution = await query(
-            """
-            SELECT subscription as plan, COUNT(*) as count
-            FROM users GROUP BY subscription ORDER BY count DESC
-            """
-        )
+        # What paying accounts actually paid, as a monthly amount; see revenue_service.
+        mrr = await revenue_service.mrr_summary()
+        plan_distribution = await revenue_service.plan_mix()
 
         top_domains = await query(
             """
-            SELECT d.domain, d.name, u.email as owner, COUNT(e.id) as events_count
+            SELECT d.domain, d.name, u.email as owner, COALESCE(SUM(ds.events), 0) as events_count
             FROM domains d
-            LEFT JOIN events e ON e.domain_id = d.id AND e.created_at >= NOW() - INTERVAL '30 days'
+            LEFT JOIN daily_domain_stats ds
+                   ON ds.domain_id = d.id AND ds.day > (NOW() AT TIME ZONE $1)::date - 30
             LEFT JOIN users u ON d.user_id = u.id
             GROUP BY d.id, d.domain, d.name, u.email
             ORDER BY events_count DESC
             LIMIT 10
-            """
+            """,
+            revenue_service.report_tz_name(),
         )
-
-        # `parseFloat(... || '0')`; jsjson normalises an integral float back to an
-        # integer, which is what JS would emit for `45000`.
-        mrr = float((mrr_row or {}).get("total") or "0")
 
         return jsjson(
             {
@@ -85,8 +76,13 @@ async def stats():
                     "totalDomains": _count(domains_count),
                     "eventsToday": _count(events_today),
                     "paidSubscriptions": _count(active_subscriptions),
-                    "mrr": mrr,
+                    "mrr": mrr["mrr"],
+                    "payingAccounts": mrr["paying"],
+                    "graceAccounts": mrr["grace"],
+                    "graceMrr": mrr["graceMrr"],
+                    "complimentaryAccounts": mrr["complimentary"],
                 },
+                "timezone": revenue_service.report_tz_name(),
                 "planDistribution": plan_distribution,
                 "topDomains": top_domains,
                 "recentSignups": recent_signups,
@@ -106,35 +102,32 @@ async def charts(request: Request):
         # a 500, not an empty chart. `js_parse_int` would have quietly used 0.
         days = js_parse_int_or_nan(request.query_params.get("days") or "30")
 
+        tz = revenue_service.report_tz_name()
         signups = await query(
             """
-            SELECT DATE(created_at) as date, COUNT(*) as count
+            SELECT DATE(created_at AT TIME ZONE $2) as date, COUNT(*) as count
             FROM users
             WHERE created_at >= NOW() - INTERVAL '1 day' * $1::int
-            GROUP BY DATE(created_at) ORDER BY date
+            GROUP BY 1 ORDER BY date
             """,
             days,
+            tz,
         )
 
-        events = await query(
+        # Events and sessions come from the daily totals (jobs/daily_stats.py),
+        # already counted per report-zone day, instead of scanning raw events.
+        totals = await query(
             """
-            SELECT DATE(created_at) as date, COUNT(*) as count
-            FROM events
-            WHERE created_at >= NOW() - INTERVAL '1 day' * $1::int
-            GROUP BY DATE(created_at) ORDER BY date
+            SELECT day as date, SUM(events) as events, SUM(sessions) as sessions
+            FROM daily_domain_stats
+            WHERE day > (NOW() AT TIME ZONE $2)::date - $1::int
+            GROUP BY day ORDER BY day
             """,
             days,
+            tz,
         )
-
-        sessions = await query(
-            """
-            SELECT DATE(started_at) as date, COUNT(*) as count
-            FROM sessions
-            WHERE started_at >= NOW() - INTERVAL '1 day' * $1::int
-            GROUP BY DATE(started_at) ORDER BY date
-            """,
-            days,
-        )
+        events = [{"date": r["date"], "count": r["events"]} for r in totals]
+        sessions = [{"date": r["date"], "count": r["sessions"]} for r in totals]
 
         return jsjson({"signups": signups, "events": events, "sessions": sessions})
     except Exception as exc:  # noqa: BLE001

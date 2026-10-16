@@ -1,5 +1,9 @@
 """Admin data export — port of `routes/admin/export.ts` (2 handlers).
 
+`POST /user/:id` is the answer to a data-access request (NDPA / GDPR): the
+person's profile, plan, payments, promo use, team seats, the admin actions
+taken on their account, the emails Thravic sent them, and their sites' data.
+
 Both handlers stamp the payload with `exportDate: new Date().toISOString()`, which
 is volatile, so the parity specs normalise it rather than comparing it.
 
@@ -30,6 +34,10 @@ log = create_logger("Admin:Export")
 router = APIRouter()
 
 CSV_HEADER = "id,type,url,created_at\n"
+
+# Left out of a person's export: they are not "about" the person, and leaking a
+# password hash or 2FA secret in a download is a security problem.
+SECRET_USER_COLUMNS = {"password", "totp_secret", "totp_last_step", "auth_provider_id"}
 
 
 class _CsvResponse(Response):
@@ -73,16 +81,11 @@ async def export_user(
     user_id: str, request: Request, admin: AdminUser = Depends(admin_auth)
 ):
     try:
-        user = await query_one(
-            """
-            SELECT id, name, email, subscription, role, created_at
-            FROM users WHERE id = $1
-            """,
-            user_id,
-        )
-
-        if not user:
+        row = await query_one("SELECT * FROM users WHERE id = $1", user_id)
+        if not row:
             raise SimpleError("User not found", 404)
+        # Everything held about the person except secrets (hashes, keys).
+        user = {k: v for k, v in row.items() if k not in SECRET_USER_COLUMNS}
 
         domains = await query("SELECT * FROM domains WHERE user_id = $1", user_id)
 
@@ -126,6 +129,46 @@ async def export_user(
             "SELECT * FROM subscriptions WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1",
             user_id,
         )
+        payments = await query(
+            """
+            SELECT plan, amount, currency, status, paystack_ref, created_at
+            FROM payment_history WHERE user_id = $1 ORDER BY created_at DESC
+            """,
+            user_id,
+        )
+        promo_uses = await query(
+            """
+            SELECT pc.code, pr.plan, pr.original_amount, pr.discounted_amount, pr.created_at
+            FROM promo_redemptions pr
+            LEFT JOIN promo_codes pc ON pc.id = pr.promo_code_id
+            WHERE pr.user_id = $1 ORDER BY pr.created_at DESC
+            """,
+            user_id,
+        )
+        team_seats = await query(
+            """
+            SELECT d.domain, dm.role, dm.created_at
+            FROM domain_members dm JOIN domains d ON d.id = dm.domain_id
+            WHERE dm.user_id = $1
+            """,
+            user_id,
+        )
+        admin_actions = await query(
+            """
+            SELECT action, details, created_at
+            FROM admin_audit_log
+            WHERE target_type = 'user' AND target_id = $1
+            ORDER BY created_at DESC
+            """,
+            user_id,
+        )
+        emails_sent = await query(
+            """
+            SELECT kind, key, sent_at FROM notification_log
+            WHERE user_id = $1 ORDER BY sent_at DESC
+            """,
+            user_id,
+        )
 
         await log_action(
             admin_id=admin.user_id,
@@ -140,6 +183,11 @@ async def export_user(
                 "exportDate": _iso_millis(),
                 "user": user,
                 "subscription": subscription,
+                "payments": payments,
+                "promoCodesUsed": promo_uses,
+                "teamSeats": team_seats,
+                "adminActionsOnAccount": admin_actions,
+                "emailsSent": emails_sent,
                 "domains": domains,
                 "events": {"count": len(events), "data": events},
                 "sessions": {"count": len(sessions), "data": sessions},

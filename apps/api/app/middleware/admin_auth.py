@@ -6,15 +6,22 @@ blacklist, unlike `authenticate`. Porting that faithfully means a blacklisted
 token is still accepted on admin routes until it expires — that is existing
 behaviour, not a new bug, and it is called out here so nobody "fixes" it by
 accident and diverges from the current API.
+
+Admin routes also need a token from the admin sign-in (password plus an
+authenticator code, see `services/admin_2fa.py`): it carries `adm: true`, which
+a normal web sign-in never does. When `ADMIN_PROXY_SECRET` is set, requests must
+also come through the admin panel's own server, which sends that secret.
 """
 
 from __future__ import annotations
 
+import hmac
 from dataclasses import dataclass
 
 import jwt
 from fastapi import Request
 
+from ..config import get_settings
 from ..db import query_one
 from ..errors import SimpleError
 from ..logging import create_logger
@@ -31,8 +38,23 @@ class AdminUser(AuthUser):
     role: str = "user"
 
 
+def check_proxy_secret(request: Request) -> None:
+    """Refuse admin calls that did not come through the admin panel's server.
+
+    Off unless `ADMIN_PROXY_SECRET` is set. The panel's server enforces the IP
+    allowlist, so this stops anyone going around it to the API directly.
+    """
+    expected = (get_settings().ADMIN_PROXY_SECRET or "").strip()
+    if not expected:
+        return
+    given = request.headers.get("x-admin-proxy-secret") or ""
+    if not hmac.compare_digest(given.encode("utf-8"), expected.encode("utf-8")):
+        raise SimpleError("Admin access required", 403)
+
+
 async def _verify_and_load_role(request: Request) -> tuple[str, str, str]:
     """Verify the token and return `(userId, email, role)`."""
+    check_proxy_secret(request)
     token = bearer_token(request)
     if not token:
         raise SimpleError("No token provided", 401)
@@ -41,6 +63,10 @@ async def _verify_and_load_role(request: Request) -> tuple[str, str, str]:
         payload = jwt.decode(token, get_jwt_secret(), algorithms=["HS256"])
     except Exception:
         raise SimpleError("Invalid or expired token", 401) from None
+
+    # Signed in on the web app, not through the admin two-step sign-in.
+    if payload.get("adm") is not True:
+        raise SimpleError("Admin sign-in required", 401)
 
     user_id = payload.get("userId", "")
     email = payload.get("email", "")

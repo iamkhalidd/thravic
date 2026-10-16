@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
+import { MaskedEmail } from '@/components/MaskedEmail';
 import { Search, ChevronLeft, ChevronRight, Edit, Trash2, ArrowRightLeft, CheckCircle, XCircle, Download } from 'lucide-react';
 
 interface Domain {
@@ -114,7 +115,7 @@ export default function DomainsPage() {
                             domains.map((d) => (
                                 <tr key={d.id}>
                                     <td style={{ color: 'var(--color-text-primary)', fontWeight: 500 }}>{d.domain}</td>
-                                    <td>{d.owner_name}<br /><span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>{d.owner_email}</span></td>
+                                    <td>{d.owner_name}<br /><span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>{d.owner_email ? <MaskedEmail email={d.owner_email} /> : null}</span></td>
                                     <td><code style={{ fontSize: '12px', background: 'var(--color-bg-tertiary)', padding: '2px 6px', borderRadius: '4px' }}>{d.tracking_id}</code></td>
                                     <td>{d.verified ? <CheckCircle size={16} color="var(--color-success)" /> : <XCircle size={16} color="var(--color-text-muted)" />}</td>
                                     <td>{parseInt(d.events_30d).toLocaleString()}</td>

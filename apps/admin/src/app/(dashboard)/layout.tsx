@@ -1,15 +1,15 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
-import { getAccessToken, clearTokens } from '@/lib/api';
+import { usePathname } from 'next/navigation';
+import { useEffect, useRef, useState } from 'react';
+import { api, signOut } from '@/lib/api';
 import { ThemedLogo } from '@/components/ThemedLogo';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import {
     LayoutDashboard, Users, Globe, CreditCard, Activity,
     Server, FileText, Settings, Database, Menu,
-    LogOut, X, Layers, Tag, Mail, type LucideIcon,
+    LogOut, X, Layers, Tag, Mail, Wallet, TrendingUp, type LucideIcon,
 } from 'lucide-react';
 
 interface NavItem {
@@ -23,6 +23,8 @@ const navSections: { label: string; items: NavItem[] }[] = [
     {
         label: '', items: [
             { href: '/', icon: LayoutDashboard, label: 'Overview', description: 'What needs your attention, and how Thravic is growing.' },
+            { href: '/revenue', icon: Wallet, label: 'Revenue', description: 'MRR and what is behind it, money received, and the monthly check against Paystack.' },
+            { href: '/growth', icon: TrendingUp, label: 'Growth', description: 'Where new accounts drop off, who stopped paying, and who is stuck.' },
         ]
     },
     {
@@ -54,20 +56,40 @@ const navSections: { label: string; items: NavItem[] }[] = [
     },
 ];
 
+// Signed out after this long without a click, key press or scroll. The API
+// ends the session on its side too (the refresh token expires after 30 idle minutes).
+const IDLE_MINUTES = 30;
+
+function useIdleSignOut(enabled: boolean) {
+    const lastActive = useRef(Date.now());
+    useEffect(() => {
+        if (!enabled) return;
+        const touch = () => { lastActive.current = Date.now(); };
+        const events = ['mousedown', 'keydown', 'scroll', 'touchstart'] as const;
+        events.forEach(e => window.addEventListener(e, touch, { passive: true }));
+        const timer = window.setInterval(() => {
+            if (Date.now() - lastActive.current > IDLE_MINUTES * 60_000) signOut('idle');
+        }, 30_000);
+        return () => {
+            events.forEach(e => window.removeEventListener(e, touch));
+            window.clearInterval(timer);
+        };
+    }, [enabled]);
+}
+
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
-    const router = useRouter();
     const [mounted, setMounted] = useState(false);
     const [sidebarOpen, setSidebarOpen] = useState(false);
+    const [loadError, setLoadError] = useState('');
 
+    // The session lives in httpOnly cookies the page cannot read, so ask the API.
+    // A 401 sends the browser to /login (see lib/api.ts).
     useEffect(() => {
-        const token = getAccessToken();
-        if (!token) {
-            router.push('/login');
-            return;
-        }
-        setMounted(true);
-    }, [router]);
+        api.get('/api/admin/me').then(() => setMounted(true)).catch((err: Error) => setLoadError(err.message));
+    }, []);
+
+    useIdleSignOut(mounted);
 
     // Close sidebar when route changes (mobile nav)
     useEffect(() => {
@@ -76,8 +98,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
     if (!mounted) {
         return (
-            <div className="loading" style={{ minHeight: '100vh' }}>
-                <div className="spinner" />
+            <div className="loading" style={{ minHeight: '100vh', flexDirection: 'column', gap: 12 }}>
+                {loadError ? (
+                    <>
+                        <p style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>{loadError}</p>
+                        <button className="btn btn-secondary" onClick={() => window.location.reload()}>Try again</button>
+                    </>
+                ) : <div className="spinner" />}
             </div>
         );
     }
@@ -85,10 +112,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     const currentPage = navSections.flatMap(s => s.items).find(item => item.href === pathname);
     const currentSection = navSections.find(s => s.items.includes(currentPage as NavItem))?.label;
 
-    const handleLogout = () => {
-        clearTokens();
-        router.push('/login');
-    };
+    const handleLogout = () => signOut();
 
     return (
         <div className="admin-layout">

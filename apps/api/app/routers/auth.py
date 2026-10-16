@@ -44,7 +44,14 @@ from ..schemas.auth import (
     ResetPasswordSchema,
 )
 from ..security import get_jwt_refresh_secret, get_jwt_secret
-from ..services import domain_service, email_service, plan_service, token_store, user_service
+from ..services import (
+    domain_service,
+    email_service,
+    plan_service,
+    token_store,
+    user_erasure,
+    user_service,
+)
 
 log = create_logger("Auth")
 
@@ -527,7 +534,7 @@ async def delete_me(request: Request, user: AuthUser = Depends(require_auth)):
 
     user_id = str(row["id"])
     try:
-        await query("DELETE FROM users WHERE id = $1", user_id)
+        await user_erasure.erase_user(user_id)
     except Exception as exc:
         log.error(f"Account delete error for {user_id}: {exc}")
         raise SimpleError("Failed to delete account", 500) from None
@@ -539,10 +546,6 @@ async def delete_me(request: Request, user: AuthUser = Depends(require_auth)):
     token = bearer_token(request)
     if token:
         await cache.set(f"bl:{token}", "1", get_settings().access_token_seconds)
-    avatar = row.get("avatar_url") or ""
-    if avatar.startswith("/uploads/avatars/"):
-        (Path.cwd() / avatar.lstrip("/")).unlink(missing_ok=True)
-
     log.info(f"User {user_id} deleted their account")
     return jsjson({"message": "Account deleted"})
 
@@ -557,7 +560,7 @@ async def _refuse_underage(row: dict[str, Any], born: date):
     user_id = str(row["id"])
     if await domain_service.count_by_user(user_id) == 0:
         try:
-            await query("DELETE FROM users WHERE id = $1", user_id)
+            await user_erasure.erase_user(user_id)
             log.info(f"Deleted under-18 account {user_id} with no sites")
             return jsjson(
                 {"error": profile.UNDERAGE_MESSAGE, "restricted": profile.UNDERAGE,

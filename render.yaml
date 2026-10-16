@@ -89,3 +89,12 @@ services:
         value: https://api.deepseek.com
       - key: AI_MODEL
         sync: false
+      # Optional. Same value as ADMIN_PROXY_SECRET on the admin panel (Vercel);
+      # admin routes then only answer calls made through the panel's server.
+      - key: ADMIN_PROXY_SECRET
+        sync: false
+      - key: REPORT_TIMEZONE
+        value: Africa/Lagos
+      # Optional. Sentry DSN for error reports; blank turns them off.
+      - key: SENTRY_DSN
+        sync: false

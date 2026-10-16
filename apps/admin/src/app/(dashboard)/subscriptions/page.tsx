@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
+import { MaskedEmail } from '@/components/MaskedEmail';
 import { Edit } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
@@ -166,7 +167,7 @@ export default function SubscriptionsPage() {
                             <tr><td colSpan={5} className="loading"><div className="spinner" /></td></tr>
                         ) : subscriptions.map(sub => (
                             <tr key={sub.id}>
-                                <td><span style={{ color: 'var(--color-text-primary)', fontWeight: 500 }}>{sub.user_name}</span><br /><span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>{sub.user_email}</span></td>
+                                <td><span style={{ color: 'var(--color-text-primary)', fontWeight: 500 }}>{sub.user_name}</span><br /><span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>{sub.user_email ? <MaskedEmail email={sub.user_email} /> : null}</span></td>
                                 <td><span className="badge">{sub.plan}</span></td>
                                 <td><span className={`badge badge-${sub.state}`}>{sub.state}</span></td>
                                 <td>

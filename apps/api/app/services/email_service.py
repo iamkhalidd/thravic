@@ -918,6 +918,66 @@ async def send_owner_subscription_alert(
     )
 
 
+async def send_owner_system_alert(
+    subject: str, heading: str, rows: Sequence[tuple[str, str]]
+) -> None:
+    """Anything else the owner must hear about: a big switch flipped, a payment
+    that needs a look, an error in the payment webhook. Never raises."""
+    await _send_owner_alert(subject, heading, [*rows, ("When", _when(datetime.now(UTC)))])
+
+
+# ── Admin sign-in ────────────────────────────────────────────────────────────
+
+
+async def send_admin_setup_code_email(to: str, name: str, code: str) -> None:
+    """The code that proves the admin owns this inbox while setting up the app."""
+    subject = f"{code} is your Thravic admin setup code"
+    await send_email(
+        to,
+        subject,
+        _render(
+            subject=subject,
+            heading="Set up two-step sign-in",
+            preheader="Enter this code in the admin panel. It expires in 5 minutes.",
+            blocks=[
+                _greeting(name),
+                _p("You're connecting an authenticator app to your Thravic admin account. "
+                   "Enter this code in the admin panel, with the code from the app:"),
+                _p(_strong(code), size=24),
+                _p("It expires in 5 minutes. If you didn't just sign in to the admin panel, "
+                   "someone has your password: change it now.", muted=True, size=13),
+            ],
+        ),
+        f"Hi {name or 'there'},\n\nYour Thravic admin setup code is {code}. "
+        "It expires in 5 minutes.\n\nIf you didn't just sign in to the admin panel, "
+        "someone has your password: change it now.",
+    )
+
+
+async def send_admin_2fa_enabled_email(to: str, name: str, ip: str) -> None:
+    subject = "Two-step sign-in is on for your Thravic admin account"
+    await send_email(
+        to,
+        subject,
+        _render(
+            subject=subject,
+            heading="Two-step sign-in is on",
+            preheader="Signing in to the admin panel now needs your authenticator app.",
+            blocks=[
+                _greeting(name),
+                _p("An authenticator app was connected to your Thravic admin account. "
+                   "From now on, signing in to the admin panel needs a code from it."),
+                _details([("When", _when(datetime.now(UTC))), ("IP address", ip)]),
+                _p("If this wasn't you, change your password and ask the owner to reset "
+                   "two-step sign-in on your account.", muted=True, size=13),
+            ],
+        ),
+        f"Hi {name or 'there'},\n\nAn authenticator app was connected to your Thravic "
+        f"admin account (IP {ip}). If this wasn't you, change your password and ask the "
+        "owner to reset two-step sign-in.",
+    )
+
+
 def contact_form_email(data: dict[str, Any]) -> tuple[str, str, str]:
     """`(subject, html, text)` for a contact form submission sent to the team."""
     subject = f"[Contact Form] {data['type']}: {data['subject']}"

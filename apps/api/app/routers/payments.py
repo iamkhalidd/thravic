@@ -34,7 +34,13 @@ from ..logging import create_logger
 from ..middleware.admin_auth import AdminUser, admin_auth
 from ..middleware.auth import AuthUser, require_auth
 from ..middleware.profile_gate import profile_gate
-from ..services import domain_service, plan_catalog, plan_service, recording_service
+from ..services import (
+    domain_service,
+    paystack_service,
+    plan_catalog,
+    plan_service,
+    recording_service,
+)
 from ..services.email_service import (
     send_owner_subscription_alert,
     send_payment_receipt_email,
@@ -528,6 +534,20 @@ async def webhook(request: Request):
 
         if not hmac.compare_digest(digest, signature):
             log.warning("Paystack webhook signature mismatch")
+            # One now and then is a stray request; a run of them after a key
+            # change means real payments are being turned away.
+            _fire_and_forget(
+                paystack_service.alert_owner_once(
+                    "webhook_signature",
+                    "Paystack webhook signature mismatch",
+                    "A Paystack payment message was rejected",
+                    [
+                        ("What happened", "The signature did not match PAYSTACK_WEBHOOK_SECRET."),
+                        ("Event", str(body.get("event") or "unknown")),
+                        ("Check", "The webhook secret on Render matches the Paystack dashboard."),
+                    ],
+                )
+            )
             return jsjson({"error": "Unauthorized"}, status_code=401)
 
         event_name = body.get("event")
@@ -565,6 +585,18 @@ async def webhook(request: Request):
         return jsjson({"received": True})
     except Exception as exc:
         log.error(f"Paystack webhook error: {exc}")
+        _fire_and_forget(
+            paystack_service.alert_owner_once(
+                "webhook_error",
+                "Paystack payment message failed",
+                "A Paystack payment message could not be processed",
+                [
+                    ("Error", str(exc)[:300]),
+                    ("What happens next", "Paystack retries for up to 72 hours, and the hourly "
+                     "payment check applies any payment still pending."),
+                ],
+            )
+        )
         raise SimpleError("Internal error", 500) from None
 
 
@@ -693,6 +725,19 @@ async def _upgrade_subscription(
     if not tier:
         # Paid for a plan that no longer exists: keep the payment visible.
         log.error(f"Payment for unknown plan {plan!r} by user {user_id} (ref {reference})")
+        _fire_and_forget(
+            paystack_service.alert_owner_once(
+                f"unknown_plan:{reference}",
+                "Payment for a plan that does not exist",
+                "Someone paid for a plan Thravic cannot find",
+                [
+                    ("Plan", str(plan)),
+                    ("User id", str(user_id)),
+                    ("Paystack reference", str(reference)),
+                    ("Do this", "Grant the right plan from Users, or refund in Paystack."),
+                ],
+            )
+        )
         return
 
     # One transaction: a payment is marked applied only if the plan was granted.

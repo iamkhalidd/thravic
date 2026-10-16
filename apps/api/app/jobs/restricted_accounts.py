@@ -17,6 +17,7 @@ from apscheduler.triggers.cron import CronTrigger
 from ..db import query
 from ..logging import create_logger
 from ..profile import UNDERAGE, UNDERAGE_GRACE_DAYS
+from ..services import user_erasure
 from .runner import run_if_due
 
 log = create_logger("Job")
@@ -39,7 +40,7 @@ async def delete_expired_restrictions() -> dict[str, Any]:
     for row in due:
         try:
             # Cascades to the user's sites and their data.
-            await query("DELETE FROM users WHERE id = $1", row["id"])
+            await user_erasure.erase_user(str(row["id"]))
             deleted += 1
         except Exception as exc:  # noqa: BLE001 — one blocked delete must not stop the rest
             failed += 1

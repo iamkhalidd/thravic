@@ -9,17 +9,19 @@ order to land on the same stack:
 
 from __future__ import annotations
 
+import asyncio
 import time
 import traceback
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
+import sentry_sdk
 from fastapi import Depends, FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 
 from .config import get_settings
-from .db import close_database, init_database
+from .db import close_database, init_database, query_one
 from .jobs import init_jobs, shutdown_jobs
 from .json_response import js_iso_datetime, jsjson
 from .logging import configure_logging, create_logger
@@ -30,12 +32,13 @@ from .middleware.profile_gate import profile_gate
 from .middleware.rate_limit import RateLimitMiddleware
 from .middleware.security_headers import SecurityHeadersMiddleware
 from .middleware.settings_gate import MaintenanceModeMiddleware
-from .redis_client import close_redis, init_redis
+from .redis_client import close_redis, get_client, init_redis
 from .routers import admin as admin_routes
 from .routers import analytics as analytics_routes
 from .routers import announcements as announcement_routes
 from .routers import assistant as assistant_routes
 from .routers import auth as auth_routes
+from .routers import client_errors as client_error_routes
 from .routers import collect as collect_routes
 from .routers import contact as contact_routes
 from .routers import custom_events as custom_event_routes
@@ -61,6 +64,17 @@ log = create_logger("Server")
 settings = get_settings()
 
 _started_at = time.time()
+
+# Error tracking: off unless SENTRY_DSN is set. No request bodies, cookies or
+# user details are sent; the stack trace and route are enough to fix a bug.
+if settings.SENTRY_DSN:
+    sentry_sdk.init(
+        dsn=settings.SENTRY_DSN,
+        environment=settings.NODE_ENV or "development",
+        send_default_pii=False,
+        traces_sample_rate=0,
+        max_request_body_size="never",
+    )
 
 
 @asynccontextmanager
@@ -132,6 +146,39 @@ async def health():
     )
 
 
+@app.get("/health/deep")
+async def health_deep():
+    """For the uptime monitor: 200 only when the database answers.
+
+    /health says the process is up; this says it can do its job. Redis is
+    reported but optional, so it never turns this red on its own.
+    """
+    checks: dict[str, str] = {}
+    healthy = True
+    try:
+        await asyncio.wait_for(query_one("SELECT 1 AS ok"), timeout=5)
+        checks["database"] = "ok"
+    except Exception as exc:  # noqa: BLE001
+        log.error(f"Deep health: database check failed: {exc}")
+        checks["database"] = "down"
+        healthy = False
+
+    client = get_client()
+    if client is None:
+        checks["redis"] = "not configured"
+    else:
+        try:
+            await asyncio.wait_for(client.ping(), timeout=2)
+            checks["redis"] = "ok"
+        except Exception:  # noqa: BLE001
+            checks["redis"] = "down"
+
+    return jsjson(
+        {"status": "ok" if healthy else "down", "checks": checks, "timestamp": datetime.now(UTC)},
+        status_code=200 if healthy else 503,
+    )
+
+
 # ── Static uploads ───────────────────────────────────────────────────────────
 # Express serves `process.cwd()/uploads`; the directory is created on boot so the
 # mount never fails on a fresh checkout.
@@ -172,6 +219,9 @@ app.include_router(
     announcement_routes.router, prefix="/api/announcements", tags=["announcements"]
 )
 app.include_router(contact_routes.router, prefix="/api/contact", tags=["contact"])
+app.include_router(
+    client_error_routes.router, prefix="/api/client-errors", tags=["client-errors"]
+)
 app.include_router(
     domain_routes.router, prefix="/api/domains", tags=["domains"],
     dependencies=PROFILE_REQUIRED,

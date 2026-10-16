@@ -8,6 +8,7 @@ import {
     ResponsiveContainer, CartesianGrid,
 } from 'recharts';
 import { api } from '@/lib/api';
+import { MaskedEmail } from '@/components/MaskedEmail';
 
 interface DashboardStats {
     stats: {
@@ -16,7 +17,12 @@ interface DashboardStats {
         eventsToday: number;
         paidSubscriptions: number;
         mrr: number;
+        payingAccounts: number;
+        graceAccounts: number;
+        graceMrr: number;
+        complimentaryAccounts: number;
     };
+    timezone: string;
     planDistribution: { plan: string; count: string }[];
     topDomains: { domain: string; owner: string; events_count: string }[];
     recentSignups: { id: string; name: string; email: string; subscription: string; created_at: string }[];
@@ -123,10 +129,17 @@ export default function AdminOverview() {
     const tiles = [
         { label: 'Users', value: s.totalUsers.toLocaleString(), hint: `${signupsTotal.toLocaleString()} joined in 30 days` },
         { label: 'Paid subscriptions', value: s.paidSubscriptions.toLocaleString(), hint: `${paidShare}% of users` },
-        { label: 'Monthly revenue', value: `₦${s.mrr.toLocaleString()}`, hint: 'From active paid plans' },
+        {
+            label: 'Monthly revenue',
+            value: `₦${Math.round(s.mrr).toLocaleString()}`,
+            hint: `${s.payingAccounts} paying · ${s.graceAccounts} at risk · ${s.complimentaryAccounts} free grants`,
+            title: 'What paying accounts actually paid, after promos, with yearly plans counted as 1/12 a month. '
+                + `At risk: ${s.graceAccounts} in their grace days (₦${Math.round(s.graceMrr).toLocaleString()} a month), not counted. `
+                + 'Free grants: paid plans given by an admin or a 100% promo, not counted.',
+        },
         { label: 'Active domains', value: s.totalDomains.toLocaleString(), hint: 'Sites and apps' },
-        { label: 'Events today', value: s.eventsToday.toLocaleString(), hint: `${eventsTotal.toLocaleString()} in 30 days` },
-    ];
+        { label: 'Events today', value: s.eventsToday.toLocaleString(), hint: `Since midnight, ${stats.timezone.split('/').pop()?.replace('_', ' ')} time` },
+    ] as { label: string; value: string; hint: string; title?: string }[];
 
     return (
         <div className="page-stack">
@@ -153,7 +166,7 @@ export default function AdminOverview() {
 
             <div className="stat-grid">
                 {tiles.map(t => (
-                    <div key={t.label} className="stat-card">
+                    <div key={t.label} className="stat-card" title={t.title}>
                         <span className="stat-label">{t.label}</span>
                         <span className="stat-value">{t.value}</span>
                         <span className="stat-hint">{t.hint}</span>
@@ -166,7 +179,7 @@ export default function AdminOverview() {
                     <div className="card-header">
                         <div>
                             <div className="card-title">Events</div>
-                            <div className="card-subtitle">Last 30 days, all domains</div>
+                            <div className="card-subtitle">{eventsTotal.toLocaleString()} in the last 30 days, all domains</div>
                         </div>
                     </div>
                     <ResponsiveContainer width="100%" height={240}>
@@ -251,7 +264,7 @@ export default function AdminOverview() {
                                 <div key={u.id} className="alert-row" style={{ cursor: 'default' }}>
                                     <div className="alert-text">
                                         <div className="alert-title" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.name}</div>
-                                        <div className="alert-detail" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.email}</div>
+                                        <div className="alert-detail" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}><MaskedEmail email={u.email} /></div>
                                     </div>
                                     <div style={{ textAlign: 'right', flexShrink: 0 }}>
                                         <span className="badge">{u.subscription}</span>
@@ -288,7 +301,7 @@ export default function AdminOverview() {
                                 {stats.topDomains.map(d => (
                                     <tr key={d.domain}>
                                         <td style={{ paddingLeft: 20, fontWeight: 500 }}>{d.domain}</td>
-                                        <td className="muted">{d.owner}</td>
+                                        <td className="muted">{d.owner ? <MaskedEmail email={d.owner} /> : '—'}</td>
                                         <td className="num" style={{ paddingRight: 20 }}>{(Number(d.events_count) || 0).toLocaleString()}</td>
                                     </tr>
                                 ))}

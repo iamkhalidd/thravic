@@ -1,33 +1,7 @@
-// Admin API Helper — Centralized fetch with auth token management
+// Admin API helper. Calls go to this panel's own server (/api/proxy), which adds
+// the admin token from an httpOnly cookie; the page never sees a token.
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-
-// Token management
-let accessToken: string | null = null;
-let refreshToken: string | null = null;
-
-if (typeof window !== 'undefined') {
-    accessToken = localStorage.getItem('admin_token');
-    refreshToken = localStorage.getItem('admin_refresh_token');
-}
-
-export function setTokens(access: string, refresh: string) {
-    accessToken = access;
-    refreshToken = refresh;
-    localStorage.setItem('admin_token', access);
-    localStorage.setItem('admin_refresh_token', refresh);
-}
-
-export function clearTokens() {
-    accessToken = null;
-    refreshToken = null;
-    localStorage.removeItem('admin_token');
-    localStorage.removeItem('admin_refresh_token');
-}
-
-export function getAccessToken() {
-    return accessToken;
-}
+const PROXY = '/api/proxy';
 
 // How long a 429 asks us to wait, if it is short enough to wait out. The API
 // counts signed-in requests per minute, so a brief burst clears in seconds.
@@ -39,79 +13,57 @@ function rateLimitWaitMs(response: Response): number | null {
     return seconds * 1000;
 }
 
-// Main API fetch
-export async function adminFetch<T = any>(
+function goToLogin(reason?: string) {
+    if (typeof window === 'undefined' || window.location.pathname === '/login') return;
+    window.location.href = reason ? `/login?reason=${reason}` : '/login';
+}
+
+// Every call that changes something carries this header; see lib/server/session.ts.
+export const CSRF_HEADERS = { 'x-thravic-admin': '1' };
+
+// Raw response, for downloads. Throws with the API's message on failure.
+export async function adminFetchRaw(
     endpoint: string,
     options: RequestInit = {},
     rateLimitRetried = false
-): Promise<T> {
-    const url = `${API_BASE}${endpoint}`;
-
-    const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-        ...(options.headers as Record<string, string>),
-    };
-
-    if (accessToken) {
-        headers['Authorization'] = `Bearer ${accessToken}`;
-    }
-
-    const response = await fetch(url, {
+): Promise<Response> {
+    const response = await fetch(`${PROXY}${endpoint}`, {
         ...options,
-        headers,
+        credentials: 'same-origin',
+        headers: {
+            'Content-Type': 'application/json',
+            ...CSRF_HEADERS,
+            ...(options.headers as Record<string, string>),
+        },
     });
 
     // Rate limited: wait it out once rather than leaving the page empty
     const waitMs = response.status === 429 && !rateLimitRetried ? rateLimitWaitMs(response) : null;
     if (waitMs !== null) {
         await new Promise(resolve => setTimeout(resolve, waitMs));
-        return adminFetch<T>(endpoint, options, true);
+        return adminFetchRaw(endpoint, options, true);
     }
 
-    // Handle 401 — try refresh
-    if (response.status === 401 && refreshToken) {
-        const refreshed = await tryRefreshToken();
-        if (refreshed) {
-            headers['Authorization'] = `Bearer ${accessToken}`;
-            const retryResponse = await fetch(url, { ...options, headers });
-            if (!retryResponse.ok) {
-                const error = await retryResponse.json().catch(() => ({ error: 'Request failed' }));
-                throw new Error(error.error || 'Request failed');
-            }
-            return retryResponse.json();
-        } else {
-            clearTokens();
-            if (typeof window !== 'undefined') {
-                window.location.href = '/login';
-            }
-            throw new Error('Session expired');
-        }
+    if (response.status === 401) {
+        goToLogin('expired');
+        throw new Error('Your admin session has ended. Sign in again.');
     }
 
     if (!response.ok) {
         const error = await response.json().catch(() => ({ error: 'Request failed' }));
         throw new Error(error.error || `HTTP ${response.status}`);
     }
+    return response;
+}
 
+export async function adminFetch<T = any>(endpoint: string, options: RequestInit = {}): Promise<T> {
+    const response = await adminFetchRaw(endpoint, options);
     return response.json();
 }
 
-async function tryRefreshToken(): Promise<boolean> {
-    try {
-        const res = await fetch(`${API_BASE}/api/auth/refresh`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ refreshToken }),
-        });
-
-        if (!res.ok) return false;
-
-        const data = await res.json();
-        setTokens(data.accessToken, data.refreshToken);
-        return true;
-    } catch {
-        return false;
-    }
+export async function signOut(reason?: string) {
+    await fetch('/api/session/logout', { method: 'POST', headers: CSRF_HEADERS, credentials: 'same-origin' }).catch(() => undefined);
+    window.location.href = reason ? `/login?reason=${reason}` : '/login';
 }
 
 // Convenience methods
