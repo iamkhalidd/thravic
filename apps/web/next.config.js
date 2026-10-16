@@ -1,6 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
     reactStrictMode: true,
+    // Lets a second local dev server run beside the first without sharing .next.
+    distDir: process.env.NEXT_DIST_DIR || '.next',
     // Self-contained server bundle for the Docker image.
     // Vercel ignores this option, so it is safe for both targets.
     output: 'standalone',

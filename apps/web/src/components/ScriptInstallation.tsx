@@ -3,111 +3,25 @@
 import { useState } from 'react';
 import { Copy, Check, Globe, CircleDot, ShoppingBag, Zap, Atom, ClipboardList, Bot } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { buildInstallPrompt, nextScriptTag, parseTrackerTag } from '@/lib/installPrompt';
+import { INSTALL_PLATFORMS, getPlatformInstructions, type InstallPlatform } from '@/lib/installGuides';
 
-type Platform = 'html' | 'wordpress' | 'shopify' | 'webflow' | 'nextjs' | 'ai';
+const PLATFORM_ICONS: Record<InstallPlatform, LucideIcon> = {
+    html: Globe,
+    wordpress: CircleDot,
+    shopify: ShoppingBag,
+    webflow: Zap,
+    nextjs: Atom,
+    ai: Bot,
+};
 
-const PLATFORM_TABS: { id: Platform; label: string; icon: LucideIcon }[] = [
-    { id: 'html', label: 'HTML', icon: Globe },
-    { id: 'wordpress', label: 'WordPress', icon: CircleDot },
-    { id: 'shopify', label: 'Shopify', icon: ShoppingBag },
-    { id: 'webflow', label: 'Webflow', icon: Zap },
-    { id: 'nextjs', label: 'Next.js', icon: Atom },
-    { id: 'ai', label: 'AI agent', icon: Bot },
-];
-
-function getPlatformInstructions(platform: Platform, script: string) {
-    switch (platform) {
-        case 'html':
-            return {
-                snippet: script,
-                steps: [
-                    "Copy the snippet above.",
-                    "Open your website's HTML file (usually index.html).",
-                    "Paste it just before the closing </head> tag.",
-                    "Save and re-deploy your site.",
-                    'Click "Verify Installation" below.',
-                ],
-            };
-        case 'wordpress':
-            return {
-                snippet: script,
-                steps: [
-                    'Copy the snippet above.',
-                    'In your WordPress admin go to Appearance → Theme File Editor.',
-                    'Select header.php from the list on the right.',
-                    'Paste the snippet just before the closing </head> tag.',
-                    'Click Update File.',
-                    'Alternatively, install the "Insert Headers and Footers" plugin and paste the snippet in the Header field.',
-                    'Click "Verify Installation" below.',
-                ],
-            };
-        case 'shopify':
-            return {
-                snippet: script,
-                steps: [
-                    'Copy the snippet above.',
-                    'In your Shopify admin go to Online Store → Themes.',
-                    'Click the "..." menu next to your current theme and choose Edit code.',
-                    'Open Layout → theme.liquid.',
-                    'Paste the snippet just before the closing </head> tag.',
-                    'Click Save.',
-                    'Click "Verify Installation" below.',
-                ],
-            };
-        case 'webflow':
-            return {
-                snippet: script,
-                steps: [
-                    'Copy the snippet above.',
-                    'Open your Webflow project and go to Project Settings.',
-                    'Click the "Custom Code" tab.',
-                    'Paste the snippet in the "Head Code" section.',
-                    'Click Save Changes, then Publish your site.',
-                    'Click "Verify Installation" below.',
-                ],
-            };
-        case 'nextjs': {
-            const tag = parseTrackerTag(script);
-            return {
-                snippet: tag
-                    ? `// app/layout.tsx (App Router)
-import Script from 'next/script';
-
-// inside <body> of the root layout:
-${nextScriptTag(tag)}`
-                    : script,
-                steps: [
-                    'App Router: add the <Script> above inside <body> of app/layout.tsx, once.',
-                    'Pages Router: paste the plain HTML snippet (HTML tab) inside <Head> in pages/_document.tsx instead.',
-                    'Commit and deploy your changes.',
-                    'Click "Verify Installation" below.',
-                ],
-            };
-        }
-        case 'ai': {
-            const tag = parseTrackerTag(script);
-            return {
-                snippet: tag
-                    ? buildInstallPrompt(tag)
-                    : `Add this analytics script to this website, once, inside <head> of the shared layout so it loads on every page. Keep it exactly as written.\n\n${script}`,
-                steps: [
-                    'Copy the prompt above.',
-                    'Paste it into your AI coding agent (Cursor, Claude Code, GitHub Copilot, Windsurf, Lovable, Bolt, v0, …) with your website project open.',
-                    'Review the change it makes — it should touch one shared file (plus your security policy if you have one).',
-                    'Deploy, then click "Verify Installation" below.',
-                ],
-            };
-        }
-    }
-}
+const VERIFY_STEP = 'Click "Verify Installation" below.';
 
 interface ScriptInstallationProps {
     script: string;
 }
 
 export function ScriptInstallation({ script }: ScriptInstallationProps) {
-    const [platform, setPlatform] = useState<Platform>('html');
+    const [platform, setPlatform] = useState<InstallPlatform>('html');
     const [copied, setCopied] = useState(false);
 
     const handleCopyScript = (text: string) => {
@@ -116,7 +30,7 @@ export function ScriptInstallation({ script }: ScriptInstallationProps) {
         setTimeout(() => setCopied(false), 2000);
     };
 
-    const platformInfo = getPlatformInstructions(platform, script);
+    const platformInfo = getPlatformInstructions(platform, script, VERIFY_STEP);
 
     return (
         <div style={{ marginTop: 'var(--space-md)' }}>
@@ -130,7 +44,9 @@ export function ScriptInstallation({ script }: ScriptInstallationProps) {
                 background: 'var(--color-bg-tertiary)',
                 borderRadius: 'var(--radius-md)',
             }}>
-                {PLATFORM_TABS.map(tab => (
+                {INSTALL_PLATFORMS.map(tab => {
+                    const Icon = PLATFORM_ICONS[tab.id];
+                    return (
                     <button
                         key={tab.id}
                         onClick={() => setPlatform(tab.id)}
@@ -148,9 +64,10 @@ export function ScriptInstallation({ script }: ScriptInstallationProps) {
                             whiteSpace: 'nowrap',
                         }}
                     >
-                        <tab.icon size={14} style={{ marginRight: '4px' }} /> {tab.label}
+                        <Icon size={14} style={{ marginRight: '4px' }} /> {tab.label}
                     </button>
-                ))}
+                    );
+                })}
             </div>
 
             {/* Snippet */}

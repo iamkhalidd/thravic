@@ -94,7 +94,7 @@ const structuredData = {
                 'Web performance monitoring',
                 'AI insights',
             ],
-            offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD', description: 'Free plan available' },
+            offers: { '@type': 'Offer', price: '0', priceCurrency: 'NGN', description: 'Free plan available; paid plans billed in naira' },
             publisher: { '@id': `${SITE_URL}/#organization` },
         },
     ],

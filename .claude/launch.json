@@ -36,6 +36,23 @@
         "dev"
       ],
       "port": 3002
+    },
+    {
+      "name": "web-alt",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "apps/web",
+        "run",
+        "dev",
+        "--",
+        "-p",
+        "3006"
+      ],
+      "env": {
+        "NEXT_DIST_DIR": ".next-alt"
+      },
+      "port": 3006
     }
   ]
 }

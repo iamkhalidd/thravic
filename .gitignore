@@ -1,6 +1,7 @@
 node_modules/
 dist/
 .next/
+.next-alt/
 .env
 .env.local
 .env.*.local

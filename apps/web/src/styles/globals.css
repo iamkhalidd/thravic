@@ -1601,6 +1601,291 @@ a.card:hover {
   }
 }
 
+.lp-plan-sub {
+  margin: -10px 0 16px;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.lp-plans-status,
+.lp-plans-note {
+  max-width: 640px;
+  margin: 0 auto;
+  text-align: center;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: var(--color-text-secondary);
+}
+
+.lp-plans-status a {
+  color: var(--color-text-primary);
+}
+
+.lp-plans-note {
+  margin-top: 24px;
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  text-wrap: pretty;
+}
+
+.lp-cta-note {
+  margin: 16px 0 0;
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}
+
+/* Walkthrough video, shown only once a URL is configured */
+.lp-video {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  max-width: 880px;
+  margin: 0 auto 48px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--color-bg-secondary);
+}
+
+.lp-video iframe,
+.lp-video video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+/* Comparison table */
+.lp-compare {
+  max-width: 920px;
+  margin: 0 auto;
+}
+
+.lp-compare-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-card);
+}
+
+.lp-compare-scroll:focus-visible {
+  outline: 2px solid var(--color-text-muted);
+  outline-offset: 2px;
+}
+
+.lp-compare table {
+  width: 100%;
+  min-width: 620px;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.lp-compare th,
+.lp-compare td {
+  padding: 12px 16px;
+  text-align: left;
+  vertical-align: top;
+  border-top: 1px solid var(--color-border);
+  line-height: 1.45;
+}
+
+.lp-compare thead th {
+  border-top: 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.lp-compare tbody th {
+  font-weight: 500;
+  color: var(--color-text-primary);
+}
+
+.lp-compare td {
+  color: var(--color-text-secondary);
+}
+
+/* The Thravic column */
+.lp-compare thead th:nth-child(2),
+.lp-compare td:nth-child(2) {
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+}
+
+.lp-compare-note {
+  margin-top: 12px;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.lp-compare-note a {
+  color: inherit;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* FAQ: native details/summary */
+.lp-faq {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.lp-faq details {
+  border-top: 1px solid var(--color-border);
+}
+
+.lp-faq details:last-child {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.lp-faq summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 0;
+  cursor: pointer;
+  list-style: none;
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--color-text-primary);
+}
+
+.lp-faq summary::-webkit-details-marker {
+  display: none;
+}
+
+.lp-faq summary::after {
+  content: '+';
+  flex-shrink: 0;
+  font-size: 1.25rem;
+  font-weight: 400;
+  color: var(--color-text-muted);
+  transition: transform 0.2s ease;
+}
+
+.lp-faq details[open] summary::after {
+  transform: rotate(45deg);
+}
+
+.lp-faq summary:focus-visible {
+  outline: 2px solid var(--color-text-muted);
+  outline-offset: 2px;
+}
+
+.lp-faq details p {
+  margin: 0 0 20px;
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+  max-width: 62ch;
+}
+
+/* Mobile sticky signup bar */
+.lp-sticky-cta {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .lp-sticky-cta {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 40;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+    background: color-mix(in srgb, var(--color-bg-primary) 88%, transparent);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-top: 1px solid var(--color-border);
+    font-size: 0.8125rem;
+    color: var(--color-text-secondary);
+    transform: translateY(110%);
+    transition: transform 0.25s ease;
+  }
+  .lp-sticky-cta.visible {
+    transform: translateY(0);
+  }
+  .lp-sticky-cta a {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lp-sticky-cta,
+  .lp-faq summary::after {
+    transition: none;
+  }
+}
+
+/* Public docs */
+.docs-guides {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.docs-guides a {
+  display: block;
+  height: 100%;
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-card);
+  text-decoration: none;
+  transition: border-color 0.15s ease;
+}
+
+.docs-guides a:hover {
+  border-color: var(--color-text-muted);
+}
+
+.docs-guides strong {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 0.9375rem;
+  color: var(--color-text-primary);
+}
+
+.docs-guides span {
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+@media (max-width: 560px) {
+  .docs-guides {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* ============================================
    Demo dashboard
    ============================================ */
