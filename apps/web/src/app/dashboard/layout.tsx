@@ -254,7 +254,8 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
     const currentDatePreset = datePresets.find(p => p.value === dateRange);
 
     return (
-        <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--color-bg-primary)' }}>
+        // tf-block: thravic.com's own tracker never records the dashboard.
+        <div className="tf-block" style={{ display: 'flex', minHeight: '100vh', background: 'var(--color-bg-primary)' }}>
 
             {/* ── Sidebar ── */}
             <aside

@@ -2,7 +2,13 @@ import type { Metadata, Viewport } from 'next';
 import '@/styles/globals.css';
 import { ToastProvider, RouteErrorBoundary } from '@/components';
 import { ThemeProvider } from '@/components/ThemeProvider';
+import SiteTracker from '@/components/SiteTracker';
 import { ALLOW_INDEXING, SITE_DESCRIPTION, SITE_KEYWORDS, SITE_NAME, SITE_URL } from '@/lib/site';
+
+// thravic.com's own tracking ID. Only the production deploy loads the script,
+// so local runs and preview deploys never mix test visits into the real data.
+const TRACKING_ID = process.env.NEXT_PUBLIC_THRAVIC_TRACKING_ID || 'TF-E04DA34F';
+const TRACK_THIS_SITE = process.env.VERCEL_ENV === 'production';
 
 const DEFAULT_TITLE = 'Thravic: Session Replays, Heatmaps & Funnel Analytics';
 
@@ -127,6 +133,12 @@ export default function RootLayout({
                         </RouteErrorBoundary>
                     </ToastProvider>
                 </ThemeProvider>
+                {TRACK_THIS_SITE && (
+                    <SiteTracker
+                        trackingId={TRACKING_ID}
+                        apiUrl={process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}
+                    />
+                )}
             </body>
         </html>
     );

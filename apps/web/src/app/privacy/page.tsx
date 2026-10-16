@@ -43,7 +43,7 @@ export default function PrivacyPage() {
                         <BarChart3 size={24} style={{ color: 'var(--color-bg-primary)' }} />
                     </div>
                     <h1 style={s.h1}>Privacy Policy & Data Processing Agreement</h1>
-                    <p style={s.subtitle}>Last Updated: March 17, 2026</p>
+                    <p style={s.subtitle}>Last Updated: October 16, 2026</p>
                 </header>
 
                 {/* 1. Introduction */}
@@ -54,6 +54,11 @@ export default function PrivacyPage() {
                     </p>
                     <p style={s.p}>
                         By using Thravic, Customers (&ldquo;you,&rdquo; &ldquo;Controller&rdquo;) agree to the terms of this Agreement.
+                    </p>
+                    <p style={s.p}>
+                        We use Thravic on our own public pages, such as the home page, pricing, demo and docs, to see how visitors
+                        use them. It sets no cookies, every form input is masked in your browser before anything is sent, and it
+                        honors Do Not Track. It never runs or records inside your signed-in dashboard.
                     </p>
                 </section>
 
