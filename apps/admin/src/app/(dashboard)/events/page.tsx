@@ -14,14 +14,6 @@ interface EventItem {
     created_at: string;
 }
 
-const typeColors: Record<string, string> = {
-    pageview: '#6c5ce7',
-    click: '#00d68f',
-    scroll: '#00bcd4',
-    form: '#ffaa00',
-    custom: '#ff6b6b'
-};
-
 export default function EventsPage() {
     const [events, setEvents] = useState<EventItem[]>([]);
     const [total, setTotal] = useState(0);
@@ -104,13 +96,7 @@ export default function EventsPage() {
                             events.map(event => (
                                 <tr key={event.id}>
                                     <td>
-                                        <span style={{
-                                            display: 'inline-flex', alignItems: 'center', gap: '6px',
-                                            background: `${typeColors[event.type] || '#666'}18`,
-                                            color: typeColors[event.type] || '#666',
-                                            padding: '2px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: 600
-                                        }}>
-                                            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: typeColors[event.type] || '#666' }} />
+                                        <span className="badge">
                                             {event.type}
                                         </span>
                                     </td>

@@ -136,8 +136,8 @@ export default function PromosPage() {
             {message && (
                 <div className="card" style={{
                     marginBottom: 'var(--space-md)', padding: 'var(--space-sm) var(--space-md)',
-                    background: message.type === 'success' ? 'rgba(0,214,143,0.1)' : 'rgba(255,85,85,0.1)',
-                    borderLeft: `3px solid ${message.type === 'success' ? '#00d68f' : '#ff5555'}`,
+                    background: message.type === 'success' ? 'var(--color-success-bg)' : 'var(--color-danger-bg)',
+                    borderLeft: `3px solid ${message.type === 'success' ? 'var(--color-success)' : 'var(--color-danger)'}`,
                 }}>{message.text}</div>
             )}
 
@@ -168,7 +168,7 @@ export default function PromosPage() {
                                                 {promo.code}
                                             </code>
                                             <button className="btn btn-ghost btn-sm" onClick={() => copyCode(promo.code)} title="Copy code">
-                                                {copied === promo.code ? <Check size={12} color="#00d68f" /> : <Copy size={12} />}
+                                                {copied === promo.code ? <Check size={12} color="var(--color-success)" /> : <Copy size={12} />}
                                             </button>
                                         </div>
                                     </td>
@@ -181,7 +181,7 @@ export default function PromosPage() {
                                     <td>
                                         {(!promo.applicable_plans || promo.applicable_plans.length === 0)
                                             ? <span className="badge">All plans</span>
-                                            : promo.applicable_plans.map(p => <span key={p} className={`badge badge-${p}`} style={{ marginRight: '4px' }}>{p}</span>)
+                                            : promo.applicable_plans.map(p => <span key={p} className="badge" style={{ marginRight: '4px' }}>{p}</span>)
                                         }
                                     </td>
                                     <td>
@@ -195,7 +195,7 @@ export default function PromosPage() {
                                     </td>
                                     <td>
                                         <button className="btn btn-ghost btn-sm" onClick={() => toggleActive(promo)}
-                                            style={{ color: promo.active ? '#00d68f' : '#666' }}>
+                                            style={{ color: promo.active ? 'var(--color-success)' : 'var(--color-text-muted)' }}>
                                             {promo.active ? <ToggleRight size={18} /> : <ToggleLeft size={18} />}
                                         </button>
                                     </td>

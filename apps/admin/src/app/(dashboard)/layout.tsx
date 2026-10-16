@@ -4,39 +4,52 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { getAccessToken, clearTokens } from '@/lib/api';
+import { ThemedLogo } from '@/components/ThemedLogo';
+import { ThemeToggle } from '@/components/ThemeToggle';
 import {
     LayoutDashboard, Users, Globe, CreditCard, Activity,
     Server, FileText, Settings, Database, Menu,
-    LogOut, Shield, X, Layers, Tag, Mail
+    LogOut, X, Layers, Tag, Mail, type LucideIcon,
 } from 'lucide-react';
 
-const navItems = [
+interface NavItem {
+    href: string;
+    icon: LucideIcon;
+    label: string;
+    description: string;
+}
+
+const navSections: { label: string; items: NavItem[] }[] = [
     {
-        section: 'Overview', items: [
-            { href: '/', icon: LayoutDashboard, label: 'Dashboard' },
+        label: '', items: [
+            { href: '/', icon: LayoutDashboard, label: 'Overview', description: 'What needs your attention, and how Thravic is growing.' },
         ]
     },
     {
-        section: 'Management', items: [
-            { href: '/users', icon: Users, label: 'Users' },
-            { href: '/domains', icon: Globe, label: 'Domains' },
-            { href: '/subscriptions', icon: CreditCard, label: 'Subscriptions' },
-            { href: '/events', icon: Activity, label: 'Events' },
-            { href: '/product-updates', icon: Mail, label: 'Product Updates' },
+        label: 'Customers', items: [
+            { href: '/users', icon: Users, label: 'Users', description: 'Everyone with an account. Change plans, suspend or reset access.' },
+            { href: '/domains', icon: Globe, label: 'Domains', description: 'Every site and app sending data, with its owner and volume.' },
+            { href: '/subscriptions', icon: CreditCard, label: 'Subscriptions', description: 'Paid plans, renewals and accounts in their grace period.' },
         ]
     },
     {
-        section: 'Billing', items: [
-            { href: '/plans', icon: Layers, label: 'Plans & Pricing' },
-            { href: '/promos', icon: Tag, label: 'Promo Codes' },
+        label: 'Billing', items: [
+            { href: '/plans', icon: Layers, label: 'Plans & pricing', description: 'What each plan costs and what it includes.' },
+            { href: '/promos', icon: Tag, label: 'Promo codes', description: 'Discount codes, their limits and how often they were used.' },
         ]
     },
     {
-        section: 'System', items: [
-            { href: '/system', icon: Server, label: 'System Health' },
-            { href: '/audit', icon: FileText, label: 'Audit Log' },
-            { href: '/settings', icon: Settings, label: 'Settings' },
-            { href: '/retention', icon: Database, label: 'Data Retention' },
+        label: 'Messages', items: [
+            { href: '/product-updates', icon: Mail, label: 'Product updates', description: 'Email news about Thravic to users who opted in.' },
+        ]
+    },
+    {
+        label: 'Platform', items: [
+            { href: '/settings', icon: Settings, label: 'Settings', description: 'Sign-ups, tracking, maintenance, blocking and the site-wide announcement.' },
+            { href: '/retention', icon: Database, label: 'Data retention', description: 'How long each plan keeps its data.' },
+            { href: '/system', icon: Server, label: 'System health', description: 'The API server, database and cache.' },
+            { href: '/audit', icon: FileText, label: 'Audit log', description: 'Every admin action, who did it and when.' },
+            { href: '/events', icon: Activity, label: 'Raw events', description: 'The latest events as they arrive, for debugging.' },
         ]
     },
 ];
@@ -69,9 +82,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         );
     }
 
-    const currentPage = navItems
-        .flatMap(s => s.items)
-        .find(item => item.href === pathname);
+    const currentPage = navSections.flatMap(s => s.items).find(item => item.href === pathname);
+    const currentSection = navSections.find(s => s.items.includes(currentPage as NavItem))?.label;
 
     const handleLogout = () => {
         clearTokens();
@@ -80,43 +92,47 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
     return (
         <div className="admin-layout">
-            {/* Dark overlay — closes sidebar on mobile tap */}
+            {/* Closes the sidebar on a mobile tap outside it */}
             <div
                 className={`admin-overlay${sidebarOpen ? ' active' : ''}`}
                 onClick={() => setSidebarOpen(false)}
             />
 
-            {/* Sidebar */}
             <aside className={`admin-sidebar${sidebarOpen ? ' open' : ''}`}>
                 <div className="sidebar-header">
-                    <Shield size={22} color="var(--color-accent)" />
-                    <span className="sidebar-logo">Thravic</span>
+                    <Link href="/" aria-label="Admin overview" style={{ display: 'inline-flex' }}>
+                        <ThemedLogo height={20} />
+                    </Link>
                     <span className="sidebar-badge">Admin</span>
-                    {/* Close button — mobile only */}
                     <button
-                        className="admin-hamburger"
+                        className="icon-btn admin-hamburger"
                         onClick={() => setSidebarOpen(false)}
                         title="Close menu"
+                        aria-label="Close menu"
                         style={{ marginLeft: 'auto' }}
                     >
-                        <X size={18} />
+                        <X size={16} />
                     </button>
                 </div>
 
                 <nav className="sidebar-nav">
-                    {navItems.map((section) => (
-                        <div key={section.section} className="sidebar-section">
-                            <div className="sidebar-section-title">{section.section}</div>
-                            {section.items.map((item) => (
-                                <Link
-                                    key={item.href}
-                                    href={item.href}
-                                    className={`sidebar-link ${pathname === item.href ? 'active' : ''}`}
-                                >
-                                    <item.icon size={18} />
-                                    {item.label}
-                                </Link>
-                            ))}
+                    {navSections.map((section) => (
+                        <div key={section.label || 'main'} className="sidebar-section" role="group" aria-label={section.label || undefined}>
+                            {section.label && <div className="sidebar-section-title">{section.label}</div>}
+                            {section.items.map((item) => {
+                                const active = pathname === item.href;
+                                return (
+                                    <Link
+                                        key={item.href}
+                                        href={item.href}
+                                        className={`sidebar-link${active ? ' active' : ''}`}
+                                        aria-current={active ? 'page' : undefined}
+                                    >
+                                        <item.icon size={18} />
+                                        {item.label}
+                                    </Link>
+                                );
+                            })}
                         </div>
                     ))}
                 </nav>
@@ -125,28 +141,39 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     <button
                         onClick={handleLogout}
                         className="sidebar-link"
-                        style={{ width: '100%', border: 'none', background: 'none', cursor: 'pointer', fontFamily: 'inherit' }}
+                        style={{ width: '100%', border: 'none', background: 'none', cursor: 'pointer' }}
                     >
                         <LogOut size={18} />
-                        Sign Out
+                        Sign out
                     </button>
                 </div>
             </aside>
 
-            {/* Main content */}
             <main className="admin-main">
-                <div className="admin-topbar">
-                    {/* Hamburger — visible on mobile only */}
+                <header className="admin-topbar">
                     <button
-                        className="admin-hamburger"
+                        className="icon-btn admin-hamburger"
                         onClick={() => setSidebarOpen(true)}
                         title="Open menu"
+                        aria-label="Open menu"
                     >
-                        <Menu size={20} />
+                        <Menu size={16} />
                     </button>
-                    <h1>{currentPage?.label || 'Admin'}</h1>
-                </div>
+                    <div className="topbar-crumb">
+                        {currentSection ? <>{currentSection} / </> : null}
+                        <strong>{currentPage?.label || 'Admin'}</strong>
+                    </div>
+                    <ThemeToggle />
+                </header>
                 <div className="admin-content">
+                    {currentPage && (
+                        <div className="page-header">
+                            <div>
+                                <h1 className="page-title">{currentPage.label}</h1>
+                                <p className="page-subtitle">{currentPage.description}</p>
+                            </div>
+                        </div>
+                    )}
                     {children}
                 </div>
             </main>

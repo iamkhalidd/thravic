@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { setTokens } from '@/lib/api';
-import { Lock, Eye, EyeOff, Shield } from 'lucide-react';
+import { Lock, Eye, EyeOff } from 'lucide-react';
+import { ThemedLogo } from '@/components/ThemedLogo';
 
 export default function AdminLogin() {
     const [email, setEmail] = useState('');
@@ -60,22 +61,6 @@ export default function AdminLogin() {
             position: 'relative',
             overflow: 'hidden'
         }}>
-            {/* Background decoration */}
-            <div style={{
-                position: 'absolute',
-                width: '600px', height: '600px',
-                borderRadius: '50%',
-                background: 'radial-gradient(circle, rgba(108,92,231,0.08) 0%, transparent 70%)',
-                top: '-200px', right: '-200px'
-            }} />
-            <div style={{
-                position: 'absolute',
-                width: '400px', height: '400px',
-                borderRadius: '50%',
-                background: 'radial-gradient(circle, rgba(162,155,254,0.06) 0%, transparent 70%)',
-                bottom: '-100px', left: '-100px'
-            }} />
-
             <form onSubmit={handleLogin} style={{
                 width: '100%',
                 maxWidth: '400px',
@@ -83,32 +68,13 @@ export default function AdminLogin() {
                 position: 'relative',
                 zIndex: 1
             }}>
-                {/* Logo area */}
-                <div style={{ textAlign: 'center', marginBottom: 'var(--space-2xl)' }}>
-                    <div style={{
-                        width: '56px', height: '56px',
-                        borderRadius: '16px',
-                        background: 'var(--color-accent-bg)',
-                        border: '1px solid rgba(108,92,231,0.25)',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        marginBottom: 'var(--space-md)'
-                    }}>
-                        <Shield size={28} color="var(--color-accent)" />
+                <div style={{ textAlign: 'center', marginBottom: 'var(--space-xl)' }}>
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, marginBottom: 'var(--space-md)' }}>
+                        <ThemedLogo height={26} />
+                        <span className="sidebar-badge">Admin</span>
                     </div>
-                    <h1 style={{
-                        fontSize: '24px',
-                        fontWeight: 700,
-                        background: 'linear-gradient(135deg, var(--color-accent), #a29bfe)',
-                        WebkitBackgroundClip: 'text',
-                        WebkitTextFillColor: 'transparent',
-                        marginBottom: '4px'
-                    }}>
-                        Thravic Admin
-                    </h1>
-                    <p style={{ color: 'var(--color-text-muted)', fontSize: '14px' }}>
-                        Sign in to access the admin panel
+                    <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>
+                        Sign in to the admin panel
                     </p>
                 </div>
 
@@ -120,7 +86,7 @@ export default function AdminLogin() {
                         borderRadius: 'var(--radius-md)',
                         fontSize: '13px',
                         marginBottom: 'var(--space-lg)',
-                        border: '1px solid rgba(255,71,87,0.2)'
+                        border: '1px solid transparent'
                     }}>
                         {error}
                     </div>
@@ -141,7 +107,7 @@ export default function AdminLogin() {
                         type="email"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        placeholder="admin@thravic.io"
+                        placeholder="you@thravic.com"
                         required
                     />
                 </div>

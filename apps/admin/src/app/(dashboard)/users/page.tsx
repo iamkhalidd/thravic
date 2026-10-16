@@ -80,18 +80,11 @@ export default function UsersPage() {
 
     useEffect(() => { loadUsers(); }, [offset, plan]);
 
-    // Detect super_admin role so we can show the impersonate button
+    // The role is not in the JWT, so ask the API who is signed in.
     useEffect(() => {
-        api.get('/api/admin/users?limit=1').then(() => {
-            // If request succeeds, check role from jwt payload
-            const token = localStorage.getItem('admin_token') || localStorage.getItem('token');
-            if (token) {
-                try {
-                    const payload = JSON.parse(atob(token.split('.')[1]));
-                    setIsSuperAdmin(payload.role === 'super_admin' || payload.adminRole === 'super_admin');
-                } catch { /* ignore */ }
-            }
-        });
+        api.get<{ role: string }>('/api/admin/me')
+            .then(me => setIsSuperAdmin(me.role === 'super_admin'))
+            .catch(() => setIsSuperAdmin(false));
     }, []);
 
     const handleSearch = (e: React.FormEvent) => {
@@ -278,7 +271,7 @@ export default function UsersPage() {
                                 <tr key={user.id}>
                                     <td style={{ color: 'var(--color-text-primary)', fontWeight: 500 }}>{user.name}</td>
                                     <td>{user.email}</td>
-                                    <td><span className={`badge badge-${user.subscription}`}>{user.subscription}</span></td>
+                                    <td><span className="badge">{user.subscription}</span></td>
                                     <td><span className={`badge badge-${user.role || 'user'}`}>{user.role || 'user'}</span></td>
                                     <td><ProfileCell user={user} /></td>
                                     <td>{user.domains_count}</td>

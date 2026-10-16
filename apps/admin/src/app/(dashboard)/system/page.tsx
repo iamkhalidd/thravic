@@ -2,18 +2,18 @@
 
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
-import { Server, Database, Cpu, HardDrive, RefreshCw, CheckCircle, XCircle } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 
+// The API keeps the old Node field names; `nodeVersion` carries the Python version.
+// Memory and the pool's waiting count are left out: the Python server cannot measure them.
 interface HealthData {
-    server: { uptime: number; uptimeFormatted: string; restartedAt: string; nodeVersion: string; platform: string; pid: number; env: string };
-    memory: { rss: string; heapUsed: string; heapTotal: string; external: string };
-    database: { pool: { totalCount: number; idleCount: number; waitingCount: number }; size: string; connected: boolean };
+    server: { uptimeFormatted: string; restartedAt: string; nodeVersion: string; env: string };
+    database: { pool: { totalCount: number; idleCount: number }; size: string; connected: boolean };
 }
 
 interface DbStats {
     tables: { table_name: string; row_count: number; total_size: string }[];
     activeConnections: number;
-    slowQueries: any[];
 }
 
 export default function SystemPage() {
@@ -37,85 +37,61 @@ export default function SystemPage() {
     useEffect(() => { loadData(); }, []);
 
     if (loading) return <div className="loading"><div className="spinner" /></div>;
+    if (!health) return <div className="card empty-note">System health could not be loaded.</div>;
+
+    const pool = health.database.pool;
+    const tiles = [
+        { label: 'API uptime', value: health.server.uptimeFormatted, hint: `Since ${new Date(health.server.restartedAt).toLocaleString()}` },
+        {
+            label: 'Database',
+            value: health.database.connected ? 'Connected' : 'Unreachable',
+            hint: `${health.database.size} on disk`,
+            tone: health.database.connected ? 'var(--color-success)' : 'var(--color-danger)',
+        },
+        { label: 'Connections', value: String(pool.totalCount), hint: `${pool.idleCount} idle, ${dbStats?.activeConnections ?? 0} running queries` },
+        { label: 'Runtime', value: `Python ${health.server.nodeVersion.replace(/^v/, '')}`, hint: `Environment: ${health.server.env}` },
+    ];
 
     return (
-        <div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 'var(--space-lg)' }}>
-                <button className="btn btn-ghost" onClick={loadData}><RefreshCw size={14} /> Refresh</button>
+        <div className="page-stack">
+            <div className="stat-grid">
+                {tiles.map(t => (
+                    <div key={t.label} className="stat-card">
+                        <span className="stat-label">{t.label}</span>
+                        <span className="stat-value" style={{ fontSize: '1.25rem', color: t.tone }}>{t.value}</span>
+                        <span className="stat-hint">{t.hint}</span>
+                    </div>
+                ))}
             </div>
 
-            {/* Server & Memory */}
-            <div className="admin-grid-4">
-                <div className="stat-card">
-                    <div className="stat-icon" style={{ background: 'rgba(108,92,231,0.12)' }}><Server size={22} color="#6c5ce7" /></div>
-                    <div><div className="stat-value" style={{ fontSize: '18px' }}>{health?.server.uptimeFormatted}</div><div className="stat-label">Uptime</div></div>
+            <div className="card card-flush">
+                <div className="card-header">
+                    <div>
+                        <div className="card-title">Tables</div>
+                        <div className="card-subtitle">Rows and size on disk, including indexes</div>
+                    </div>
+                    <button className="btn btn-secondary btn-sm" onClick={loadData}><RefreshCw size={14} /> Refresh</button>
                 </div>
-                <div className="stat-card">
-                    <div className="stat-icon" style={{ background: 'rgba(0,214,143,0.12)' }}><Cpu size={22} color="#00d68f" /></div>
-                    <div><div className="stat-value" style={{ fontSize: '18px' }}>{health?.memory.heapUsed}</div><div className="stat-label">Heap Used</div></div>
-                </div>
-                <div className="stat-card">
-                    <div className="stat-icon" style={{ background: 'rgba(0,188,212,0.12)' }}><HardDrive size={22} color="#00bcd4" /></div>
-                    <div><div className="stat-value" style={{ fontSize: '18px' }}>{health?.database.size}</div><div className="stat-label">Database Size</div></div>
-                </div>
-                <div className="stat-card">
-                    <div className="stat-icon" style={{ background: 'rgba(255,170,0,0.12)' }}><Database size={22} color="#ffaa00" /></div>
-                    <div><div className="stat-value" style={{ fontSize: '18px' }}>{health?.database.pool.totalCount}</div><div className="stat-label">DB Connections</div></div>
-                </div>
-            </div>
-
-            {/* Server info */}
-            <div className="admin-grid-2">
-                <div className="card">
-                    <div className="card-title" style={{ marginBottom: 'var(--space-md)' }}>Server Info</div>
-                    {[
-                        ['Node.js', health?.server.nodeVersion],
-                        ['Platform', health?.server.platform],
-                        ['Environment', health?.server.env],
-                        ['PID', health?.server.pid],
-                        ['Last Restarted', health?.server.restartedAt ? new Date(health.server.restartedAt).toLocaleString() : '—'],
-                        ['RSS Memory', health?.memory.rss],
-                        ['External Memory', health?.memory.external],
-                        ['DB Connected', health?.database.connected ? 'Yes' : 'No'],
-                    ].map(([label, value]) => (
-                        <div key={String(label)} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--color-border)', fontSize: '14px' }}>
-                            <span style={{ color: 'var(--color-text-secondary)' }}>{label}</span>
-                            <span style={{ fontWeight: 500, fontFamily: 'monospace' }}>{String(value)}</span>
-                        </div>
-                    ))}
-                </div>
-
-                <div className="card">
-                    <div className="card-title" style={{ marginBottom: 'var(--space-md)' }}>Connection Pool</div>
-                    {[
-                        ['Total', health?.database.pool.totalCount],
-                        ['Idle', health?.database.pool.idleCount],
-                        ['Waiting', health?.database.pool.waitingCount],
-                        ['Active Queries', dbStats?.activeConnections],
-                    ].map(([label, value]) => (
-                        <div key={String(label)} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--color-border)', fontSize: '14px' }}>
-                            <span style={{ color: 'var(--color-text-secondary)' }}>{label}</span>
-                            <span style={{ fontWeight: 500 }}>{String(value ?? 0)}</span>
-                        </div>
-                    ))}
-                </div>
-            </div>
-
-            {/* Database tables */}
-            <div className="card">
-                <div className="card-header"><span className="card-title">Table Sizes</span></div>
-                <table className="data-table">
-                    <thead><tr><th>Table</th><th>Rows</th><th>Size</th></tr></thead>
-                    <tbody>
-                        {dbStats?.tables.map((t) => (
-                            <tr key={t.table_name}>
-                                <td style={{ fontWeight: 500, fontFamily: 'monospace', color: 'var(--color-text-primary)' }}>{t.table_name}</td>
-                                <td>{t.row_count?.toLocaleString()}</td>
-                                <td>{t.total_size}</td>
+                <div className="table-scroll" style={{ marginTop: 8 }}>
+                    <table className="data-table">
+                        <thead>
+                            <tr>
+                                <th style={{ paddingLeft: 20 }}>Table</th>
+                                <th className="num">Rows</th>
+                                <th className="num" style={{ paddingRight: 20 }}>Size</th>
                             </tr>
-                        ))}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                            {dbStats?.tables.map(t => (
+                                <tr key={t.table_name}>
+                                    <td style={{ paddingLeft: 20, fontFamily: 'ui-monospace, monospace' }}>{t.table_name}</td>
+                                    <td className="num">{t.row_count?.toLocaleString()}</td>
+                                    <td className="num muted" style={{ paddingRight: 20 }}>{t.total_size}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     );

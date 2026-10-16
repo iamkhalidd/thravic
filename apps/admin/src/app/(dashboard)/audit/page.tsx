@@ -16,14 +16,11 @@ interface AuditEntry {
     created_at: string;
 }
 
-const actionColors: Record<string, string> = {
-    'user.update': '#6c5ce7', 'user.delete': '#ff4757', 'user.reset_password': '#ffaa00',
-    'domain.update': '#00bcd4', 'domain.transfer': '#a29bfe', 'domain.delete': '#ff4757',
-    'subscription.override': '#00d68f',
-    'settings.update': '#ffaa00',
-    'retention.update': '#00bcd4', 'retention.cleanup': '#ff6b6b',
-    'export.user': '#6c5ce7', 'export.domain': '#6c5ce7'
-};
+// Destructive actions stand out; everything else is a plain label.
+const actionBadge = (action: string) =>
+    /\.(delete|cleanup)$/.test(action) ? 'badge badge-error'
+        : /\.(reset_password|override|transfer)$/.test(action) ? 'badge badge-warning'
+            : 'badge';
 
 export default function AuditPage() {
     const [entries, setEntries] = useState<AuditEntry[]>([]);
@@ -91,12 +88,7 @@ export default function AuditPage() {
                                     <td style={{ whiteSpace: 'nowrap', fontSize: '13px' }}>{new Date(entry.created_at).toLocaleString()}</td>
                                     <td style={{ fontWeight: 500 }}>{entry.admin_name || entry.admin_email || 'Deleted user'}</td>
                                     <td>
-                                        <span style={{
-                                            display: 'inline-flex', alignItems: 'center', gap: '6px',
-                                            background: `${actionColors[entry.action] || '#666'}18`,
-                                            color: actionColors[entry.action] || '#666',
-                                            padding: '2px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: 600
-                                        }}>
+                                        <span className={actionBadge(entry.action)} style={{ textTransform: 'none', fontFamily: 'ui-monospace, monospace' }}>
                                             {entry.action}
                                         </span>
                                     </td>

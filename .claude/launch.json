@@ -4,14 +4,38 @@
     {
       "name": "web",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "apps/web", "run", "dev"],
+      "runtimeArgs": [
+        "--prefix",
+        "apps/web",
+        "run",
+        "dev"
+      ],
       "port": 3000
     },
     {
       "name": "web-prod",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "apps/web", "run", "start", "--", "-p", "3005"],
+      "runtimeArgs": [
+        "--prefix",
+        "apps/web",
+        "run",
+        "start",
+        "--",
+        "-p",
+        "3005"
+      ],
       "port": 3005
+    },
+    {
+      "name": "admin",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "apps/admin",
+        "run",
+        "dev"
+      ],
+      "port": 3002
     }
   ]
 }

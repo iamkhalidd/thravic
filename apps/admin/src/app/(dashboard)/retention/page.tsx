@@ -102,7 +102,7 @@ export default function RetentionPage() {
                             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
                                 <Database size={20} color="var(--color-accent)" />
                                 <div>
-                                    <span className={`badge badge-${policy.plan}`} style={{ fontSize: '14px' }}>{policy.plan}</span>
+                                    <span className="badge" style={{ fontSize: '14px' }}>{policy.plan}</span>
                                     {policy.expiredEventsCount > 0 && (
                                         <span style={{ fontSize: '12px', color: 'var(--color-warning)', marginLeft: 'var(--space-sm)' }}>
                                             {policy.expiredEventsCount.toLocaleString()} expired events

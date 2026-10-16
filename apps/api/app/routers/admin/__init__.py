@@ -15,7 +15,8 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 
-from ...middleware.admin_auth import admin_auth
+from ...json_response import jsjson
+from ...middleware.admin_auth import AdminUser, admin_auth
 from . import (
     audit,
     dashboard,
@@ -54,3 +55,12 @@ for _module, _prefix in _SUBROUTERS:
     router.include_router(
         _module.router, prefix=_prefix, dependencies=[Depends(admin_auth)]
     )
+
+
+@router.get("/me")
+async def me(admin: AdminUser = Depends(admin_auth)):
+    """The signed-in admin's role, so the panel can show super-admin actions.
+
+    The role is not in the JWT, so the panel cannot read it from the token.
+    """
+    return jsjson({"id": admin.user_id, "email": admin.email, "role": admin.role})

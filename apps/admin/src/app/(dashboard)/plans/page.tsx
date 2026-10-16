@@ -194,8 +194,8 @@ export default function PlansPage() {
                 <div className="card" style={{
                     marginBottom: 'var(--space-md)',
                     padding: 'var(--space-sm) var(--space-md)',
-                    background: message.type === 'success' ? 'rgba(0,214,143,0.1)' : 'rgba(255,85,85,0.1)',
-                    borderLeft: `3px solid ${message.type === 'success' ? '#00d68f' : '#ff5555'}`,
+                    background: message.type === 'success' ? 'var(--color-success-bg)' : 'var(--color-danger-bg)',
+                    borderLeft: `3px solid ${message.type === 'success' ? 'var(--color-success)' : 'var(--color-danger)'}`,
                 }}>
                     {message.text}
                 </div>
@@ -245,7 +245,7 @@ export default function PlansPage() {
                                             className="btn btn-ghost btn-sm"
                                             onClick={() => toggleActive(plan)}
                                             title={plan.active ? 'Stop selling this plan' : 'Sell this plan again'}
-                                            style={{ color: plan.active ? '#00d68f' : '#666' }}
+                                            style={{ color: plan.active ? 'var(--color-success)' : 'var(--color-text-muted)' }}
                                         >
                                             {plan.active ? <ToggleRight size={18} /> : <ToggleLeft size={18} />}
                                         </button>
