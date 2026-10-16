@@ -236,6 +236,10 @@ async def register(payload: RegisterSchema, _gate: None = Depends(registration_g
         _fire_and_forget(
             email_service.send_welcome_email(user["email"], user["name"]), "Welcome email"
         )
+        _fire_and_forget(
+            email_service.send_owner_signup_alert(user["name"], user["email"]),
+            "Owner sign-up alert",
+        )
         return jsjson({"user": _user_summary(user), **tokens}, 201)
     except SimpleError:
         raise
@@ -667,6 +671,10 @@ async def _find_or_create_oauth_user(
     if user:
         _fire_and_forget(
             email_service.send_welcome_email(email, name), "Welcome email"
+        )
+        _fire_and_forget(
+            email_service.send_owner_signup_alert(name, email, provider),
+            "Owner sign-up alert",
         )
     return user
 

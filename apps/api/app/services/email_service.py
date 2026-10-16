@@ -852,6 +852,72 @@ async def send_direct_email(to: str, name: str, subject: str, message: str) -> N
     )
 
 
+# ── Owner alerts ─────────────────────────────────────────────────────────────
+
+
+async def _send_owner_alert(
+    subject: str, heading: str, rows: Sequence[tuple[str, str]], reply_to: str = ""
+) -> None:
+    """Tell the owner (`OWNER_NOTIFY_EMAIL`) something happened. Never raises:
+    a failed alert must not break the sign-up, domain or payment behind it."""
+    to = (get_settings().OWNER_NOTIFY_EMAIL or "").strip()
+    if not to:
+        return
+    try:
+        await send_email(
+            to,
+            subject,
+            _render(
+                subject=subject,
+                heading=heading,
+                preheader=subject,
+                blocks=[_details(rows)],
+                reason="You get this because you own this Thravic account.",
+            ),
+            heading + "\n\n" + "\n".join(f"{label}: {value}" for label, value in rows),
+            reply_to=reply_to,
+        )
+    except Exception as exc:  # noqa: BLE001
+        log.error(f"Owner alert failed ({subject}): {exc}")
+
+
+async def send_owner_signup_alert(name: str, email: str, provider: str = "email") -> None:
+    via = {"email": "Email and password", "google": "Google", "github": "GitHub"}
+    await _send_owner_alert(
+        f"New sign-up: {name or email}",
+        "Someone signed up",
+        [("Name", name or "-"), ("Email", email), ("Signed up with", via.get(provider, provider)),
+         ("When", _when(datetime.now(UTC)))],
+        reply_to=email,
+    )
+
+
+async def send_owner_domain_alert(name: str, email: str, domain: str, platform: str) -> None:
+    kinds = {"web": "Website", "ios": "iOS app", "android": "Android app", "cross": "Mobile app"}
+    await _send_owner_alert(
+        f"New domain added: {domain}",
+        "A domain was added",
+        [("Domain", domain), ("Type", kinds.get(platform, platform)),
+         ("Added by", f"{name or '-'} <{email}>"), ("When", _when(datetime.now(UTC)))],
+        reply_to=email,
+    )
+
+
+async def send_owner_subscription_alert(
+    name: str, email: str, plan_name: str, amount: float, currency: str,
+    reference: str, period_end: datetime,
+) -> None:
+    """`amount` is in currency units (naira, not kobo)."""
+    await _send_owner_alert(
+        f"New subscription: {plan_name} by {name or email}",
+        "Someone paid for a plan",
+        [("Plan", plan_name), ("Amount", f"{currency} {amount:,.2f}"),
+         ("Customer", f"{name or '-'} <{email}>"), ("Reference", reference),
+         ("Active until", _js_date_string(period_end)), ("When", _when(datetime.now(UTC)))],
+        reply_to=email,
+    )
+
+
 def contact_form_email(data: dict[str, Any]) -> tuple[str, str, str]:
     """`(subject, html, text)` for a contact form submission sent to the team."""
     subject = f"[Contact Form] {data['type']}: {data['subject']}"

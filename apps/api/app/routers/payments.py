@@ -35,7 +35,10 @@ from ..middleware.admin_auth import AdminUser, admin_auth
 from ..middleware.auth import AuthUser, require_auth
 from ..middleware.profile_gate import profile_gate
 from ..services import domain_service, plan_catalog, plan_service, recording_service
-from ..services.email_service import send_payment_receipt_email
+from ..services.email_service import (
+    send_owner_subscription_alert,
+    send_payment_receipt_email,
+)
 
 log = create_logger("Payments")
 
@@ -765,6 +768,17 @@ async def _upgrade_subscription(
             send_payment_receipt_email(
                 account["email"],
                 account["name"],
+                tier.name,
+                (claimed["amount"] or 0) / 100,
+                claimed["currency"] or tier.currency,
+                reference,
+                period_end,
+            )
+        )
+        _fire_and_forget(
+            send_owner_subscription_alert(
+                account["name"],
+                account["email"],
                 tier.name,
                 (claimed["amount"] or 0) / 100,
                 claimed["currency"] or tier.currency,

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import secrets
 from typing import Any
 
@@ -9,12 +10,13 @@ import httpx
 from fastapi import APIRouter, Depends, Request
 
 from ..config import get_settings
-from ..db import query
+from ..db import query, query_one
 from ..errors import PayloadError, SimpleError
 from ..json_response import jsjson
 from ..logging import create_logger
 from ..middleware.auth import AuthUser, require_auth
 from ..services import domain_service, plan_catalog, plan_service
+from ..services.email_service import send_owner_domain_alert
 from ..zod_lite import (
     first_message,
     issue_invalid_type,
@@ -214,6 +216,8 @@ async def create_domain(request: Request, user: AuthUser = Depends(require_auth)
         if not domain:
             raise SimpleError(FAILED_CREATE, 500)
 
+        _alert_owner_of_domain(user, domain)
+
         return jsjson(
             {
                 "id": domain["id"],
@@ -233,6 +237,30 @@ async def create_domain(request: Request, user: AuthUser = Depends(require_auth)
             raise SimpleError("Domain already added", 400) from None
         log.error(f"Create domain error: {exc}")
         raise SimpleError(FAILED_CREATE, 500) from None
+
+
+# Strong references so a background task is not garbage collected mid-flight.
+_background_tasks: set[asyncio.Task] = set()
+
+
+def _alert_owner_of_domain(user: AuthUser, domain: dict[str, Any]) -> None:
+    """Email the owner about a new domain without holding up the response."""
+
+    async def send() -> None:
+        try:
+            account = await query_one("SELECT name FROM users WHERE id = $1", user.user_id)
+            await send_owner_domain_alert(
+                (account or {}).get("name") or "",
+                user.email,
+                domain["domain"],
+                domain.get("platform") or "web",
+            )
+        except Exception as exc:  # noqa: BLE001
+            log.warning(f"Owner domain alert failed: {exc}")
+
+    task = asyncio.create_task(send())
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
 
 
 @router.get("/{domainId}/script")

@@ -88,6 +88,9 @@ class Settings(BaseSettings):
     SMTP_USER: str | None = None
     SMTP_PASS: str | None = None
     SMTP_FROM: str = "Thravic <onboarding@resend.dev>"
+    # Where the owner is told about sign-ups, new domains and subscriptions.
+    # Empty turns these emails off.
+    OWNER_NOTIFY_EMAIL: str = "info@thravic.com"
     GOOGLE_CLIENT_ID: str | None = None
     GOOGLE_CLIENT_SECRET: str | None = None
     GITHUB_CLIENT_ID: str | None = None
