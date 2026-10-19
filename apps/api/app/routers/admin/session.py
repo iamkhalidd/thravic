@@ -151,7 +151,11 @@ async def verify(request: Request):
                 "two-step sign-in on your account.",
                 409,
             )
-        step = admin_2fa.matching_step(secret, code, user.get("totp_last_step"))
+        # BIGINT column: the int8 codec hands it back as a string.
+        last_step = user.get("totp_last_step")
+        step = admin_2fa.matching_step(
+            secret, code, int(last_step) if last_step is not None else None
+        )
         # The conditional update makes a code single-use even under a race.
         claimed = step is not None and await query_one(
             """
