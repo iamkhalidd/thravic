@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Plus, Trash2, Users, Target, TrendingDown, Percent } from 'lucide-react';
+import { authFetch } from '@/lib/api';
 import { useDomain } from '@/contexts/DomainContext';
 import { useApiRange } from '@/contexts/DateRangeContext';
 import { PageHeader } from '@/components/PageHeader';
@@ -58,27 +59,19 @@ function toMetrics(data: any): FunnelMetrics | null {
 }
 
 async function getFunnels(domainId: string) {
-    const token = localStorage.getItem('accessToken');
-    const res = await fetch(`${API_URL}/api/funnels/${domainId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-    });
+    const res = await authFetch(`${API_URL}/api/funnels/${domainId}`);
     return res.json();
 }
 
 async function getFunnelDetails(domainId: string, funnelId: string, start: string, end: string) {
-    const token = localStorage.getItem('accessToken');
     const params = new URLSearchParams({ startDate: start, endDate: end });
-    const res = await fetch(`${API_URL}/api/funnels/${domainId}/${funnelId}?${params}`, {
-        headers: { Authorization: `Bearer ${token}` }
-    });
+    const res = await authFetch(`${API_URL}/api/funnels/${domainId}/${funnelId}?${params}`);
     return res.json();
 }
 
 async function deleteFunnel(domainId: string, funnelId: string) {
-    const token = localStorage.getItem('accessToken');
-    await fetch(`${API_URL}/api/funnels/${domainId}/${funnelId}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` }
+    await authFetch(`${API_URL}/api/funnels/${domainId}/${funnelId}`, {
+        method: 'DELETE'
     });
 }
 

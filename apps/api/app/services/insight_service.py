@@ -32,7 +32,10 @@ MAX_REFRESHES_PER_DAY = 3
 MAX_INSIGHTS = 5
 REPORT_RETENTION_DAYS = 30
 AI_TIMEOUT_SECONDS = 45.0
-AI_MAX_TOKENS = 1500
+# Room for 5 insights plus any thinking the model does first; at 1500 the JSON
+# was cut off mid-string and every report fell back to the rules.
+AI_MAX_TOKENS = 4000
+AI_ATTEMPTS = 2
 
 INSIGHT_TYPES = ("traffic", "page", "technical", "funnel", "opportunity")
 PRIORITIES = ("high", "medium", "low")
@@ -89,22 +92,32 @@ async def ask_model(facts: list[dict[str, Any]]) -> list[dict[str, Any]] | None:
         "max_tokens": AI_MAX_TOKENS,
         "stream": False,
     }
-    try:
-        async with httpx.AsyncClient(timeout=AI_TIMEOUT_SECONDS) as client:
-            response = await client.post(
-                settings.AI_BASE_URL.rstrip("/") + "/chat/completions",
-                headers={"Authorization": f"Bearer {settings.AI_API_KEY}"},
-                json=payload,
-            )
-        if response.status_code >= 400:
-            # The body says why (wrong model name, no balance, bad key) without
-            # echoing the key, so it is safe and useful to log.
-            log.error(f"AI request failed ({response.status_code}): {response.text[:500]}")
+    parsed: Any = None
+    for attempt in range(1, AI_ATTEMPTS + 1):
+        try:
+            async with httpx.AsyncClient(timeout=AI_TIMEOUT_SECONDS) as client:
+                response = await client.post(
+                    settings.AI_BASE_URL.rstrip("/") + "/chat/completions",
+                    headers={"Authorization": f"Bearer {settings.AI_API_KEY}"},
+                    json=payload,
+                )
+            if response.status_code >= 400:
+                # The body says why (wrong model name, no balance, bad key) without
+                # echoing the key, so it is safe and useful to log.
+                log.error(f"AI request failed ({response.status_code}): {response.text[:500]}")
+                return None
+            choice = response.json()["choices"][0]
+            if choice.get("finish_reason") == "length":
+                log.warning(f"AI reply hit the {AI_MAX_TOKENS}-token limit (attempt {attempt})")
+            parsed = json.loads(choice["message"]["content"] or "")
+            break
+        except json.JSONDecodeError as exc:
+            # A cut-off or malformed reply; sampling again usually gives a whole one.
+            log.error(f"AI reply was not valid JSON (attempt {attempt}): {exc}")
+        except Exception as exc:  # noqa: BLE001 - any failure falls back to rules
+            log.error(f"AI request failed: {exc}")
             return None
-        content = response.json()["choices"][0]["message"]["content"] or ""
-        parsed = json.loads(content)
-    except Exception as exc:  # noqa: BLE001 - any failure falls back to rules
-        log.error(f"AI request failed: {exc}")
+    if parsed is None:
         return None
 
     items = parsed.get("insights") if isinstance(parsed, dict) else parsed
@@ -193,7 +206,23 @@ def rule_insights(facts: list[dict[str, Any]]) -> list[dict[str, Any]]:
     if overview:
         n = overview["numbers"]
         change = n.get("sessionsChangePct")
-        if change is not None and abs(change) >= 10:
+        before = n["sessionsBefore"]
+        if change is None and before and n["sessions"] >= 2 * before:
+            # Too few sessions last week for a percentage to mean anything.
+            out.append(
+                {
+                    "type": "traffic",
+                    "priority": "medium",
+                    "title": f"{n['sessions']} sessions this week, from {before}",
+                    "description": (
+                        f"Traffic grew from {before} to {n['sessions']} sessions. Last week was "
+                        "too small to compare as a percentage."
+                    ),
+                    "recommendation": "Open the source breakdown to see what brought the new visitors.",
+                    "facts": [overview["id"]],
+                }
+            )
+        elif change is not None and abs(change) >= 10:
             top = drivers[0] if drivers else None
             because = (
                 f" The biggest move: {top['subject']} ({top['numbers']['sessionsDelta']:+d})."
@@ -318,6 +347,8 @@ async def generate(domain: dict[str, Any], trigger: str, now: datetime | None = 
     else:
         raw = await ask_model(sheet.facts)
         insights = validate(raw, sheet.facts) if raw else []
+        if raw and not insights:
+            log.warning(f"All {len(raw)} AI insights failed the checks; using the rules")
         ai_generated = bool(insights)
         if not insights:
             insights = rule_insights(sheet.facts)
@@ -357,10 +388,12 @@ async def latest_today(domain_id: str, now: datetime) -> dict | None:
 
 
 async def refreshes_today(domain_id: str, now: datetime) -> int:
+    # Only refreshes that produced a report count: one with too little data costs
+    # nothing (no model call), so it shouldn't use up the day's allowance.
     row = await query_one(
         """
         SELECT COUNT(*)::int AS count FROM insight_reports
-        WHERE domain_id = $1 AND trigger = 'refresh' AND created_at >= $2
+        WHERE domain_id = $1 AND trigger = 'refresh' AND status = 'ok' AND created_at >= $2
         """,
         domain_id,
         _day_start(now),

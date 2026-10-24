@@ -105,6 +105,27 @@ async function apiRequest<T>(
     }
 }
 
+/**
+ * `fetch` with the signed-in token, renewing it once on a 401 like apiRequest
+ * does. For pages that read the raw Response; without this they stopped
+ * working 15 minutes in, when the access token expires.
+ */
+export async function authFetch(url: string, init: RequestInit = {}, retried = false): Promise<Response> {
+    const { accessToken } = getTokens();
+    const headers = new Headers(init.headers);
+    if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`);
+
+    const response = await fetch(url, { ...init, headers });
+    if (response.status !== 401 || retried) return response;
+
+    const current = getTokens();
+    if ((current.accessToken && current.accessToken !== accessToken) || (current.refreshToken && await refreshToken())) {
+        return authFetch(url, init, true);
+    }
+    if (!getTokens().accessToken) sessionEnded();
+    return response;
+}
+
 const SESSION_ENDED = 'Your session has ended. Please sign in again.';
 
 // The session is gone for good (refresh token expired or revoked): send a

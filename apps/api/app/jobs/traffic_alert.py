@@ -42,6 +42,7 @@ previous_hour AS (
     GROUP BY domain_id
 )
 SELECT
+    d.id::text AS domain_id,
     d.domain,
     u.email,
     COALESCE(curr.count, 0) as current_count,
@@ -56,10 +57,12 @@ WHERE (COALESCE(curr.count, 0) > 10 OR COALESCE(prev.count, 0) > 10)
 """
 
 
-async def send_alert(to: str, domain: str, alert_type: str, message: str) -> None:
+async def send_alert(
+    to: str, domain: str, alert_type: str, message: str, domain_id: str | None = None
+) -> None:
     """`alert_type` is "Traffic Spike" or "Traffic Drop"."""
     kind = "drop" if "drop" in alert_type.lower() else "spike"
-    await send_traffic_alert_email(to, domain, kind, message)
+    await send_traffic_alert_email(to, domain, kind, message, domain_id)
 
 
 async def check_traffic_spikes() -> None:
@@ -80,6 +83,7 @@ async def check_traffic_spikes() -> None:
                     domain,
                     "Traffic Spike",
                     f"Traffic went from 0 to {current} sessions in the last hour.",
+                    row["domain_id"],
                 )
             continue
 
@@ -91,6 +95,7 @@ async def check_traffic_spikes() -> None:
                 domain,
                 "Traffic Spike",
                 f"Traffic up {js_round(change * 100)}% ({previous} -> {current})",
+                row["domain_id"],
             )
         elif change < -SPIKE_THRESHOLD:
             await send_alert(
@@ -98,6 +103,7 @@ async def check_traffic_spikes() -> None:
                 domain,
                 "Traffic Drop",
                 f"Traffic down {js_round(abs(change) * 100)}% ({previous} -> {current})",
+                row["domain_id"],
             )
 
 

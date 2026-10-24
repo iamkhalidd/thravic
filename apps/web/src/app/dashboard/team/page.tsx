@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { authFetch } from '@/lib/api';
 import { useDomain } from '@/contexts/DomainContext';
 import { useSubscription } from '@/hooks/useSubscription';
 import { UpgradeGate } from '@/components/UpgradeGate';
@@ -11,13 +12,11 @@ import { ChartCard } from '@/components/ChartCard';
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
 async function teamApi<T>(path: string, options?: RequestInit): Promise<{ data?: T; error?: string }> {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
     try {
-        const res = await fetch(`${API_BASE}${path}`, {
+        const res = await authFetch(`${API_BASE}${path}`, {
             ...options,
             headers: {
                 'Content-Type': 'application/json',
-                ...(token ? { Authorization: `Bearer ${token}` } : {}),
                 ...options?.headers,
             },
         });

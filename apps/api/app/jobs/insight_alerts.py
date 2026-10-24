@@ -27,7 +27,6 @@ from .runner import run_if_due
 log = create_logger("Job")
 
 JOB_NAME = "insight_alerts"
-RUN_EVERY = timedelta(hours=23)
 KIND = "insight"
 SEND_FROM_HOUR = 9  # UTC
 REPEAT_AFTER = timedelta(days=7)
@@ -91,7 +90,9 @@ async def send_insight_alerts() -> dict[str, Any]:
             if not fresh:
                 continue
             try:
-                await send_insight_alert_email(user["email"], user["name"], domain["domain"], fresh)
+                await send_insight_alert_email(
+                    user["email"], user["name"], domain["domain"], fresh, str(domain["id"])
+                )
                 sent += 1
             except Exception as exc:  # noqa: BLE001 — release the claims and retry tomorrow
                 failed += 1
@@ -109,10 +110,14 @@ async def send_insight_alerts() -> dict[str, Any]:
 
 async def _scheduled_alerts() -> None:
     # Checked before run_if_due so an early-morning tick isn't recorded as the day's run
-    if datetime.now(UTC).hour < SEND_FROM_HOUR:
+    now = datetime.now(UTC)
+    if now.hour < SEND_FROM_HOUR:
         return
+    # Due once per UTC day: anything that ran since today's send time counts. A fixed
+    # 23h interval let the send time drift later each day the host was asleep.
+    since_send_time = now - now.replace(hour=SEND_FROM_HOUR, minute=0, second=0, microsecond=0)
     try:
-        await run_if_due(JOB_NAME, RUN_EVERY, send_insight_alerts)
+        await run_if_due(JOB_NAME, since_send_time, send_insight_alerts)
     except Exception as exc:  # noqa: BLE001 — a failed run must not stop the schedule
         log.error(f"[Jobs] Insight alerts failed: {exc}")
 
@@ -124,4 +129,7 @@ def start_insight_alert_job(scheduler: AsyncIOScheduler) -> None:
         trigger=CronTrigger(minute=27, timezone=UTC),
         id=JOB_NAME,
         replace_existing=True,
+        # Also check soon after start: the host sleeps when idle and often wakes
+        # for less than the hour it would take to reach the next :27 tick.
+        next_run_time=datetime.now(UTC) + timedelta(minutes=1),
     )

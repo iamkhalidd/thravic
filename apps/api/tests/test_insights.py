@@ -247,6 +247,22 @@ def test_rules_write_specific_insights_from_the_same_facts():
     assert insight_service.validate(out, FACTS) == out  # rules pass the same check
 
 
+def test_no_percentage_from_a_tiny_base():
+    assert insight_facts.pct_change(61, 4) is None
+    assert insight_facts.pct_change(61, insight_facts.MIN_PCT_BASE) is not None
+
+
+def test_growth_from_a_tiny_base_is_told_in_counts():
+    facts = [
+        {**FACTS[0], "numbers": {"sessions": 61, "sessionsBefore": 4, "sessionsChangePct": None}}
+    ]
+
+    out = insight_service.rule_insights(facts)
+
+    assert out[0]["title"] == "61 sessions this week, from 4"
+    assert "%" not in out[0]["title"]
+
+
 # ── The model call ─────────────────────────────────────────────────────────
 
 
@@ -284,6 +300,26 @@ async def test_the_model_gets_the_facts_and_returns_insights(model):
     assert body["response_format"] == {"type": "json_object"}
     assert '"F2"' in body["messages"][1]["content"]
     assert raw == [_insight()]
+
+
+async def test_a_cut_off_reply_is_asked_again(monkeypatch):
+    replies = iter(['{"insights": [{"title": "Visits do', json.dumps({"insights": [_insight()]})])
+
+    def handler(request):
+        return httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": next(replies)}, "finish_reason": "stop"}]},
+        )
+
+    real_client = httpx.AsyncClient
+    monkeypatch.setattr(
+        insight_service.httpx,
+        "AsyncClient",
+        lambda **kw: real_client(transport=httpx.MockTransport(handler), **kw),
+    )
+    monkeypatch.setattr(get_settings(), "AI_API_KEY", "sk-test")
+
+    assert await insight_service.ask_model(FACTS) == [_insight()]
 
 
 async def test_without_a_key_the_model_is_not_called(monkeypatch):

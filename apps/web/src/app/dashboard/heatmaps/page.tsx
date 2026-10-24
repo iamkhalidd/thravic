@@ -9,6 +9,7 @@ import {
     Tablet,
     Loader2
 } from 'lucide-react';
+import { authFetch } from '@/lib/api';
 import { useDomain } from '@/contexts/DomainContext';
 import { useApiRange } from '@/contexts/DateRangeContext';
 import { PageHeader } from '@/components/PageHeader';
@@ -38,22 +39,16 @@ interface HeatmapData {
 type ApiRange = { start: string; end: string };
 
 async function getPages(domainId: string, range: ApiRange) {
-    const token = localStorage.getItem('accessToken');
     const params = new URLSearchParams({ startDate: range.start, endDate: range.end });
-    const res = await fetch(`${API_URL}/api/heatmaps/${domainId}/pages?${params}`, {
-        headers: { Authorization: `Bearer ${token}` }
-    });
+    const res = await authFetch(`${API_URL}/api/heatmaps/${domainId}/pages?${params}`);
     return res.json();
 }
 
 // The API serves one endpoint for both heatmap types, selected with ?type=click|scroll.
 // `viewport` limits it to sessions of that device class (by screen width).
 async function getHeatmap(domainId: string, type: 'click' | 'scroll', page: string, viewport: string, range: ApiRange) {
-    const token = localStorage.getItem('accessToken');
     const params = new URLSearchParams({ type, page, viewport, startDate: range.start, endDate: range.end });
-    const res = await fetch(`${API_URL}/api/heatmaps/${domainId}?${params}`, {
-        headers: { Authorization: `Bearer ${token}` }
-    });
+    const res = await authFetch(`${API_URL}/api/heatmaps/${domainId}?${params}`);
     return res.json();
 }
 

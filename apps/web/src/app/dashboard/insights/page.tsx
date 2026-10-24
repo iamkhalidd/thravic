@@ -14,6 +14,7 @@ import {
     FileText,
     Filter,
 } from 'lucide-react';
+import { authFetch } from '@/lib/api';
 import { useDomain } from '@/contexts/DomainContext';
 import { PageHeader } from '@/components/PageHeader';
 import { ChartCard } from '@/components/ChartCard';
@@ -98,25 +99,21 @@ const PRIORITY_BADGE: Record<Insight['priority'], string> = {
 };
 
 async function getInsights(domainId: string, refresh = false) {
-    const token = localStorage.getItem('accessToken');
-    const res = await fetch(`${API_URL}/api/insights/${domainId}${refresh ? '/refresh' : ''}`, {
-        method: refresh ? 'POST' : 'GET',
-        headers: { Authorization: `Bearer ${token}` }
+    const res = await authFetch(`${API_URL}/api/insights/${domainId}${refresh ? '/refresh' : ''}`, {
+        method: refresh ? 'POST' : 'GET'
     });
     const body = await res.json();
     return res.ok ? { report: body as InsightReport } : { error: (body?.error as string) || 'Could not load insights' };
 }
 
-async function getTrends(domainId: string) {
-    const token = localStorage.getItem('accessToken');
-    const res = await fetch(`${API_URL}/api/insights/${domainId}/trends`, {
-        headers: { Authorization: `Bearer ${token}` }
-    });
-    return res.json();
+async function getTrends(domainId: string): Promise<TrendData | null> {
+    const res = await authFetch(`${API_URL}/api/insights/${domainId}/trends`);
+    // An error body is not trend data; show the chart's empty state instead.
+    return res.ok ? res.json() : null;
 }
 
 export default function InsightsPage() {
-    const { selectedDomainId, loading: domainLoading } = useDomain();
+    const { selectedDomainId, selectedDomain, loading: domainLoading } = useDomain();
     const [report, setReport] = useState<InsightReport | null>(null);
     const [trends, setTrends] = useState<TrendData | null>(null);
     const [loading, setLoading] = useState(true);
@@ -305,7 +302,7 @@ export default function InsightsPage() {
                 {insights.length === 0 ? (
                     <p className="empty-note">
                         {report?.status === 'insufficient_data'
-                            ? `Not enough data yet: insights need at least ${report.minSessions} sessions in the last 7 days.`
+                            ? `Not enough data yet for ${selectedDomain?.domain ?? 'this site'}: insights need at least ${report.minSessions} sessions in the last 7 days.`
                             : error ? 'Insights could not be loaded.' : 'No insights yet.'}
                     </p>
                 ) : (

@@ -37,6 +37,8 @@ MIN_SESSIONS = 50
 
 # Smallest moves worth reporting, so noise on tiny numbers never becomes a story.
 MIN_DRIVER_DELTA = 5
+# A percentage needs this much to compare against; "up 1450%" from 4 sessions is noise.
+MIN_PCT_BASE = 20
 MIN_PAGE_ENTRIES = 20
 BOUNCE_MARGIN_POINTS = 15
 MIN_TECHNICAL_COUNT = 3
@@ -68,8 +70,8 @@ DIMENSIONS: tuple[tuple[str, str, str], ...] = (
 
 
 def pct_change(current: float, previous: float) -> int | None:
-    """Whole-percent change; None when there was nothing before to compare with."""
-    if not previous:
+    """Whole-percent change; None when there was too little before to compare with."""
+    if previous < MIN_PCT_BASE:
         return None
     return js_round((current - previous) / previous * 100)
 

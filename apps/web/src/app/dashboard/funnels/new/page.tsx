@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Plus, Trash2, ArrowLeft } from 'lucide-react';
+import { authFetch } from '@/lib/api';
 import { useDomain } from '@/contexts/DomainContext';
 import { PageHeader } from '@/components/PageHeader';
 import { ChartCard } from '@/components/ChartCard';
@@ -130,12 +131,10 @@ export default function NewFunnelPage() {
         setLoading(true);
 
         try {
-            const token = localStorage.getItem('accessToken');
-            const response = await fetch(`${API_URL}/api/funnels/${selectedDomainId}`, {
+            const response = await authFetch(`${API_URL}/api/funnels/${selectedDomainId}`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
                 },
                 body: JSON.stringify({
                     name,

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { exportData, formatPlanPrice, payments, recordings, webhooks } from '../api';
+import { authFetch, exportData, formatPlanPrice, payments, recordings, webhooks } from '../api';
 
 const fetchMock = vi.fn();
 
@@ -99,6 +99,36 @@ describe('exportData.downloadCsv', () => {
 
         expect(fetchMock).toHaveBeenCalledTimes(3);
         expect(result.error).toBe('Invalid or expired token');
+    });
+});
+
+describe('authFetch', () => {
+    it('renews an expired token once and retries with the new one', async () => {
+        localStorage.setItem('refreshToken', 'refresh');
+        fetchMock
+            .mockResolvedValueOnce(jsonResponse({ error: 'Invalid or expired token' }, 401))
+            .mockResolvedValueOnce(jsonResponse({ accessToken: 'new-access', refreshToken: 'new-refresh' }))
+            .mockResolvedValueOnce(jsonResponse({ insights: [] }));
+
+        const res = await authFetch('https://api.example/api/insights/dom-1', { method: 'POST' });
+
+        expect(res.status).toBe(200);
+        expect(fetchMock).toHaveBeenCalledTimes(3);
+        const retry = fetchMock.mock.calls[2][1];
+        expect(retry.method).toBe('POST');
+        expect(new Headers(retry.headers).get('Authorization')).toBe('Bearer new-access');
+    });
+
+    it('returns the 401 when the renewal fails', async () => {
+        localStorage.setItem('refreshToken', 'refresh');
+        fetchMock
+            .mockResolvedValueOnce(jsonResponse({ error: 'Invalid or expired token' }, 401))
+            .mockResolvedValueOnce(jsonResponse({ error: 'Invalid refresh token' }, 401));
+
+        const res = await authFetch('https://api.example/api/funnels/dom-1');
+
+        expect(res.status).toBe(401);
+        expect(fetchMock).toHaveBeenCalledTimes(2);
     });
 });
 

@@ -52,9 +52,13 @@ def _utc_day(value: datetime) -> str:
     return value.astimezone(UTC).isoformat()[:MONTH_DAY_LENGTH]
 
 
-async def _require_owned_domain(domain_id: str, user_id: str) -> dict:
+async def _require_domain(domain_id: str, user_id: str) -> dict:
+    """The owner or any team member; the feature gate already checks the owner's plan."""
     domain = await domain_service.get_by_id(domain_id)
-    if not domain_service.is_owner(domain, user_id):
+    if not domain or not (
+        domain_service.is_owner(domain, user_id)
+        or await domain_service.has_access(domain_id, user_id)
+    ):
         raise SimpleError("Domain not found", 404)
     return domain
 
@@ -74,7 +78,7 @@ async def trends(
     _feature: None = Depends(require_feature("insights")),
 ):
     try:
-        domain = await _require_owned_domain(domainId, user.user_id)
+        domain = await _require_domain(domainId, user.user_id)
 
         now = datetime.now(UTC)
         start = now - timedelta(days=TREND_WINDOW_DAYS)
@@ -160,7 +164,7 @@ async def insights(
 ):
     """Today's report: generated on the first view of the (UTC) day, then cached."""
     try:
-        domain = await _require_owned_domain(domainId, user.user_id)
+        domain = await _require_domain(domainId, user.user_id)
         report = await insight_service.todays_report(domain)
         return jsjson(await insight_service.to_response(report, str(domain["id"])))
     except SimpleError:
@@ -178,7 +182,7 @@ async def refresh_insights(
 ):
     """A new report now, up to `MAX_REFRESHES_PER_DAY` times a day."""
     try:
-        domain = await _require_owned_domain(domainId, user.user_id)
+        domain = await _require_domain(domainId, user.user_id)
         report = await insight_service.refresh(domain)
         if report is None:
             raise SimpleError(

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { Monitor, Smartphone, Tablet, Trash2 } from 'lucide-react';
-import { recordings, type RecordingDevice, type RecordingDuration } from '@/lib/api';
+import { authFetch, recordings, type RecordingDevice, type RecordingDuration } from '@/lib/api';
 import { useDomain } from '@/contexts/DomainContext';
 import { useApiRange } from '@/contexts/DateRangeContext';
 import { useSubscription } from '@/hooks/useSubscription';
@@ -55,18 +55,13 @@ interface FullRecording extends Recording {
 }
 
 async function getRecording(domainId: string, recordingId: string) {
-    const token = localStorage.getItem('accessToken');
-    const res = await fetch(`${API_URL}/api/recordings/${domainId}/${recordingId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-    });
+    const res = await authFetch(`${API_URL}/api/recordings/${domainId}/${recordingId}`);
     return res.json();
 }
 
 async function deleteRecording(domainId: string, recordingId: string) {
-    const token = localStorage.getItem('accessToken');
-    await fetch(`${API_URL}/api/recordings/${domainId}/${recordingId}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` }
+    await authFetch(`${API_URL}/api/recordings/${domainId}/${recordingId}`, {
+        method: 'DELETE'
     });
 }
 

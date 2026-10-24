@@ -671,9 +671,16 @@ async def send_usage_limit_email(
 # ── Notifications (Settings → Notifications) ─────────────────────────────────
 
 
-async def send_traffic_alert_email(to: str, domain: str, kind: str, detail: str) -> None:
+def _site_link(path: str, domain_id: str | None) -> str:
+    """A dashboard link that opens on the site the email is about, not whichever was last picked."""
+    return f"{_frontend()}{path}" + (f"?site={domain_id}" if domain_id else "")
+
+
+async def send_traffic_alert_email(
+    to: str, domain: str, kind: str, detail: str, domain_id: str | None = None
+) -> None:
     """`kind` is "spike" or "drop"; `detail` is one sentence with the numbers."""
-    base = _frontend()
+    link = _site_link("/dashboard/realtime", domain_id)
     subject = f"Traffic {kind} on {domain}"
     await send_email(
         to,
@@ -686,12 +693,12 @@ async def send_traffic_alert_email(to: str, domain: str, kind: str, detail: str)
                 _p(f"We noticed a significant change in traffic for {_strong(domain)} "
                    "in the last hour."),
                 _p(_esc(detail)),
-                _button(f"{base}/dashboard/realtime", "See live traffic"),
+                _button(link, "See live traffic"),
             ],
             reason="You're receiving this because traffic alerts are on for your account.",
             manage_link=True,
         ),
-        f"{subject}\n\n{detail}\n\nSee live traffic: {base}/dashboard/realtime",
+        f"{subject}\n\n{detail}\n\nSee live traffic: {link}",
     )
 
 
@@ -768,10 +775,14 @@ async def send_weekly_report_email(
 
 
 async def send_insight_alert_email(
-    to: str, name: str, domain: str, insights: Sequence[dict[str, Any]]
+    to: str,
+    name: str,
+    domain: str,
+    insights: Sequence[dict[str, Any]],
+    domain_id: str | None = None,
 ) -> None:
     """High-priority insights for one site. Raises on failure so the job can retry."""
-    base = _frontend()
+    link = _site_link("/dashboard/insights", domain_id)
     count = len(insights)
     subject = (
         f"{insights[0]['title']} ({domain})" if count == 1
@@ -802,13 +813,13 @@ async def send_insight_alert_email(
                 _greeting(name),
                 _p(f"Today's analysis of {_strong(domain)} found something worth a look:"),
                 items,
-                _button(f"{base}/dashboard/insights", "See all insights"),
+                _button(link, "See all insights"),
             ],
             reason="You're receiving this because AI insight alerts are on for your account.",
             manage_link=True,
         ),
         f"Hi {name or 'there'},\n\nNew insights for {domain}:\n\n{text}\n\n"
-        f"See all insights: {base}/dashboard/insights",
+        f"See all insights: {link}",
     )
 
 

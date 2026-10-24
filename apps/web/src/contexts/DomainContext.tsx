@@ -27,10 +27,20 @@ export function DomainProvider({ children }: { children: ReactNode }) {
             if (result.data?.domains) {
                 const list = result.data.domains;
                 setDomainList(list);
-                // Keep the selection if it still exists; otherwise (first load, or the
-                // selected site was deleted) fall back to the first site, or none.
+                // A link from an alert email names its site (?site=<id>); open on that one
+                // and drop the param so a later reload keeps whatever the user picks next.
+                const params = new URLSearchParams(window.location.search);
+                const linked = params.get('site');
+                if (linked) {
+                    params.delete('site');
+                    const query = params.toString();
+                    window.history.replaceState(null, '', window.location.pathname + (query ? `?${query}` : ''));
+                }
+                // Otherwise keep the selection if it still exists; on first load, or if the
+                // selected site was deleted, fall back to the first site, or none.
                 setSelectedDomainId(current =>
-                    current && list.some(d => d.id === current) ? current : list[0]?.id ?? null);
+                    linked && list.some(d => d.id === linked) ? linked
+                        : current && list.some(d => d.id === current) ? current : list[0]?.id ?? null);
             }
         } catch (error) {
             console.error('Failed to load domains:', error);
