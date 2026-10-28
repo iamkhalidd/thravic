@@ -178,6 +178,23 @@ async def test_too_little_traffic_is_reported_as_such(seeded_domain, db_pool, mo
     assert called == []  # no model call for a site this small
 
 
+@requires_test_db
+async def test_a_quiet_week_keeps_showing_the_last_good_report(seeded_domain, db_pool, model):
+    await _seed_week(db_pool, seeded_domain)
+    good = await insight_service.generate({"id": seeded_domain}, "auto", NOW)
+    async with db_pool.acquire() as conn:
+        await conn.execute("DELETE FROM sessions WHERE domain_id = $1", seeded_domain)
+    quiet = await insight_service.generate({"id": seeded_domain}, "auto", NOW)
+    assert quiet["status"] == "insufficient_data"
+
+    response = await insight_service.to_response(quiet, seeded_domain)
+
+    assert response["status"] == "ok"
+    assert response["generatedAt"] == good["created_at"]
+    assert response["insights"]
+    assert response["quietWeek"]["sessions"] == 0
+
+
 # ── Checking the model's answer ────────────────────────────────────────────
 
 FACTS = [

@@ -387,6 +387,30 @@ async def latest_today(domain_id: str, now: datetime) -> dict | None:
     )
 
 
+async def latest_ok(domain_id: str) -> dict | None:
+    return await query_one(
+        """
+        SELECT * FROM insight_reports
+        WHERE domain_id = $1 AND status = 'ok'
+        ORDER BY created_at DESC LIMIT 1
+        """,
+        domain_id,
+    )
+
+
+async def with_fallback(report: dict, domain_id: str) -> tuple[dict, dict | None]:
+    """What the dashboard shows: the report, or the last good one while this week is too quiet.
+
+    A site hovering around `MIN_SESSIONS` would otherwise lose yesterday's insights
+    (the ones it was emailed) the first day it dips below. Returns the report to
+    show and, when it is an older one, the quiet report that replaced it.
+    """
+    if report["status"] == "ok":
+        return report, None
+    earlier = await latest_ok(domain_id)
+    return (earlier, report) if earlier else (report, None)
+
+
 async def refreshes_today(domain_id: str, now: datetime) -> int:
     # Only refreshes that produced a report count: one with too little data costs
     # nothing (no model call), so it shouldn't use up the day's allowance.
@@ -428,8 +452,17 @@ async def refresh(domain: dict[str, Any]) -> dict | None:
 
 async def to_response(report: dict, domain_id: str) -> dict:
     now = datetime.now(UTC)
+    report, quiet = await with_fallback(report, domain_id)
     insights = _with_evidence(report["insights"], report["facts"], report["created_at"])
+    quiet_facts = quiet["facts"] if quiet else []
     return {
+        # Set when this is an earlier report because the latest week was too quiet.
+        "quietWeek": {
+            "sessions": quiet_facts[0]["numbers"].get("sessions", 0) if quiet_facts else 0,
+            "checkedAt": quiet["created_at"],
+        }
+        if quiet
+        else None,
         "status": report["status"],
         "insights": insights,
         "aiGenerated": report["ai_generated"],

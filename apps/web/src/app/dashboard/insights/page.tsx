@@ -43,6 +43,8 @@ interface InsightReport {
     generatedAt: string;
     refreshesLeft: number;
     minSessions: number;
+    // Set when this is an earlier report because the latest week was too quiet.
+    quietWeek: { sessions: number; checkedAt: string } | null;
 }
 
 // `sessionsChangePct` -> "Sessions change", with the unit taken from the suffix.
@@ -239,6 +241,13 @@ export default function InsightsPage() {
             {error && (
                 <div role="alert" className="card" style={{ color: 'var(--color-error)', fontSize: '0.875rem' }}>
                     {error}
+                </div>
+            )}
+
+            {report?.quietWeek && (
+                <div className="card" style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
+                    The last 7 days had {report.quietWeek.sessions} sessions, under the {report.minSessions} a new report needs,
+                    so this is the latest full report, from {new Date(report.generatedAt).toLocaleDateString(undefined, { dateStyle: 'medium' })}.
                 </div>
             )}
 
