@@ -5,9 +5,15 @@ import { buildInstallPrompt, nextScriptTag, parseTrackerTag } from './installPro
 
 export type InstallPlatform = 'html' | 'wordpress' | 'shopify' | 'webflow' | 'nextjs' | 'ai';
 
+/** Plugin zip, attached to the latest GitHub release until it is on WordPress.org. */
+export const WORDPRESS_PLUGIN = {
+    href: 'https://github.com/iamkhalidd/thravic/releases/latest/download/thravic.zip',
+    label: 'Download the WordPress plugin',
+};
+
 export const INSTALL_PLATFORMS: { id: InstallPlatform; label: string; title: string; summary: string }[] = [
     { id: 'html', label: 'HTML', title: 'Install on any HTML site', summary: 'Paste one tag into your site’s head.' },
-    { id: 'wordpress', label: 'WordPress', title: 'Install on WordPress', summary: 'Add the tag through your theme or a header plugin.' },
+    { id: 'wordpress', label: 'WordPress', title: 'Install on WordPress', summary: 'Install the Thravic plugin and paste your tracking ID.' },
     { id: 'shopify', label: 'Shopify', title: 'Install on Shopify', summary: 'Add the tag to your theme’s layout file.' },
     { id: 'webflow', label: 'Webflow', title: 'Install on Webflow', summary: 'Add the tag in Project Settings → Custom Code.' },
     { id: 'nextjs', label: 'Next.js', title: 'Install on Next.js', summary: 'Use next/script in your root layout.' },
@@ -18,7 +24,14 @@ export const INSTALL_PLATFORMS: { id: InstallPlatform; label: string; title: str
  * Snippet and steps for a platform. `verifyStep` is the last step: the dashboard
  * points at its Verify button, the public guides at the dashboard.
  */
-export function getPlatformInstructions(platform: InstallPlatform, script: string, verifyStep: string) {
+export interface PlatformInstructions {
+    snippet: string;
+    steps: string[];
+    /** A file to download first, shown as a button above the steps. */
+    download?: { href: string; label: string };
+}
+
+export function getPlatformInstructions(platform: InstallPlatform, script: string, verifyStep: string): PlatformInstructions {
     switch (platform) {
         case 'html':
             return {
@@ -31,19 +44,23 @@ export function getPlatformInstructions(platform: InstallPlatform, script: strin
                     verifyStep,
                 ],
             };
-        case 'wordpress':
+        case 'wordpress': {
+            const tag = parseTrackerTag(script);
             return {
-                snippet: script,
+                // The plugin only needs the ID; it prints the full tag itself.
+                snippet: tag ? tag.trackingId : script,
+                download: WORDPRESS_PLUGIN,
                 steps: [
-                    'Copy the snippet above.',
-                    'In your WordPress admin go to Appearance → Theme File Editor.',
-                    'Select header.php from the list on the right.',
-                    'Paste the snippet just before the closing </head> tag.',
-                    'Click Update File.',
-                    'Alternatively, install the "Insert Headers and Footers" plugin and paste the snippet in the Header field.',
+                    'Download the Thravic plugin (thravic.zip) with the button above. It is coming soon to the WordPress.org plugin directory.',
+                    'In your WordPress admin go to Plugins → Add New → Upload Plugin, choose thravic.zip, then click Install Now and Activate.',
+                    'Go to Settings → Thravic.',
+                    'Paste your tracking ID (shown above) into the Tracking ID box and click Save Changes. The page should say "Tracker is active".',
+                    'Your own visits as an admin or editor are not counted, so check it in a private window.',
+                    'Can’t install plugins? Copy the snippet from the HTML tab and paste it in the Header box of a plugin like "WPCode" instead.',
                     verifyStep,
                 ],
             };
+        }
         case 'shopify':
             return {
                 snippet: script,

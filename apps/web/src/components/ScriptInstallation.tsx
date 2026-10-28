@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Copy, Check, Globe, CircleDot, ShoppingBag, Zap, Atom, ClipboardList, Bot } from 'lucide-react';
+import { Copy, Check, Globe, CircleDot, ShoppingBag, Zap, Atom, ClipboardList, Bot, Download } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { INSTALL_PLATFORMS, getPlatformInstructions, type InstallPlatform } from '@/lib/installGuides';
 
@@ -69,6 +69,22 @@ export function ScriptInstallation({ script }: ScriptInstallationProps) {
                     );
                 })}
             </div>
+
+            {platformInfo.download && (
+                <a
+                    href={platformInfo.download.href}
+                    className="btn btn-primary"
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', marginBottom: 'var(--space-md)', fontSize: '0.875rem' }}
+                >
+                    <Download size={14} /> {platformInfo.download.label}
+                </a>
+            )}
+
+            {platform === 'wordpress' && (
+                <p style={{ margin: '0 0 var(--space-xs)', fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>
+                    Your tracking ID
+                </p>
+            )}
 
             {/* Snippet */}
             <div style={{ position: 'relative', marginBottom: 'var(--space-lg)' }}>
