@@ -15,7 +15,10 @@ export type PlanFeature =
     | 'recordings'
     | 'experiments'
     | 'webhooks'
-    | 'team';
+    | 'team'
+    | 'client_reports'
+    | 'client_links'
+    | 'client_overview';
 
 export type PlanName = 'free' | 'pro' | 'agency';
 

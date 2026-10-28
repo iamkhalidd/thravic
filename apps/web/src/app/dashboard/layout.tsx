@@ -37,7 +37,9 @@ import {
     Bell,
     Repeat,
     Users,
-    MessageSquare
+    MessageSquare,
+    Briefcase,
+    Link2
 } from 'lucide-react';
 import { isApp, pathFits } from '@/lib/platform';
 import { useToast } from '@/components/Toast';
@@ -71,6 +73,7 @@ const navStructure: NavEntry[] = [
             { href: '/dashboard/insights', icon: Sparkles, label: 'AI insights' },
             { href: '/dashboard/alerts', icon: Bell, label: 'Alerts' },
             { href: '/dashboard/reports', icon: FileBarChart, label: 'Reports' },
+            { href: '/dashboard/clients', icon: Briefcase, label: 'Clients' },
         ],
     },
     {
@@ -116,6 +119,7 @@ const navStructure: NavEntry[] = [
             { href: '/dashboard/tracking', icon: SlidersHorizontal, label: 'Site settings' },
             { href: '/dashboard/team', icon: UsersRound, label: 'Team' },
             { href: '/dashboard/webhooks', icon: Webhook, label: 'Webhooks' },
+            { href: '/dashboard/client-links', icon: Link2, label: 'Client links' },
         ],
     },
 ];

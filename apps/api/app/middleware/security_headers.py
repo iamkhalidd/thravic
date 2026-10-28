@@ -31,6 +31,8 @@ DOCS_PATHS = frozenset({"/docs", "/docs/", "/redoc", "/redoc/", "/openapi.json"}
 # With `Cross-Origin-Resource-Policy: same-origin` browsers refuse to run it
 # (ERR_BLOCKED_BY_RESPONSE.NotSameOrigin), so these paths opt out of that header.
 CROSS_ORIGIN_SCRIPT_PATHS = frozenset({"/tf.js", "/v.js", "/recorder.js"})
+# Agency logos are shown by the web app, share pages and report emails (other origins).
+CROSS_ORIGIN_PREFIXES = ("/api/share/brand-logo/",)
 
 # The Shopify app's admin page is framed by admin.shopify.com, so it sets its own
 # CSP (with `frame-ancestors`, see routers/shopify.py) and has no X-Frame-Options.
@@ -96,7 +98,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Origin-Agent-Cluster"] = "?1"
         response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
         response.headers["Cross-Origin-Resource-Policy"] = (
-            "cross-origin" if request.url.path in CROSS_ORIGIN_SCRIPT_PATHS else "same-origin"
+            "cross-origin"
+            if request.url.path in CROSS_ORIGIN_SCRIPT_PATHS
+            or request.url.path.startswith(CROSS_ORIGIN_PREFIXES)
+            else "same-origin"
         )
 
         # crossOriginEmbedderPolicy is disabled in Express (needed for the

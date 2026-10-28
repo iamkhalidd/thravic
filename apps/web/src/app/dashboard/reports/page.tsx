@@ -7,6 +7,9 @@ import { exportData, type ExportType } from '@/lib/api';
 import { useDomain } from '@/contexts/DomainContext';
 import { PageHeader } from '@/components/PageHeader';
 import { ChartCard } from '@/components/ChartCard';
+import { UpgradeGate } from '@/components/UpgradeGate';
+import { ClientReports } from '@/components/agency/ClientReports';
+import { useSubscription } from '@/hooks/useSubscription';
 
 // What GET /api/export/{domainId}?type=... returns: the 10,000 most recent rows.
 const datasets: Array<{ type: ExportType; name: string; description: string }> = [
@@ -23,7 +26,9 @@ const datasets: Array<{ type: ExportType; name: string; description: string }> =
 ];
 
 export default function ReportsPage() {
-    const { selectedDomainId, loading: domainLoading } = useDomain();
+    const { selectedDomainId, selectedDomain, loading: domainLoading } = useDomain();
+    const { hasFeature, loading: subLoading } = useSubscription();
+    const clientReports = hasFeature('client_reports', selectedDomain?.features || undefined);
     const [downloading, setDownloading] = useState<ExportType | null>(null);
     const [error, setError] = useState<{ message: string; upgrade: boolean } | null>(null);
 
@@ -39,7 +44,7 @@ export default function ReportsPage() {
     const header = (
         <PageHeader
             title="Reports"
-            subtitle="Download this site's raw data as CSV, up to the 10,000 most recent rows."
+            subtitle="Branded monthly reports for your clients, and this site's raw data as CSV."
         />
     );
 
@@ -69,6 +74,16 @@ export default function ReportsPage() {
                     )}
                 </div>
             )}
+
+            {selectedDomainId && !subLoading && (clientReports
+                ? <ClientReports domainId={selectedDomainId} />
+                : (
+                    <UpgradeGate
+                        feature="client_reports"
+                        requiredPlan="agency"
+                        message="Send clients a monthly report with your logo and colours, not ours."
+                    />
+                ))}
 
             <ChartCard flush title="CSV exports" subtitle="Each file holds the most recent rows, newest first.">
                 <ul style={{ listStyle: 'none', margin: '10px 0 0', padding: 0, borderTop: '1px solid var(--color-border)' }}>

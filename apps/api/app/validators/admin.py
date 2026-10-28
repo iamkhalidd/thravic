@@ -477,6 +477,9 @@ PLAN_FEATURE_IDS = (
     "experiments",
     "webhooks",
     "team",
+    "client_reports",
+    "client_links",
+    "client_overview",
 )
 MAX_EXTRA_FEATURES = 8
 

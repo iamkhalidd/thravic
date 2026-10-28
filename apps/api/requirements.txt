@@ -14,3 +14,5 @@ python-multipart>=0.0.9
 apscheduler>=3.10.4
 cryptography>=42.0.0
 sentry-sdk[fastapi]>=2.0.0
+fpdf2>=2.8.0
+Pillow>=10.0.0

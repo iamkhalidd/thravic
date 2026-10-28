@@ -38,6 +38,9 @@ PLAN_FEATURES: dict[str, list[str]] = {
         "experiments",
         "webhooks",
         "team",
+        "client_reports",
+        "client_links",
+        "client_overview",
     ],
 }
 
@@ -53,6 +56,9 @@ ALL_FEATURES: tuple[str, ...] = (
     "experiments",
     "webhooks",
     "team",
+    "client_reports",
+    "client_links",
+    "client_overview",
 )
 
 # Maps a feature to the lowest plan that unlocks it
@@ -68,6 +74,9 @@ _FEATURE_PLAN_MAP: dict[str, str] = {
     "experiments": "pro",
     "webhooks": "pro",
     "team": "pro",
+    "client_reports": "agency",
+    "client_links": "agency",
+    "client_overview": "agency",
 }
 
 PLAN_LIMITS: dict[str, dict[str, object]] = {

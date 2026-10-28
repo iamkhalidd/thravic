@@ -1329,3 +1329,223 @@ export const feedback = {
         return apiRequest<FeedbackSummary>(`/api/feedback/${domainId}?days=${days}`);
     },
 };
+
+// Agency API — /api/agency (Agency plan): white-label branding, monthly client
+// reports, read-only client links and the all-clients overview.
+
+export interface AgencyBrand {
+    name: string;
+    color: string;
+    logoUrl: string | null;
+    showPoweredBy: boolean;
+}
+
+export interface ClientReportSent {
+    id: string;
+    month: string;
+    trigger: 'monthly' | 'manual';
+    recipients: string[];
+    sentAt: string;
+}
+
+export interface ClientReportSettings {
+    enabled: boolean;
+    recipients: string[];
+    /** Last month as YYYY-MM: what Send now and Download send by default. */
+    defaultMonth: string;
+    brand: AgencyBrand;
+    /** Only the site's owner edits the brand; admins of a shared site see it. */
+    isBrandOwner: boolean;
+    history: ClientReportSent[];
+}
+
+export interface ShareLink {
+    id: string;
+    label: string;
+    allowRecordings: boolean;
+    expiresAt: string | null;
+    revokedAt: string | null;
+    createdAt: string;
+    lastUsedAt: string | null;
+    state: 'active' | 'revoked' | 'expired';
+    /** Only in the create response: shown once, never stored in the clear. */
+    token?: string;
+}
+
+export interface ClientSite {
+    id: string;
+    domain: string;
+    name: string;
+    owned: boolean;
+    visitors: number;
+    visitorsBefore: number;
+    visitorsChangePct: number | null;
+    lastVisitAt: string | null;
+    conversions: number;
+    conversionsBefore: number;
+    conversionsChangePct: number | null;
+    openAlerts: number;
+    latestAlert: string | null;
+    lastReportAt: string | null;
+    lastReportMonth: string | null;
+    reportsOn: boolean;
+    /** Why the site needs a look, most serious first; empty when it's fine. */
+    attention: string[];
+}
+
+function fileNameFrom(response: Response, fallback: string): string {
+    const match = /filename="?([^";]+)"?/.exec(response.headers.get('Content-Disposition') || '');
+    return match ? match[1] : fallback;
+}
+
+export const agency = {
+    async getBrand() {
+        return apiRequest<AgencyBrand>('/api/agency/branding');
+    },
+
+    async saveBrand(brand: Partial<Omit<AgencyBrand, 'logoUrl'>>) {
+        return apiRequest<AgencyBrand>('/api/agency/branding', { method: 'PUT', body: JSON.stringify(brand) });
+    },
+
+    /** `image` is a data URL (PNG, JPEG or WebP); the server stores it as a PNG. */
+    async uploadLogo(image: string) {
+        return apiRequest<AgencyBrand>('/api/agency/branding/logo', { method: 'POST', body: JSON.stringify({ image }) });
+    },
+
+    async removeLogo() {
+        return apiRequest<AgencyBrand>('/api/agency/branding/logo', { method: 'DELETE' });
+    },
+
+    async getReports(domainId: string) {
+        return apiRequest<ClientReportSettings>(`/api/agency/reports/${domainId}`);
+    },
+
+    async saveReports(domainId: string, settings: { enabled?: boolean; recipients?: string[] }) {
+        return apiRequest<{ enabled: boolean; recipients: string[] }>(`/api/agency/reports/${domainId}`, {
+            method: 'PUT',
+            body: JSON.stringify(settings),
+        });
+    },
+
+    async sendReport(domainId: string, month?: string) {
+        return apiRequest<{ sent: number; month: string }>(`/api/agency/reports/${domainId}/send`, {
+            method: 'POST',
+            body: JSON.stringify(month ? { month } : {}),
+        });
+    },
+
+    /** Fetch the report PDF and hand it to the browser as a download. */
+    async downloadReport(domainId: string, month?: string): Promise<{ error?: string }> {
+        const query = month ? `?month=${encodeURIComponent(month)}` : '';
+        let response: Response;
+        try {
+            response = await authFetch(`${API_URL}/api/agency/reports/${domainId}/pdf${query}`);
+        } catch {
+            return { error: 'Network error' };
+        }
+        if (!response.ok) {
+            const body = await response.json().catch(() => ({}));
+            return { error: body.error || 'Download failed' };
+        }
+        const url = URL.createObjectURL(await response.blob());
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileNameFrom(response, 'report.pdf');
+        a.click();
+        URL.revokeObjectURL(url);
+        return {};
+    },
+
+    async listLinks(domainId: string) {
+        return apiRequest<ShareLink[]>(`/api/agency/links/${domainId}`);
+    },
+
+    async createLink(domainId: string, link: { label: string; allowRecordings: boolean; expiresInDays: number | null }) {
+        return apiRequest<ShareLink>(`/api/agency/links/${domainId}`, { method: 'POST', body: JSON.stringify(link) });
+    },
+
+    async revokeLink(domainId: string, linkId: string) {
+        return apiRequest<{ revoked: boolean }>(`/api/agency/links/${domainId}/${linkId}`, { method: 'DELETE' });
+    },
+
+    async overview(days = 30) {
+        return apiRequest<{ days: number; sites: ClientSite[] }>(`/api/agency/overview?days=${days}`);
+    },
+};
+
+/** The public address of a client link. */
+export function shareUrl(token: string): string {
+    return `${window.location.origin}/share/${token}`;
+}
+
+// Share API — /api/share/{token}: what a client link shows, no account needed.
+
+export interface SharedDashboard {
+    site: { name: string; domain: string };
+    brand: AgencyBrand;
+    label: string;
+    permissions: { recordings: boolean };
+    expiresAt: string | null;
+    days: number;
+    overview: {
+        visitors: number;
+        visitorsBefore: number;
+        pageviews: number;
+        sessions: number;
+        bounceRate: number;
+        avgDuration: number;
+    };
+    series: { bucket: string; pageviews: number; visitors: number; sessions: number }[];
+    channels: { source_type: string; count: number }[];
+    referrers: { site: string; sessions: number; visitors: number; pageviews: number }[];
+    pages: { path: string; views: number }[];
+    latestReport: { month: string; monthLabel: string | null; sentAt: string; summary: string[] } | null;
+}
+
+export interface SharedRecording {
+    id: string;
+    url: string | null;
+    duration: number | null;
+    startedAt: string | null;
+    device: string | null;
+}
+
+/** No sign-in and no token renewal: a share page is public. */
+async function publicGet<T>(endpoint: string): Promise<{ data?: T; error?: string; status?: number }> {
+    try {
+        const response = await fetch(`${API_URL}${endpoint}`, { cache: 'no-store' });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) return { error: body.error || 'Request failed', status: response.status };
+        return { data: body as T };
+    } catch {
+        return { error: 'Network error' };
+    }
+}
+
+export const share = {
+    async dashboard(token: string, days = 30) {
+        return publicGet<SharedDashboard>(`/api/share/${encodeURIComponent(token)}?days=${days}`);
+    },
+
+    reportPdfUrl(token: string): string {
+        return `${API_URL}/api/share/${encodeURIComponent(token)}/report.pdf`;
+    },
+
+    async recordings(token: string, page = 1) {
+        return publicGet<{ recordings: SharedRecording[]; page: number; total: number; pageSize: number }>(
+            `/api/share/${encodeURIComponent(token)}/recordings?page=${page}`
+        );
+    },
+
+    async recording(token: string, id: string) {
+        return publicGet<{ format?: 'rrweb' | 'legacy'; events: ReplayEventLike[] }>(
+            `/api/share/${encodeURIComponent(token)}/recordings/${id}`
+        );
+    },
+};
+
+interface ReplayEventLike {
+    type: number;
+    timestamp: number;
+    [key: string]: unknown;
+}

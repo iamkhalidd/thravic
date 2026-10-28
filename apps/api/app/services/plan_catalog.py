@@ -37,6 +37,9 @@ FEATURE_LABELS: dict[str, str] = {
     "experiments": "A/B experiments",
     "webhooks": "Webhooks",
     "team": "Team members",
+    "client_reports": "White-label client reports",
+    "client_links": "Client share links",
+    "client_overview": "All-clients overview",
 }
 
 

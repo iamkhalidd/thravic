@@ -14,12 +14,15 @@ names, messages) is escaped before it reaches the HTML.
 
 from __future__ import annotations
 
+import base64
 import html
 import re
 import smtplib
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from email.message import EmailMessage
+from email.utils import formataddr, parseaddr
 from typing import Any
 
 import anyio
@@ -37,19 +40,47 @@ class EmailSendError(RuntimeError):
     """Raised by `send_email_or_raise` when a configured provider fails."""
 
 
+@dataclass(frozen=True)
+class Attachment:
+    filename: str
+    content: bytes
+    mime_type: str = "application/pdf"
+
+
 def _sender() -> str:
     return get_settings().SMTP_FROM or "Thravic <onboarding@resend.dev>"
 
 
+def sender_named(name: str) -> str:
+    """Our sending address under another display name (white-label emails)."""
+    _, address = parseaddr(_sender())
+    clean = re.sub(r"[\r\n<>\"]", "", name).strip()[:60]
+    return formataddr((clean, address)) if clean else _sender()
+
+
 async def _send_via_resend(
-    api_key: str, to: str, subject: str, html_body: str, text: str = "", reply_to: str = ""
+    api_key: str,
+    to: str,
+    subject: str,
+    html_body: str,
+    text: str = "",
+    reply_to: str = "",
+    sender: str = "",
+    attachments: Sequence[Attachment] = (),
 ) -> tuple[bool, str]:
     """Returns `(ok, error_message)`; the message is empty on success."""
-    payload: dict[str, Any] = {"from": _sender(), "to": [to], "subject": subject, "html": html_body}
+    payload: dict[str, Any] = {
+        "from": sender or _sender(), "to": [to], "subject": subject, "html": html_body
+    }
     if text:
         payload["text"] = text
     if reply_to:
         payload["reply_to"] = reply_to
+    if attachments:
+        payload["attachments"] = [
+            {"filename": a.filename, "content": base64.b64encode(a.content).decode()}
+            for a in attachments
+        ]
     try:
         async with httpx.AsyncClient(timeout=15) as client:
             response = await client.post(
@@ -68,7 +99,13 @@ async def _send_via_resend(
 
 
 def _send_via_smtp_sync(
-    to: str, subject: str, html_body: str, text: str = "", reply_to: str = ""
+    to: str,
+    subject: str,
+    html_body: str,
+    text: str = "",
+    reply_to: str = "",
+    sender: str = "",
+    attachments: Sequence[Attachment] = (),
 ) -> tuple[bool, str]:
     """Returns `(ok, error_message)`; the message is empty on success."""
     settings = get_settings()
@@ -76,7 +113,7 @@ def _send_via_smtp_sync(
         return False, "No SMTP provider configured"
 
     message = EmailMessage()
-    message["From"] = _sender()
+    message["From"] = sender or _sender()
     message["To"] = to
     message["Subject"] = subject
     if reply_to:
@@ -87,6 +124,11 @@ def _send_via_smtp_sync(
         message.add_alternative(html_body, subtype="html")
     else:
         message.set_content(html_body, subtype="html")
+    for attachment in attachments:
+        maintype, _, subtype = attachment.mime_type.partition("/")
+        message.add_attachment(
+            attachment.content, maintype=maintype, subtype=subtype, filename=attachment.filename
+        )
 
     try:
         port = settings.SMTP_PORT or 587
@@ -124,7 +166,16 @@ async def send_email(to: str, subject: str, html: str, text: str = "", reply_to:
     log.info(f"[DEV EMAIL] {text or html}")
 
 
-async def send_email_or_raise(to: str, subject: str, html: str, text: str = "") -> None:
+async def send_email_or_raise(
+    to: str,
+    subject: str,
+    html: str,
+    text: str = "",
+    *,
+    reply_to: str = "",
+    sender: str = "",
+    attachments: Sequence[Attachment] = (),
+) -> None:
     """Express-compatible send that surfaces provider failures.
 
     `send_email` above degrades gracefully because every call site mirrors the
@@ -138,13 +189,17 @@ async def send_email_or_raise(to: str, subject: str, html: str, text: str = "") 
     settings = get_settings()
 
     if settings.RESEND_API_KEY:
-        ok, error = await _send_via_resend(settings.RESEND_API_KEY, to, subject, html, text)
+        ok, error = await _send_via_resend(
+            settings.RESEND_API_KEY, to, subject, html, text, reply_to, sender, attachments
+        )
         if not ok:
             raise EmailSendError(error)
         return
 
     if settings.SMTP_HOST and settings.SMTP_USER and settings.SMTP_PASS:
-        ok, error = await anyio.to_thread.run_sync(_send_via_smtp_sync, to, subject, html, text)
+        ok, error = await anyio.to_thread.run_sync(
+            _send_via_smtp_sync, to, subject, html, text, reply_to, sender, attachments
+        )
         if not ok:
             raise EmailSendError(error)
         return

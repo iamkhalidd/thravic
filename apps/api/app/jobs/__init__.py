@@ -17,6 +17,7 @@ from datetime import UTC
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from ..logging import create_logger
+from .client_reports import start_client_report_job
 from .daily_stats import start_daily_stats_job
 from .insight_alerts import start_insight_alert_job
 from .payment_reconcile import start_payment_reconcile_job
@@ -49,6 +50,7 @@ def init_jobs() -> AsyncIOScheduler:
     start_insight_alert_job(scheduler)
     start_daily_stats_job(scheduler)
     start_payment_reconcile_job(scheduler)
+    start_client_report_job(scheduler)
     scheduler.start()
 
     log.info("[Jobs] All jobs scheduled.")

@@ -258,6 +258,34 @@ async def list_recordings(
         raise SimpleError(FAILED_LIST, 500) from None
 
 
+async def recording_payload(recording: dict) -> Response:
+    """A recording with its events, as the player loads it (shared with share links)."""
+    meta = {
+        "id": recording["id"],
+        "url": recording["url"],
+        "format": recording["format"],
+        "duration": recording["duration"],
+        "eventsCount": recording["events_count"],
+        "startedAt": recording["started_at"],
+        "endedAt": recording["ended_at"],
+    }
+
+    if recording["format"] == "rrweb":
+        # Spliced in as stored JSON rather than parsed and re-encoded: a
+        # screen recording can run to tens of MB uncompressed.
+        events = await recording_service.rrweb_events_json(recording["id"])
+        head = js_json_dumps(meta)[:-1]
+        return Response(
+            content=f'{head},"events":{events}}}',
+            media_type=None,
+            headers={"content-type": JSON_CONTENT_TYPE},
+        )
+
+    full = await recording_service.get_by_id(recording["id"]) or {}
+    recording_data = full.get("recording_data") or {}
+    return jsjson({**meta, "events": recording_data.get("events") or []})
+
+
 @router.get("/{domainId}/{recordingId}")
 async def get_recording(
     domainId: str,
@@ -272,30 +300,7 @@ async def get_recording(
         if not recording or recording["domain_id"] != domain["id"]:
             raise SimpleError("Recording not found", 404)
 
-        meta = {
-            "id": recording["id"],
-            "url": recording["url"],
-            "format": recording["format"],
-            "duration": recording["duration"],
-            "eventsCount": recording["events_count"],
-            "startedAt": recording["started_at"],
-            "endedAt": recording["ended_at"],
-        }
-
-        if recording["format"] == "rrweb":
-            # Spliced in as stored JSON rather than parsed and re-encoded: a
-            # screen recording can run to tens of MB uncompressed.
-            events = await recording_service.rrweb_events_json(recording["id"])
-            head = js_json_dumps(meta)[:-1]
-            return Response(
-                content=f'{head},"events":{events}}}',
-                media_type=None,
-                headers={"content-type": JSON_CONTENT_TYPE},
-            )
-
-        full = await recording_service.get_by_id(recording["id"]) or {}
-        recording_data = full.get("recording_data") or {}
-        return jsjson({**meta, "events": recording_data.get("events") or []})
+        return await recording_payload(recording)
     except SimpleError:
         raise
     except Exception as exc:

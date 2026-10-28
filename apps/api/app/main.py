@@ -34,6 +34,7 @@ from .middleware.security_headers import SecurityHeadersMiddleware
 from .middleware.settings_gate import MaintenanceModeMiddleware
 from .redis_client import close_redis, get_client, init_redis
 from .routers import admin as admin_routes
+from .routers import agency as agency_routes
 from .routers import alerts as alert_routes
 from .routers import analytics as analytics_routes
 from .routers import announcements as announcement_routes
@@ -53,6 +54,7 @@ from .routers import heatmaps as heatmap_routes
 from .routers import insights as insight_routes
 from .routers import payments as payment_routes
 from .routers import recordings as recording_routes
+from .routers import share as share_routes
 from .routers import shopify as shopify_routes
 from .routers import sources as source_routes
 from .routers import team as team_routes
@@ -266,6 +268,12 @@ app.include_router(
     export_routes.router, prefix="/api/export", tags=["export"],
     dependencies=PROFILE_REQUIRED,
 )
+app.include_router(
+    agency_routes.router, prefix="/api/agency", tags=["agency"],
+    dependencies=PROFILE_REQUIRED,
+)
+# Public client links: no account, read-only, one site per token.
+app.include_router(share_routes.router, prefix="/api/share", tags=["share"])
 app.include_router(demo_routes.router, prefix="/api/demo", tags=["demo"])
 app.include_router(collect_routes.router, prefix="/api/collect", tags=["collect"])
 app.include_router(payment_routes.router, prefix="/api/payments", tags=["payments"])
