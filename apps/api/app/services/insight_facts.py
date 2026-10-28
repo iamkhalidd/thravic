@@ -33,7 +33,7 @@ from .event_service import URL_PATH_SQL
 WINDOW_DAYS = 7
 
 # Below this many sessions in the current week there is too little to say.
-MIN_SESSIONS = 50
+MIN_SESSIONS = 20
 
 # Smallest moves worth reporting, so noise on tiny numbers never becomes a story.
 MIN_DRIVER_DELTA = 5
