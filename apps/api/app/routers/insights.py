@@ -3,9 +3,9 @@
 Both handlers are gated by `requireFeature('insights')` and only Pro/Agency plans
 pass the gate.
 
-`GET /:domainId` serves today's insight report and `POST /:domainId/refresh`
-makes a new one; see `insight_service` (facts in `insight_facts`). The model is
-any OpenAI-compatible API (`AI_*` settings); without one, insights are written
+`GET /:domainId?start=&end=` serves today's insight report for that range
+(default: the last 7 days) and `POST /:domainId/refresh` makes a new one; see
+`insight_service` (facts in `insight_facts`). The model is any OpenAI-compatible API (`AI_*` settings); without one, insights are written
 by rules from the same facts.
 """
 
@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from ..errors import SimpleError
 from ..js_compat import js_round
@@ -22,6 +22,7 @@ from ..logging import create_logger
 from ..middleware.auth import AuthUser, require_auth
 from ..middleware.feature_gate import require_feature
 from ..services import domain_service, event_service, insight_service
+from .analytics import _parse_date
 
 log = create_logger("Insights")
 
@@ -61,6 +62,14 @@ async def _require_domain(domain_id: str, user_id: str) -> dict:
     ):
         raise SimpleError("Domain not found", 404)
     return domain
+
+
+def _range(start: str | None, end: str | None) -> tuple[datetime | None, datetime | None]:
+    """The requested range; either end missing means the service's default."""
+    parsed = (_parse_date(start) if start else None, _parse_date(end) if end else None)
+    if parsed[0] and parsed[1] and parsed[0] >= parsed[1]:
+        raise SimpleError("start must be before end", 400)
+    return parsed
 
 
 def _bucket_key(value: object) -> str:
@@ -159,13 +168,15 @@ async def trends(
 @router.get("/{domainId}")
 async def insights(
     domainId: str,
+    start: str | None = Query(None),
+    end: str | None = Query(None),
     user: AuthUser = Depends(require_auth),
     _feature: None = Depends(require_feature("insights")),
 ):
-    """Today's report: generated on the first view of the (UTC) day, then cached."""
+    """Today's report for the range: generated on its first view of the (UTC) day, then cached."""
     try:
         domain = await _require_domain(domainId, user.user_id)
-        report = await insight_service.todays_report(domain)
+        report = await insight_service.todays_report(domain, *_range(start, end))
         return jsjson(await insight_service.to_response(report, str(domain["id"])))
     except SimpleError:
         raise
@@ -177,13 +188,15 @@ async def insights(
 @router.post("/{domainId}/refresh")
 async def refresh_insights(
     domainId: str,
+    start: str | None = Query(None),
+    end: str | None = Query(None),
     user: AuthUser = Depends(require_auth),
     _feature: None = Depends(require_feature("insights")),
 ):
-    """A new report now, up to `MAX_REFRESHES_PER_DAY` times a day."""
+    """A new report for the range now, up to `MAX_REFRESHES_PER_DAY` times a day."""
     try:
         domain = await _require_domain(domainId, user.user_id)
-        report = await insight_service.refresh(domain)
+        report = await insight_service.refresh(domain, *_range(start, end))
         if report is None:
             raise SimpleError(
                 f"You can refresh insights {insight_service.MAX_REFRESHES_PER_DAY} times a day. "

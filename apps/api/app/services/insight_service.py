@@ -6,8 +6,12 @@ each insight must cite fact ids, and any insight that cites an unknown fact or
 uses a number that is not in the facts it cites is dropped. Without a usable
 model answer, rule-based insights are written from the same facts.
 
-Reports are stored (`insight_reports`) and served for the rest of the UTC day;
-a refresh makes a new one, at most `MAX_REFRESHES_PER_DAY` times a day.
+Reports cover a period (the dashboard's date range; the daily email's is the
+last 7 days) and are compared with the period of the same length just before.
+They are stored (`insight_reports`) and served for the rest of the UTC day for
+that period; a refresh makes a new one, at most `MAX_REFRESHES_PER_DAY` times a
+day. At most `MAX_AI_REPORTS_PER_DAY` reports a day per site ask the model, so
+flicking through date ranges can't run up the bill; later ones use the rules.
 """
 
 from __future__ import annotations
@@ -29,7 +33,9 @@ from . import insight_facts
 log = create_logger("Insights")
 
 MAX_REFRESHES_PER_DAY = 3
-MAX_INSIGHTS = 5
+MAX_AI_REPORTS_PER_DAY = 15
+MAX_INSIGHTS = 8
+MAX_PERIOD = timedelta(days=92)
 REPORT_RETENTION_DAYS = 30
 AI_TIMEOUT_SECONDS = 45.0
 # Room for 5 insights plus any thinking the model does first; at 1500 the JSON
@@ -46,9 +52,9 @@ PRIORITY_ORDER = {p: i for i, p in enumerate(PRIORITIES)}
 FREE_NUMBER_MAX = 10
 
 SYSTEM_PROMPT = """You are a web analytics analyst writing for a website owner.
-You receive FACTS computed from their analytics for the last 7 days compared with the 7 days before. Each fact has an id (F1, F2, ...), a subject, numbers and a kind.
+You receive FACTS computed from their analytics for a period compared with the period of the same length just before it (the overview fact's subject gives the dates). Each fact has an id (F1, F2, ...), a subject, numbers and a kind.
 
-Write the 3 to 5 insights that matter most for this site, most important first. Kinds of insight:
+Write up to 8 insights that matter for this site, most important first, covering every fact that says something useful. The site may be small: explain what its numbers mean in plain terms rather than skipping them. Kinds of insight:
 - "traffic": what changed in traffic and where it came from (use overview + driver facts together)
 - "page": landing pages losing visitors
 - "technical": JavaScript errors, rage clicks, slow pages
@@ -193,7 +199,7 @@ def validate(raw: list[dict[str, Any]], facts: list[dict[str, Any]]) -> list[dic
 
 def _fmt_change(pct: int | None) -> str:
     if pct is None:
-        return "new this week"
+        return "new this period"
     return f"{'up' if pct >= 0 else 'down'} {abs(pct)}%"
 
 
@@ -208,14 +214,14 @@ def rule_insights(facts: list[dict[str, Any]]) -> list[dict[str, Any]]:
         change = n.get("sessionsChangePct")
         before = n["sessionsBefore"]
         if change is None and before and n["sessions"] >= 2 * before:
-            # Too few sessions last week for a percentage to mean anything.
+            # Too few sessions in the period before for a percentage to mean anything.
             out.append(
                 {
                     "type": "traffic",
                     "priority": "medium",
-                    "title": f"{n['sessions']} sessions this week, from {before}",
+                    "title": f"{n['sessions']} sessions this period, from {before}",
                     "description": (
-                        f"Traffic grew from {before} to {n['sessions']} sessions. Last week was "
+                        f"Traffic grew from {before} to {n['sessions']} sessions. The period before was "
                         "too small to compare as a percentage."
                     ),
                     "recommendation": "Open the source breakdown to see what brought the new visitors.",
@@ -233,8 +239,8 @@ def rule_insights(facts: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 {
                     "type": "traffic",
                     "priority": "high" if abs(change) >= 30 else "medium",
-                    "title": f"Sessions {_fmt_change(change)} this week",
-                    "description": f"{n['sessions']} sessions, against {n['sessionsBefore']} the week before.{because}",
+                    "title": f"Sessions {_fmt_change(change)} on the period before",
+                    "description": f"{n['sessions']} sessions, against {n['sessionsBefore']} in the period before.{because}",
                     "recommendation": "Open the source breakdown to confirm where the change came from.",
                     "facts": [overview["id"]] + ([top["id"]] if top else []),
                 }
@@ -261,7 +267,7 @@ def rule_insights(facts: list[dict[str, Any]]) -> list[dict[str, Any]]:
             title = (
                 f"Slow page: {n['lcpMs']} ms to show its main content"
                 if "lcpMs" in n
-                else f"{count} {'errors' if 'errors' in n else 'rage clicks'} this week"
+                else f"{count} {'errors' if 'errors' in n else 'rage clicks'} in this period"
             )
             out.append(
                 {
@@ -304,7 +310,7 @@ def rule_insights(facts: list[dict[str, Any]]) -> list[dict[str, Any]]:
             {
                 "type": "traffic",
                 "priority": "low",
-                "title": "A steady week",
+                "title": "A steady period",
                 "description": f"{overview['numbers']['sessions']} sessions, with no large changes in traffic, pages, errors or funnels.",
                 "recommendation": "Nothing needs attention; check back after your next change or campaign.",
                 "facts": [overview["id"]],
@@ -338,14 +344,57 @@ def _with_evidence(insights: list[dict], facts: list[dict], created_at: datetime
     return shown
 
 
-async def generate(domain: dict[str, Any], trigger: str, now: datetime | None = None) -> dict:
-    """Build facts, ask the model, store and return the report."""
+def period(
+    start: datetime | None, end: datetime | None, now: datetime
+) -> tuple[datetime, datetime, str]:
+    """The stored period for a requested range, and the key reports are cached by.
+
+    The start is rounded down to the UTC day (to the hour for ranges under two
+    days, so "Today" stays today), so "Last 30 days" viewed at 10:00 and at 15:00
+    is one report. A range ending within the last hour runs to now.
+    """
+    end = min(end or now, now)
+    start = start or end - timedelta(days=insight_facts.WINDOW_DAYS)
+    start = max(start, end - MAX_PERIOD)
+    if end - start < timedelta(days=2):
+        start = start.astimezone(UTC).replace(minute=0, second=0, microsecond=0)
+    else:
+        start = _day_start(start)
+    open_ended = end >= now - timedelta(hours=1)
+    if open_ended:
+        end = now
+    end_key = "now" if open_ended else f"{end.astimezone(UTC):%Y-%m-%dT%H}"
+    return start, end, f"{start.astimezone(UTC):%Y-%m-%dT%H}|{end_key}"
+
+
+async def ai_reports_today(domain_id: str, now: datetime) -> int:
+    row = await query_one(
+        """
+        SELECT COUNT(*)::int AS count FROM insight_reports
+        WHERE domain_id = $1 AND ai_generated AND created_at >= $2
+        """,
+        domain_id,
+        _day_start(now),
+    )
+    return int((row or {}).get("count") or 0)
+
+
+async def generate(
+    domain: dict[str, Any],
+    trigger: str,
+    now: datetime | None = None,
+    start: datetime | None = None,
+    end: datetime | None = None,
+) -> dict:
+    """Build facts for the period, ask the model, store and return the report."""
     now = now or datetime.now(UTC)
-    sheet = await insight_facts.build(domain, now)
+    start, end, key = period(start, end, now)
+    sheet = await insight_facts.build(domain, end, start)
     if sheet.sessions < insight_facts.MIN_SESSIONS:
         status, ai_generated, insights = "insufficient_data", False, []
     else:
-        raw = await ask_model(sheet.facts)
+        use_model = await ai_reports_today(str(domain["id"]), now) < MAX_AI_REPORTS_PER_DAY
+        raw = await ask_model(sheet.facts) if use_model else None
         insights = validate(raw, sheet.facts) if raw else []
         if raw and not insights:
             log.warning(f"All {len(raw)} AI insights failed the checks; using the rules")
@@ -356,8 +405,9 @@ async def generate(domain: dict[str, Any], trigger: str, now: datetime | None = 
 
     row = await query_one(
         """
-        INSERT INTO insight_reports (domain_id, trigger, status, ai_generated, insights, facts)
-        VALUES ($1, $2, $3, $4, $5, $6)
+        INSERT INTO insight_reports (domain_id, trigger, status, ai_generated, insights, facts,
+                                     period_start, period_end, period_key)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         RETURNING *
         """,
         domain["id"],
@@ -366,6 +416,9 @@ async def generate(domain: dict[str, Any], trigger: str, now: datetime | None = 
         ai_generated,
         insights,
         sheet.facts,
+        start,
+        end,
+        key,
     )
     await query(
         "DELETE FROM insight_reports WHERE domain_id = $1 AND created_at < $2 RETURNING 1",
@@ -375,40 +428,17 @@ async def generate(domain: dict[str, Any], trigger: str, now: datetime | None = 
     return row
 
 
-async def latest_today(domain_id: str, now: datetime) -> dict | None:
+async def latest_today(domain_id: str, key: str, now: datetime) -> dict | None:
     return await query_one(
         """
         SELECT * FROM insight_reports
-        WHERE domain_id = $1 AND created_at >= $2
+        WHERE domain_id = $1 AND period_key = $2 AND created_at >= $3
         ORDER BY created_at DESC LIMIT 1
         """,
         domain_id,
+        key,
         _day_start(now),
     )
-
-
-async def latest_ok(domain_id: str) -> dict | None:
-    return await query_one(
-        """
-        SELECT * FROM insight_reports
-        WHERE domain_id = $1 AND status = 'ok'
-        ORDER BY created_at DESC LIMIT 1
-        """,
-        domain_id,
-    )
-
-
-async def with_fallback(report: dict, domain_id: str) -> tuple[dict, dict | None]:
-    """What the dashboard shows: the report, or the last good one while this week is too quiet.
-
-    A site hovering around `MIN_SESSIONS` would otherwise lose yesterday's insights
-    (the ones it was emailed) the first day it dips below. Returns the report to
-    show and, when it is an older one, the quiet report that replaced it.
-    """
-    if report["status"] == "ok":
-        return report, None
-    earlier = await latest_ok(domain_id)
-    return (earlier, report) if earlier else (report, None)
 
 
 async def refreshes_today(domain_id: str, now: datetime) -> int:
@@ -425,58 +455,55 @@ async def refreshes_today(domain_id: str, now: datetime) -> int:
     return int((row or {}).get("count") or 0)
 
 
-async def todays_report(domain: dict[str, Any]) -> dict:
-    """Today's report, generating it on the first view of the day.
+async def todays_report(
+    domain: dict[str, Any], start: datetime | None = None, end: datetime | None = None
+) -> dict:
+    """Today's report for the period (default: the last 7 days), made on first view.
 
     The lock stops two dashboard requests arriving together from both paying for
     a model call (one instance; across instances the worst case is a duplicate).
     """
     now = datetime.now(UTC)
-    key = str(domain["id"])
-    async with _locks.setdefault(key, asyncio.Lock()):
-        report = await latest_today(key, now)
+    domain_id = str(domain["id"])
+    start, end, key = period(start, end, now)
+    async with _locks.setdefault(f"{domain_id}|{key}", asyncio.Lock()):
+        report = await latest_today(domain_id, key, now)
         if report is None:
-            report = await generate(domain, "auto", now)
+            report = await generate(domain, "auto", now, start, end)
     return report
 
 
-async def refresh(domain: dict[str, Any]) -> dict | None:
-    """A fresh report, or None when today's refreshes are used up."""
+async def refresh(
+    domain: dict[str, Any], start: datetime | None = None, end: datetime | None = None
+) -> dict | None:
+    """A fresh report for the period, or None when today's refreshes are used up."""
     now = datetime.now(UTC)
-    key = str(domain["id"])
-    async with _locks.setdefault(key, asyncio.Lock()):
-        if await refreshes_today(key, now) >= MAX_REFRESHES_PER_DAY:
+    domain_id = str(domain["id"])
+    start, end, key = period(start, end, now)
+    async with _locks.setdefault(f"{domain_id}|{key}", asyncio.Lock()):
+        if await refreshes_today(domain_id, now) >= MAX_REFRESHES_PER_DAY:
             return None
-        return await generate(domain, "refresh", now)
+        return await generate(domain, "refresh", now, start, end)
 
 
 async def to_response(report: dict, domain_id: str) -> dict:
     now = datetime.now(UTC)
-    report, quiet = await with_fallback(report, domain_id)
     insights = _with_evidence(report["insights"], report["facts"], report["created_at"])
-    quiet_facts = quiet["facts"] if quiet else []
+    overview = next((f for f in report["facts"] if f["kind"] == "overview"), None)
+    # Reports from before periods were stored covered the 7 days to their creation.
+    end = report.get("period_end") or report["created_at"]
+    start = report.get("period_start") or end - timedelta(days=insight_facts.WINDOW_DAYS)
     return {
-        # Set when this is an earlier report because the latest week was too quiet.
-        "quietWeek": {
-            "sessions": quiet_facts[0]["numbers"].get("sessions", 0) if quiet_facts else 0,
-            "checkedAt": quiet["created_at"],
-        }
-        if quiet
-        else None,
         "status": report["status"],
         "insights": insights,
+        # The period's headline numbers, against the period before.
+        "summary": overview["numbers"] if overview else None,
         "aiGenerated": report["ai_generated"],
         "generatedAt": report["created_at"],
         "refreshesLeft": max(0, MAX_REFRESHES_PER_DAY - await refreshes_today(domain_id, now)),
         "minSessions": insight_facts.MIN_SESSIONS,
         "period": {
-            "current": {
-                "start": report["created_at"] - timedelta(days=insight_facts.WINDOW_DAYS),
-                "end": report["created_at"],
-            },
-            "previous": {
-                "start": report["created_at"] - timedelta(days=2 * insight_facts.WINDOW_DAYS),
-                "end": report["created_at"] - timedelta(days=insight_facts.WINDOW_DAYS),
-            },
+            "current": {"start": start, "end": end},
+            "previous": {"start": start - (end - start), "end": start},
         },
     }

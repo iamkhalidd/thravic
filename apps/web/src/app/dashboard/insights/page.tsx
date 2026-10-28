@@ -16,15 +16,18 @@ import {
 } from 'lucide-react';
 import { authFetch } from '@/lib/api';
 import { useDomain } from '@/contexts/DomainContext';
+import { useApiRange } from '@/contexts/DateRangeContext';
 import { PageHeader } from '@/components/PageHeader';
 import { ChartCard } from '@/components/ChartCard';
+import { StatCard } from '@/components/StatCard';
 import { ASK_EVENT } from '@/components/AskThravic';
 import { TimeSeriesChart } from '@/components/charts/TimeSeriesChart';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
-// GET /api/insights/{domainId}: today's report. Every number in an insight comes
-// from its `evidence` (computed from the site's data, not by the model).
+// GET /api/insights/{domainId}?start=&end=: today's report for the header's date
+// range, compared with the period of the same length before it. Every number in
+// an insight comes from its `evidence` (computed from the site's data, not by the model).
 interface Insight {
     id: string;
     type: 'traffic' | 'page' | 'technical' | 'funnel' | 'opportunity';
@@ -42,9 +45,21 @@ interface InsightReport {
     aiGenerated: boolean;
     generatedAt: string;
     refreshesLeft: number;
-    minSessions: number;
-    // Set when this is an earlier report because the latest week was too quiet.
-    quietWeek: { sessions: number; checkedAt: string } | null;
+    // The period's headline numbers (the overview fact), against the period before.
+    summary: Partial<Record<
+        'sessions' | 'sessionsChangePct' | 'visitors' | 'visitorsChangePct' | 'pageviews' | 'pageviewsChangePct'
+        | 'bounceRatePct' | 'bounceRateBeforePct' | 'avgSessionSeconds' | 'avgSessionSecondsBefore', number>> | null;
+    period: { current: { start: string; end: string }; previous: { start: string; end: string } };
+}
+
+function formatDuration(seconds: number) {
+    const s = Math.round(seconds);
+    return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
+}
+
+function formatPeriod({ start, end }: { start: string; end: string }) {
+    const day = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    return `${day(start)} – ${day(end)}`;
 }
 
 // `sessionsChangePct` -> "Sessions change", with the unit taken from the suffix.
@@ -100,8 +115,9 @@ const PRIORITY_BADGE: Record<Insight['priority'], string> = {
     low: 'badge badge-success',
 };
 
-async function getInsights(domainId: string, refresh = false) {
-    const res = await authFetch(`${API_URL}/api/insights/${domainId}${refresh ? '/refresh' : ''}`, {
+async function getInsights(domainId: string, range: { start: string; end: string }, refresh = false) {
+    const params = new URLSearchParams({ start: range.start, end: range.end });
+    const res = await authFetch(`${API_URL}/api/insights/${domainId}${refresh ? '/refresh' : ''}?${params}`, {
         method: refresh ? 'POST' : 'GET'
     });
     const body = await res.json();
@@ -116,12 +132,16 @@ async function getTrends(domainId: string): Promise<TrendData | null> {
 
 export default function InsightsPage() {
     const { selectedDomainId, selectedDomain, loading: domainLoading } = useDomain();
+    const range = useApiRange();
+    // Reports are cached per day, so Live's moving range end needn't re-fetch them.
+    const dayKey = `${range.start.slice(0, 13)}|${range.end.slice(0, 10)}`;
     const [report, setReport] = useState<InsightReport | null>(null);
     const [trends, setTrends] = useState<TrendData | null>(null);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [selectedInsight, setSelectedInsight] = useState<Insight | null>(null);
+    // Every insight opens with its full detail; the reader can fold any away.
+    const [folded, setFolded] = useState<Set<string>>(new Set());
     const insights = report?.insights ?? [];
 
     useEffect(() => {
@@ -133,10 +153,10 @@ export default function InsightsPage() {
         const loadData = async () => {
             setLoading(true);
             setError(null);
-            setSelectedInsight(null);
+            setFolded(new Set());
 
             const [insightsData, trendsData] = await Promise.all([
-                getInsights(selectedDomainId),
+                getInsights(selectedDomainId, range),
                 getTrends(selectedDomainId)
             ]);
 
@@ -147,13 +167,15 @@ export default function InsightsPage() {
         };
 
         loadData();
-    }, [selectedDomainId, domainLoading]);
+        // range is read through dayKey
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedDomainId, domainLoading, dayKey]);
 
     const refresh = async () => {
         if (!selectedDomainId) return;
         setRefreshing(true);
         setError(null);
-        const result = await getInsights(selectedDomainId, true);
+        const result = await getInsights(selectedDomainId, range, true);
         if (result.report) setReport(result.report);
         else setError(result.error ?? null);
         setRefreshing(false);
@@ -183,7 +205,9 @@ export default function InsightsPage() {
     const header = (
         <PageHeader
             title="AI insights"
-            subtitle="A daily report on what changed on your site and what to do about it"
+            subtitle={report
+                ? `What changed ${formatPeriod(report.period.current)}, against ${formatPeriod(report.period.previous)}, and what to do about it`
+                : 'What changed on your site in the selected period, and what to do about it'}
             badge={report && report.status === 'ok' ? (
                 <span className="badge" title={report.aiGenerated ? 'Written by AI from your numbers' : 'AI unavailable: written by rules from the same numbers'}>
                     {report.aiGenerated ? 'AI' : 'Rule-based'}
@@ -231,6 +255,7 @@ export default function InsightsPage() {
         );
     }
 
+    const summary = report?.status === 'ok' ? report.summary : null;
     const direction = trends?.trend?.direction;
     const TrendIcon = direction === 'up' ? TrendingUp : direction === 'down' ? TrendingDown : ArrowRight;
 
@@ -244,10 +269,15 @@ export default function InsightsPage() {
                 </div>
             )}
 
-            {report?.quietWeek && (
-                <div className="card" style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
-                    The last 7 days had {report.quietWeek.sessions} sessions, under the {report.minSessions} a new report needs,
-                    so this is the latest full report, from {new Date(report.generatedAt).toLocaleDateString(undefined, { dateStyle: 'medium' })}.
+            {summary && (
+                <div className="stat-grid">
+                    <StatCard label="Sessions" value={(summary.sessions ?? 0).toLocaleString()} change={summary.sessionsChangePct} />
+                    <StatCard label="Visitors" value={(summary.visitors ?? 0).toLocaleString()} change={summary.visitorsChangePct} />
+                    <StatCard label="Page views" value={(summary.pageviews ?? 0).toLocaleString()} change={summary.pageviewsChangePct} />
+                    <StatCard label="Bounce rate" value={`${summary.bounceRatePct ?? 0}%`} lowerIsBetter
+                        hint={summary.bounceRateBeforePct !== undefined ? `${summary.bounceRateBeforePct}% the period before` : undefined} />
+                    <StatCard label="Avg. session" value={formatDuration(summary.avgSessionSeconds ?? 0)}
+                        hint={summary.avgSessionSecondsBefore !== undefined ? `${formatDuration(summary.avgSessionSecondsBefore)} the period before` : undefined} />
                 </div>
             )}
 
@@ -307,24 +337,28 @@ export default function InsightsPage() {
                 </div>
             </div>
 
-            <ChartCard title="All insights" subtitle={insights.length ? `${insights.length} from today's report` : undefined} flush>
+            <ChartCard title="All insights" subtitle={insights.length ? `${insights.length} for ${report ? formatPeriod(report.period.current) : 'this period'}` : undefined} flush>
                 {insights.length === 0 ? (
                     <p className="empty-note">
                         {report?.status === 'insufficient_data'
-                            ? `Not enough data yet for ${selectedDomain?.domain ?? 'this site'}: insights need at least ${report.minSessions} sessions in the last 7 days.`
+                            ? `No visits to ${selectedDomain?.domain ?? 'this site'} in this period yet. Pick a longer date range to see insights.`
                             : error ? 'Insights could not be loaded.' : 'No insights yet.'}
                     </p>
                 ) : (
                     <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
                         {insights.map(insight => {
                             const Icon = insightIcons[insight.type] || Sparkles;
-                            const open = selectedInsight?.id === insight.id;
+                            const open = !folded.has(insight.id);
                             return (
                                 <li key={insight.id} style={{ borderTop: '1px solid var(--color-border)' }}>
                                     <button
                                         type="button"
                                         aria-expanded={open}
-                                        onClick={() => setSelectedInsight(open ? null : insight)}
+                                        onClick={() => setFolded(prev => {
+                                            const next = new Set(prev);
+                                            if (open) next.add(insight.id); else next.delete(insight.id);
+                                            return next;
+                                        })}
                                         style={{
                                             display: 'flex', alignItems: 'flex-start', gap: 12, width: '100%',
                                             padding: '12px 20px', background: 'transparent', border: 'none',

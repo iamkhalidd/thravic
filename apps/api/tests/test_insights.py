@@ -178,23 +178,6 @@ async def test_too_little_traffic_is_reported_as_such(seeded_domain, db_pool, mo
     assert called == []  # no model call for a site this small
 
 
-@requires_test_db
-async def test_a_quiet_week_keeps_showing_the_last_good_report(seeded_domain, db_pool, model):
-    await _seed_week(db_pool, seeded_domain)
-    good = await insight_service.generate({"id": seeded_domain}, "auto", NOW)
-    async with db_pool.acquire() as conn:
-        await conn.execute("DELETE FROM sessions WHERE domain_id = $1", seeded_domain)
-    quiet = await insight_service.generate({"id": seeded_domain}, "auto", NOW)
-    assert quiet["status"] == "insufficient_data"
-
-    response = await insight_service.to_response(quiet, seeded_domain)
-
-    assert response["status"] == "ok"
-    assert response["generatedAt"] == good["created_at"]
-    assert response["insights"]
-    assert response["quietWeek"]["sessions"] == 0
-
-
 # ── Checking the model's answer ────────────────────────────────────────────
 
 FACTS = [
@@ -276,7 +259,7 @@ def test_growth_from_a_tiny_base_is_told_in_counts():
 
     out = insight_service.rule_insights(facts)
 
-    assert out[0]["title"] == "61 sessions this week, from 4"
+    assert out[0]["title"] == "61 sessions this period, from 4"
     assert "%" not in out[0]["title"]
 
 
@@ -363,6 +346,37 @@ async def test_a_failed_model_call_falls_back(monkeypatch):
 # ── Stored reports ─────────────────────────────────────────────────────────
 
 
+def test_a_range_is_one_report_for_the_whole_day():
+    now = datetime(2026, 10, 28, 15, 20, tzinfo=UTC)
+    morning = datetime(2026, 10, 28, 10, 5, tzinfo=UTC)
+
+    start, end, key = insight_service.period(now - timedelta(days=30), now, now)
+    _, _, morning_key = insight_service.period(morning - timedelta(days=30), morning, now)
+
+    assert start == datetime(2026, 9, 28, tzinfo=UTC) and end == now
+    assert key == "2026-09-28T00|now"
+    assert morning_key == "2026-09-28T00|2026-10-28T10"  # ended hours ago: a closed range
+
+
+def test_today_keeps_its_hours_and_long_ranges_are_capped():
+    now = datetime(2026, 10, 28, 15, 20, tzinfo=UTC)
+
+    today, _, _ = insight_service.period(datetime(2026, 10, 27, 23, 0, tzinfo=UTC), now, now)
+    year, _, _ = insight_service.period(now - timedelta(days=365), now, now)
+
+    assert today == datetime(2026, 10, 27, 23, 0, tzinfo=UTC)  # local midnight, UTC+1
+    assert now - year <= insight_service.MAX_PERIOD + timedelta(days=1)
+
+
+def test_facts_name_the_period_they_compare():
+    w = insight_facts.Windows.covering(
+        datetime(2026, 10, 1, tzinfo=UTC), datetime(2026, 10, 29, tzinfo=UTC)
+    )
+
+    assert w.start == datetime(2026, 9, 3, tzinfo=UTC)
+    assert w.describe() == "Oct 1 to Oct 29 vs Sep 3 to Oct 1"
+
+
 @requires_test_db
 async def test_one_report_a_day_and_capped_refreshes(seeded_domain, db_pool, model):
     await _seed_week(db_pool, seeded_domain)
@@ -383,5 +397,6 @@ async def test_one_report_a_day_and_capped_refreshes(seeded_domain, db_pool, mod
         await insight_service.todays_report(domain), seeded_domain
     )
     assert response["refreshesLeft"] == 0
+    assert response["summary"]["sessions"] > 0
     assert response["insights"][0]["evidence"][0]["subject"]
     assert response["insights"][0]["link"].startswith("/dashboard")

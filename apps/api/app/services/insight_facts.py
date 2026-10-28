@@ -1,4 +1,4 @@
-"""The facts AI insights are built from: this week against last, from the database.
+"""The facts AI insights are built from: a period against the one just before it.
 
 Every number an insight can mention is computed here, never by the model. Each
 fact gets an id (F1, F2, ...) that insights must cite; `insight_service` checks
@@ -30,24 +30,24 @@ from ..routers.funnels import _funnel_progress
 from . import event_service, funnel_service, session_service
 from .event_service import URL_PATH_SQL
 
-WINDOW_DAYS = 7
+WINDOW_DAYS = 7  # the default period (and the daily email's)
 
-# Below this many sessions in the current week there is too little to say.
-MIN_SESSIONS = 20
+# With no sessions at all in the period there is nothing to say.
+MIN_SESSIONS = 1
 
 # Smallest moves worth reporting, so noise on tiny numbers never becomes a story.
-MIN_DRIVER_DELTA = 5
+MIN_DRIVER_DELTA = 3
 # A percentage needs this much to compare against; "up 1450%" from 4 sessions is noise.
 MIN_PCT_BASE = 20
-MIN_PAGE_ENTRIES = 20
+MIN_PAGE_ENTRIES = 10
 BOUNCE_MARGIN_POINTS = 15
-MIN_TECHNICAL_COUNT = 3
+MIN_TECHNICAL_COUNT = 2
 SLOW_LCP_MS = 2500
-MIN_LCP_SAMPLES = 10
-MIN_FUNNEL_ENTRANTS = 20
+MIN_LCP_SAMPLES = 5
+MIN_FUNNEL_ENTRANTS = 10
 OPPORTUNITY_ENGAGEMENT_RATIO = 1.5
 OPPORTUNITY_MAX_SHARE = 15
-MIN_OPPORTUNITY_SESSIONS = 10
+MIN_OPPORTUNITY_SESSIONS = 5
 MAX_FUNNELS = 5
 
 # The legacy source types, folded like the Sources page does.
@@ -89,8 +89,19 @@ class Windows:
 
     @classmethod
     def ending(cls, end: datetime) -> Windows:
-        mid = end - timedelta(days=WINDOW_DAYS)
-        return cls(start=mid - timedelta(days=WINDOW_DAYS), mid=mid, end=end)
+        return cls.covering(end - timedelta(days=WINDOW_DAYS), end)
+
+    @classmethod
+    def covering(cls, start: datetime, end: datetime) -> Windows:
+        """`start`..`end`, compared with the period of the same length just before."""
+        return cls(start=start - (end - start), mid=start, end=end)
+
+    def describe(self) -> str:
+        return f"{_day(self.mid)} to {_day(self.end)} vs {_day(self.start)} to {_day(self.mid)}"
+
+
+def _day(value: datetime) -> str:
+    return f"{value:%b} {value.day}"
 
 
 @dataclass
@@ -110,9 +121,9 @@ class FactSheet:
         )
 
 
-async def build(domain: dict[str, Any], end: datetime) -> FactSheet:
-    """All facts for the week ending at `end`."""
-    w = Windows.ending(end)
+async def build(domain: dict[str, Any], end: datetime, start: datetime | None = None) -> FactSheet:
+    """All facts for `start`..`end` (default: the week ending at `end`)."""
+    w = Windows.covering(start, end) if start else Windows.ending(end)
     sheet = FactSheet()
     await _overview(sheet, domain, w)
     if sheet.sessions < MIN_SESSIONS:
@@ -141,7 +152,7 @@ async def _overview(sheet: FactSheet, domain: dict, w: Windows) -> None:
     sheet.sessions = ses_now
     sheet.add(
         "overview",
-        "Whole site, last 7 days vs the 7 days before",
+        f"Whole site, {w.describe()}",
         {
             "sessions": ses_now,
             "sessionsBefore": ses_before,
