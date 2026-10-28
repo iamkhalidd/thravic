@@ -20,8 +20,6 @@ import {
     Video,
     Sparkles,
     FileBarChart,
-    Settings,
-    LogOut,
     ChevronDown,
     ChevronLeft,
     Calendar,
@@ -45,7 +43,7 @@ import { DomainProvider, useDomain } from '@/contexts/DomainContext';
 import { DateRangeProvider, useDateRange, datePresets } from '@/contexts/DateRangeContext';
 import { AnnouncementBanner } from '@/components/AnnouncementBanner';
 import { BillingBanner } from '@/components/BillingBanner';
-import { UsageWidget } from '@/components/UsageWidget';
+import { AccountMenu } from '@/components/AccountMenu';
 import { ImpersonationBanner } from '@/components/ImpersonationBanner';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { RouteErrorBoundary } from '@/components/RouteErrorBoundary';
@@ -104,6 +102,14 @@ const navStructure: NavEntry[] = [
             { href: '/dashboard/performance', icon: Gauge, label: 'Page speed' },
         ],
     },
+    {
+        label: 'Settings',
+        children: [
+            { href: '/dashboard/tracking', icon: SlidersHorizontal, label: 'Site settings' },
+            { href: '/dashboard/team', icon: UsersRound, label: 'Team' },
+            { href: '/dashboard/webhooks', icon: Webhook, label: 'Webhooks' },
+        ],
+    },
 ];
 
 /**
@@ -150,8 +156,8 @@ function NavItem({ item, pathname, collapsed }: NavItemProps) {
                 width: '100%',
                 display: 'flex',
                 alignItems: 'center',
-                gap: collapsed ? '0' : '10px',
-                padding: collapsed ? '8px 0' : '7px 12px',
+                gap: collapsed ? '0' : '9px',
+                padding: collapsed ? '7px 0' : '5px 12px',
                 justifyContent: collapsed ? 'center' : 'flex-start',
                 background: 'transparent',
                 borderRadius: '6px',
@@ -165,7 +171,7 @@ function NavItem({ item, pathname, collapsed }: NavItemProps) {
                 overflow: 'hidden',
             }}
         >
-            <Icon size={18} style={{ flexShrink: 0 }} />
+            <Icon size={16} style={{ flexShrink: 0 }} />
             {!collapsed && <span>{item.label}</span>}
         </Link>
     );
@@ -313,14 +319,14 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
 
                 {/* Domain Selector */}
                 {!sidebarCollapsed && (
-                    <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--color-sidebar-border)', flexShrink: 0 }}>
+                    <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--color-sidebar-border)', flexShrink: 0 }}>
                         <div style={{ position: 'relative' }}>
                             <button
                                 onClick={() => setDomainDropdownOpen(!domainDropdownOpen)}
                                 style={{
                                     width: '100%', display: 'flex', alignItems: 'center',
                                     justifyContent: 'space-between',
-                                    padding: '7px 10px',
+                                    padding: '6px 10px',
                                     background: 'var(--color-bg-primary)',
                                     border: '1px solid var(--color-border)',
                                     borderRadius: '6px', cursor: 'pointer',
@@ -399,20 +405,20 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                 {/* Navigation */}
                 <nav className="no-scrollbar" style={{
                     flex: 1, overflowY: 'auto', overflowX: 'hidden',
-                    padding: (sidebarCollapsed && !isMobile) ? '8px 4px' : '8px 0',
+                    padding: (sidebarCollapsed && !isMobile) ? '6px 4px' : '6px 0',
                 }}>
                     {nav.map(section => (
                         <div
                             key={section.label || 'main'}
                             role="group"
                             aria-label={section.label || undefined}
-                            style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginTop: section.label ? 14 : 0 }}
+                            style={{ display: 'flex', flexDirection: 'column', gap: '1px', marginTop: section.label ? 10 : 0 }}
                         >
                             {section.label && ((sidebarCollapsed && !isMobile) ? (
                                 <div aria-hidden="true" style={{ height: 1, margin: '0 8px 4px', background: 'var(--color-sidebar-border)' }} />
                             ) : (
                                 <div style={{
-                                    padding: '0 12px 4px', fontSize: '0.6875rem', fontWeight: 500,
+                                    padding: '0 12px 3px', fontSize: '0.6875rem', fontWeight: 500,
                                     textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--color-text-muted)',
                                 }}>{section.label}</div>
                             ))}
@@ -428,141 +434,15 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                     ))}
                 </nav>
 
-                {/* Bottom — Settings + User */}
-                <div style={{
-                    borderTop: '1px solid var(--color-sidebar-border)',
-                    padding: (sidebarCollapsed && !isMobile) ? '8px 4px' : '8px 0',
-                    flexShrink: 0,
-                }}>
-                    {/* Webhooks link */}
-                    <Link
-                        href="/dashboard/webhooks"
-                        title={(sidebarCollapsed && !isMobile) ? 'Webhooks' : undefined}
-                        style={{
-                            display: 'flex', alignItems: 'center',
-                            gap: (sidebarCollapsed && !isMobile) ? '0' : '10px',
-                            padding: (sidebarCollapsed && !isMobile) ? '10px 0' : '8px 12px',
-                            justifyContent: (sidebarCollapsed && !isMobile) ? 'center' : 'flex-start',
-                            color: pathname.startsWith('/dashboard/webhooks') ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
-                            fontWeight: pathname.startsWith('/dashboard/webhooks') ? 500 : 400,
-                            textDecoration: 'none', fontSize: '0.8125rem',
-                            background: 'transparent',
-                            whiteSpace: 'nowrap', overflow: 'hidden',
-                        }}
-                    >
-                        <Webhook size={18} style={{ flexShrink: 0 }} />
-                        {!(sidebarCollapsed && !isMobile) && <span>Webhooks</span>}
-                    </Link>
-
-                    {/* Tracking link */}
-                    <Link
-                        href="/dashboard/tracking"
-                        title={(sidebarCollapsed && !isMobile) ? 'Site settings' : undefined}
-                        style={{
-                            display: 'flex', alignItems: 'center',
-                            gap: (sidebarCollapsed && !isMobile) ? '0' : '10px',
-                            padding: (sidebarCollapsed && !isMobile) ? '10px 0' : '8px 12px',
-                            justifyContent: (sidebarCollapsed && !isMobile) ? 'center' : 'flex-start',
-                            color: pathname.startsWith('/dashboard/tracking') ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
-                            fontWeight: pathname.startsWith('/dashboard/tracking') ? 500 : 400,
-                            textDecoration: 'none', fontSize: '0.8125rem',
-                            background: 'transparent',
-                            whiteSpace: 'nowrap', overflow: 'hidden',
-                        }}
-                    >
-                        <SlidersHorizontal size={18} style={{ flexShrink: 0 }} />
-                        {!(sidebarCollapsed && !isMobile) && <span>Site settings</span>}
-                    </Link>
-
-                    {/* Team link */}
-                    <Link
-                        href="/dashboard/team"
-                        title={(sidebarCollapsed && !isMobile) ? 'Team' : undefined}
-                        style={{
-                            display: 'flex', alignItems: 'center',
-                            gap: (sidebarCollapsed && !isMobile) ? '0' : '10px',
-                            padding: (sidebarCollapsed && !isMobile) ? '10px 0' : '8px 12px',
-                            justifyContent: (sidebarCollapsed && !isMobile) ? 'center' : 'flex-start',
-                            color: pathname.startsWith('/dashboard/team') ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
-                            fontWeight: pathname.startsWith('/dashboard/team') ? 500 : 400,
-                            textDecoration: 'none', fontSize: '0.8125rem',
-                            background: 'transparent',
-                            whiteSpace: 'nowrap', overflow: 'hidden',
-                        }}
-                    >
-                        <UsersRound size={18} style={{ flexShrink: 0 }} />
-                        {!(sidebarCollapsed && !isMobile) && <span>Team</span>}
-                    </Link>
-
-                    {/* Settings link */}
-                    <Link
-                        href="/dashboard/settings"
-                        title={(sidebarCollapsed && !isMobile) ? 'Account' : undefined}
-                        style={{
-                            display: 'flex', alignItems: 'center',
-                            gap: (sidebarCollapsed && !isMobile) ? '0' : '10px',
-                            padding: (sidebarCollapsed && !isMobile) ? '10px 0' : '8px 12px',
-                            justifyContent: (sidebarCollapsed && !isMobile) ? 'center' : 'flex-start',
-                            color: pathname.startsWith('/dashboard/settings') ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
-                            fontWeight: pathname.startsWith('/dashboard/settings') ? 500 : 400,
-                            textDecoration: 'none', fontSize: '0.8125rem',
-                            background: 'transparent',
-                            whiteSpace: 'nowrap', overflow: 'hidden',
-                        }}
-                    >
-                        <Settings size={18} style={{ flexShrink: 0 }} />
-                        {!(sidebarCollapsed && !isMobile) && <span>Account</span>}
-                    </Link>
-
-                    {!(sidebarCollapsed && !isMobile) && <UsageWidget />}
-
-                    {/* User row */}
-                    {user && (
-                        <div style={{
-                            display: 'flex', alignItems: 'center',
-                            gap: (sidebarCollapsed && !isMobile) ? '0' : '8px',
-                            padding: (sidebarCollapsed && !isMobile) ? '8px 0' : '8px 12px',
-                            justifyContent: (sidebarCollapsed && !isMobile) ? 'center' : 'flex-start',
-                            marginTop: '4px',
-                        }}>
-                            <img
-                                src={user.avatar_url?.startsWith('/uploads') ? `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}${user.avatar_url}` : user.avatar_url}
-                                alt={user.name}
-                                style={{
-                                    width: '28px', height: '28px', borderRadius: '50%',
-                                    objectFit: 'cover', flexShrink: 0, border: '1px solid var(--color-border)'
-                                }}
-                            />
-                            {!(sidebarCollapsed && !isMobile) && (
-                                <>
-                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                        <div style={{
-                                            fontSize: '0.8125rem', fontWeight: 500,
-                                            color: 'var(--color-text-primary)',
-                                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                                        }}>{user.name}</div>
-                                        <div style={{
-                                            fontSize: '0.6875rem', color: 'var(--color-text-muted)',
-                                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                                        }}>{user.email}</div>
-                                    </div>
-                                    <div style={{ display: 'flex', gap: '4px' }}>
-                                        <button
-                                            onClick={handleLogout}
-                                            title="Logout"
-                                            style={{
-                                                padding: '6px', background: 'transparent',
-                                                border: '1px solid var(--color-border)',
-                                                borderRadius: '6px', color: 'var(--color-text-muted)',
-                                                cursor: 'pointer', display: 'flex',
-                                            }}
-                                        ><LogOut size={15} /></button>
-                                    </div>
-                                </>
-                            )}
-                        </div>
-                    )}
-                </div>
+                {/* Bottom: the account menu (profile, usage, account settings, sign out) */}
+                {user && (
+                    <AccountMenu
+                        user={user}
+                        collapsed={sidebarCollapsed && !isMobile}
+                        active={pathname.startsWith('/dashboard/settings')}
+                        onLogout={handleLogout}
+                    />
+                )}
             </aside>
 
             {/* ── Main Content ── */}
