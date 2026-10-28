@@ -33,7 +33,8 @@ import {
     Gauge,
     FileInput,
     MousePointerClick,
-    Smartphone
+    Smartphone,
+    Bell
 } from 'lucide-react';
 import { isApp, pathFits } from '@/lib/platform';
 import { useToast } from '@/components/Toast';
@@ -65,6 +66,7 @@ const navStructure: NavEntry[] = [
         children: [
             { href: '/dashboard', icon: LayoutDashboard, label: 'Overview', exact: true },
             { href: '/dashboard/insights', icon: Sparkles, label: 'AI insights' },
+            { href: '/dashboard/alerts', icon: Bell, label: 'Alerts' },
             { href: '/dashboard/reports', icon: FileBarChart, label: 'Reports' },
         ],
     },

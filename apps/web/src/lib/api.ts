@@ -1116,3 +1116,23 @@ export const webhooks = {
         });
     },
 };
+
+export type AlertKind = 'traffic_drop' | 'traffic_spike' | 'silent' | 'new_error' | 'rage_clicks' | 'slow_page';
+
+export interface SiteAlert {
+    id: string;
+    kind: AlertKind;
+    title: string;
+    message: string;
+    /** Dashboard path of the page that shows the problem. */
+    link: string | null;
+    /** Up to three recording ids that show it. */
+    recordings: string[];
+    createdAt: string;
+}
+
+export const alerts = {
+    async list(domainId: string) {
+        return apiRequest<{ alerts: SiteAlert[] }>(`/api/alerts/${domainId}`);
+    },
+};

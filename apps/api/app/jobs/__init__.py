@@ -1,6 +1,6 @@
 """Job wiring — port of `jobs/index.ts`.
 
-`init_jobs()` starts the scheduler and registers the hourly traffic alert, the
+`init_jobs()` starts the scheduler and registers the hourly smart alerts, the
 hourly usage-limit and renewal-reminder emails, the daily retention job, the
 cleanup of under-18 accounts, the Monday weekly report, the daily AI insight
 alerts, the hourly daily-totals refresh and the hourly check of pending
@@ -22,8 +22,8 @@ from .insight_alerts import start_insight_alert_job
 from .payment_reconcile import start_payment_reconcile_job
 from .restricted_accounts import start_restricted_account_job
 from .retention import start_retention_job
+from .smart_alerts import start_smart_alert_job
 from .subscription_reminders import start_subscription_reminder_job
-from .traffic_alert import start_traffic_alert_job
 from .usage_alerts import start_usage_alert_job
 from .weekly_report import start_weekly_report_job
 
@@ -40,7 +40,7 @@ def init_jobs() -> AsyncIOScheduler:
     log.info("[Jobs] Initializing scheduled jobs...")
 
     scheduler = AsyncIOScheduler(timezone=UTC)
-    start_traffic_alert_job(scheduler)
+    start_smart_alert_job(scheduler)
     start_retention_job(scheduler)
     start_usage_alert_job(scheduler)
     start_subscription_reminder_job(scheduler)

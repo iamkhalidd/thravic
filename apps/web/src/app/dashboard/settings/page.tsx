@@ -76,6 +76,9 @@ interface UserData {
 const DEFAULT_NOTIFICATIONS = {
     weeklyReport: true,
     trafficAlerts: true,
+    errorAlerts: true,
+    rageClickAlerts: true,
+    speedAlerts: true,
     insightAlerts: true,
     productUpdates: false,
 };
@@ -884,7 +887,10 @@ function SettingsPageInner() {
 
 const NOTIFICATION_COPY: Record<string, { label: string; description: string }> = {
     weeklyReport: { label: 'Weekly report', description: 'Every Monday: last week for each site against the week before' },
-    trafficAlerts: { label: 'Traffic alerts', description: 'When an hour of traffic rises or falls by more than half' },
+    trafficAlerts: { label: 'Traffic alerts', description: 'When visitors fall well below a normal day, or a site stops sending data' },
+    errorAlerts: { label: 'Error alerts', description: 'When a new JavaScript error starts hitting visitors (Pro and Agency)' },
+    rageClickAlerts: { label: 'Rage-click alerts', description: 'When far more visitors than usual rage-click on a page (Pro and Agency)' },
+    speedAlerts: { label: 'Page speed alerts', description: 'When a page loads twice as slowly as the week before (Pro and Agency)' },
     insightAlerts: { label: 'AI insight alerts', description: 'High-priority insights, at most once a day (a weekly preview on the free plan)' },
     productUpdates: { label: 'Product updates', description: 'Occasional emails about new features' },
 };

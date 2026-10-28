@@ -693,29 +693,58 @@ def _site_link(path: str, domain_id: str | None) -> str:
     return f"{_frontend()}{path}" + (f"?site={domain_id}" if domain_id else "")
 
 
-async def send_traffic_alert_email(
-    to: str, domain: str, kind: str, detail: str, domain_id: str | None = None
-) -> None:
-    """`kind` is "spike" or "drop"; `detail` is one sentence with the numbers."""
-    link = _site_link("/dashboard/realtime", domain_id)
-    subject = f"Traffic {kind} on {domain}"
+async def send_alerts_email(to: str, name: str, items: Sequence[dict[str, Any]]) -> None:
+    """New smart alerts across an owner's sites, in one email.
+
+    Each item has `domain`, `domain_id` and `alert` (an `alert_service.Alert`)."""
+    base = _frontend()
+    count = len(items)
+    subject = (
+        items[0]["alert"].title if count == 1 else f"{count} things need your attention"
+    )
+    blocks: list[str] = []
+    lines: list[str] = []
+    for item in items:
+        alert, domain_id = item["alert"], item["domain_id"]
+        link = _site_link(alert.link, domain_id)
+        watch = [
+            (f"{base}/dashboard/sessions?site={domain_id}&recording={rid}", f"Recording {n}")
+            for n, rid in enumerate(alert.recordings, 1)
+        ]
+        links = " · ".join(
+            [_link(link, "Open in Thravic")] + [_link(url, label) for url, label in watch]
+        )
+        blocks.append(
+            f'<div style="border-left:2px solid {HEADING};padding:2px 0 2px 16px;'
+            'margin:0 0 20px;">'
+            f'<div style="font-family:{FONT};font-size:15px;font-weight:600;color:{HEADING};'
+            f'margin:0 0 6px;">{_esc(alert.title)}</div>'
+            f'<div style="font-family:{FONT};font-size:14px;line-height:1.6;color:{BODY};'
+            f'margin:0 0 6px;">{_esc(alert.message)}</div>'
+            f'<div style="font-family:{FONT};font-size:13px;color:{MUTED};">{links}</div></div>'
+        )
+        lines.append(
+            f"{alert.title}\n{alert.message}\nOpen in Thravic: {link}"
+            + "".join(f"\n{label}: {url}" for url, label in watch)
+        )
     await send_email(
         to,
         subject,
         _render(
             subject=subject,
-            heading=subject,
-            preheader=detail,
+            heading="Something changed on your site" if count == 1 else subject,
+            preheader=items[0]["alert"].message,
             blocks=[
-                _p(f"We noticed a significant change in traffic for {_strong(domain)} "
-                   "in the last hour."),
-                _p(_esc(detail)),
-                _button(link, "See live traffic"),
+                _greeting(name),
+                _p("Thravic noticed this in the last few hours, compared with a normal day:"),
+                *blocks,
+                _button(f"{base}/dashboard/alerts", "See all alerts"),
             ],
-            reason="You're receiving this because traffic alerts are on for your account.",
+            reason="You're receiving this because alerts are on for your account.",
             manage_link=True,
         ),
-        f"{subject}\n\n{detail}\n\nSee live traffic: {link}",
+        f"Hi {name or 'there'},\n\n" + "\n\n".join(lines)
+        + f"\n\nSee all alerts: {base}/dashboard/alerts",
     )
 
 

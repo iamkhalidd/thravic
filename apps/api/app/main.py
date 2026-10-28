@@ -34,6 +34,7 @@ from .middleware.security_headers import SecurityHeadersMiddleware
 from .middleware.settings_gate import MaintenanceModeMiddleware
 from .redis_client import close_redis, get_client, init_redis
 from .routers import admin as admin_routes
+from .routers import alerts as alert_routes
 from .routers import analytics as analytics_routes
 from .routers import announcements as announcement_routes
 from .routers import assistant as assistant_routes
@@ -228,6 +229,10 @@ app.include_router(
 )
 app.include_router(
     funnel_routes.router, prefix="/api/funnels", tags=["funnels"],
+    dependencies=PROFILE_REQUIRED,
+)
+app.include_router(
+    alert_routes.router, prefix="/api/alerts", tags=["alerts"],
     dependencies=PROFILE_REQUIRED,
 )
 app.include_router(

@@ -144,6 +144,13 @@ export default function SessionsPage() {
         setLoadingPlayback(false);
     };
 
+    // Opened from an alert: ?recording=<id> plays that recording straight away
+    useEffect(() => {
+        const recordingId = new URLSearchParams(window.location.search).get('recording');
+        if (selectedDomainId && recordingId) handleSelectRecording(recordingId);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedDomainId]);
+
     const handleLoadMore = async () => {
         if (!selectedDomainId) return;
         setLoadingMore(true);
