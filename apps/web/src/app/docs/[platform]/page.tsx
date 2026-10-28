@@ -26,14 +26,14 @@ export function generateMetadata({ params }: { params: { platform: string } }): 
     return pageMetadata(
         `/docs/${platform.id}`,
         platform.title,
-        `${platform.summary} Add Thravic session replays, heatmaps and funnels to your ${platform.id === 'ai' ? '' : `${platform.label} `}site in a few minutes.`,
+        `${platform.summary} Add Thravic session replays, heatmaps and funnels to your ${['ai', 'html', 'gtm'].includes(platform.id) ? '' : `${platform.label} `}site in a few minutes.`,
     );
 }
 
 export default function InstallGuidePage({ params }: { params: { platform: string } }) {
     const platform = find(params.platform);
     if (!platform) notFound();
-    const { snippet, steps, download } = getPlatformInstructions(platform.id as InstallPlatform, EXAMPLE_SCRIPT, VERIFY_STEP);
+    const { snippet, steps, download, note } = getPlatformInstructions(platform.id as InstallPlatform, EXAMPLE_SCRIPT, VERIFY_STEP);
     const others = INSTALL_PLATFORMS.filter(p => p.id !== platform.id);
 
     return (
@@ -62,6 +62,7 @@ export default function InstallGuidePage({ params }: { params: { platform: strin
                 <pre style={docs.pre}><code>{snippet}</code></pre>
 
                 <h2 style={docs.h2}>3. Add it</h2>
+                {note && <p style={docs.p}><strong>Before you start:</strong> {note}</p>}
                 <ol style={{ paddingLeft: 20, margin: 0 }}>
                     {steps.map(step => <li key={step} style={docs.li}>{step}</li>)}
                 </ol>

@@ -1,7 +1,10 @@
 'use client';
 
-import { useState } from 'react';
-import { Copy, Check, Globe, CircleDot, ShoppingBag, Zap, Atom, ClipboardList, Bot, Download } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import {
+    Copy, Check, Globe, CircleDot, ShoppingBag, Zap, Atom, ClipboardList, Bot, Download, Info,
+    LayoutTemplate, Square, Frame, Ghost, StickyNote, Blocks, Rss, Puzzle, Droplet, Tags,
+} from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { INSTALL_PLATFORMS, getPlatformInstructions, type InstallPlatform } from '@/lib/installGuides';
 
@@ -9,12 +12,25 @@ const PLATFORM_ICONS: Record<InstallPlatform, LucideIcon> = {
     html: Globe,
     wordpress: CircleDot,
     shopify: ShoppingBag,
+    wix: LayoutTemplate,
+    squarespace: Square,
     webflow: Zap,
+    framer: Frame,
+    ghost: Ghost,
+    carrd: StickyNote,
+    bubble: Blocks,
+    blogger: Rss,
+    joomla: Puzzle,
+    drupal: Droplet,
+    gtm: Tags,
     nextjs: Atom,
     ai: Bot,
 };
 
 const VERIFY_STEP = 'Click "Verify Installation" below.';
+
+// The last platform picked, so the next site opens on the same guide.
+const PLATFORM_KEY = 'tf_install_platform';
 
 interface ScriptInstallationProps {
     script: string;
@@ -23,6 +39,19 @@ interface ScriptInstallationProps {
 export function ScriptInstallation({ script }: ScriptInstallationProps) {
     const [platform, setPlatform] = useState<InstallPlatform>('html');
     const [copied, setCopied] = useState(false);
+
+    useEffect(() => {
+        try {
+            const saved = localStorage.getItem(PLATFORM_KEY);
+            if (saved && INSTALL_PLATFORMS.some(p => p.id === saved)) setPlatform(saved as InstallPlatform);
+        } catch { /* storage blocked */ }
+    }, []);
+
+    const choosePlatform = (id: InstallPlatform) => {
+        setPlatform(id);
+        setCopied(false);
+        try { localStorage.setItem(PLATFORM_KEY, id); } catch { /* storage blocked */ }
+    };
 
     const handleCopyScript = (text: string) => {
         navigator.clipboard.writeText(text);
@@ -34,11 +63,14 @@ export function ScriptInstallation({ script }: ScriptInstallationProps) {
 
     return (
         <div style={{ marginTop: 'var(--space-md)' }}>
-            {/* Platform Tabs */}
-            <div style={{
-                display: 'flex',
-                gap: '6px',
-                flexWrap: 'wrap',
+            {/* Platform picker */}
+            <p id="install-platform-label" style={{ margin: '0 0 var(--space-xs)', fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>
+                Where is your site built?
+            </p>
+            <div role="group" aria-labelledby="install-platform-label" style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(112px, 1fr))',
+                gap: '4px',
                 marginBottom: 'var(--space-lg)',
                 padding: 'var(--space-xs)',
                 background: 'var(--color-bg-tertiary)',
@@ -49,9 +81,14 @@ export function ScriptInstallation({ script }: ScriptInstallationProps) {
                     return (
                     <button
                         key={tab.id}
-                        onClick={() => setPlatform(tab.id)}
+                        onClick={() => choosePlatform(tab.id)}
+                        aria-pressed={platform === tab.id}
                         style={{
-                            flex: '1 1 auto',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '4px',
+                            minWidth: 0,
                             padding: 'var(--space-xs) var(--space-sm)',
                             background: platform === tab.id ? 'var(--color-bg-card)' : 'transparent',
                             border: platform === tab.id ? '1px solid var(--color-border)' : '1px solid transparent',
@@ -64,11 +101,30 @@ export function ScriptInstallation({ script }: ScriptInstallationProps) {
                             whiteSpace: 'nowrap',
                         }}
                     >
-                        <Icon size={14} style={{ marginRight: '4px' }} /> {tab.label}
+                        <Icon size={14} style={{ flexShrink: 0 }} />
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{tab.label}</span>
                     </button>
                     );
                 })}
             </div>
+
+            {platformInfo.note && (
+                <p style={{
+                    display: 'flex',
+                    gap: '8px',
+                    alignItems: 'flex-start',
+                    margin: '0 0 var(--space-md)',
+                    padding: 'var(--space-sm) var(--space-md)',
+                    background: 'var(--color-bg-secondary)',
+                    border: '1px solid var(--color-border)',
+                    borderRadius: 'var(--radius-md)',
+                    fontSize: '0.8125rem',
+                    color: 'var(--color-text-secondary)',
+                }}>
+                    <Info size={16} style={{ flexShrink: 0, marginTop: '1px' }} />
+                    <span>{platformInfo.note}</span>
+                </p>
+            )}
 
             {platformInfo.download && (
                 <a

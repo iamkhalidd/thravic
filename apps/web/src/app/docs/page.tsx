@@ -8,7 +8,7 @@ import { docs } from './docsStyles';
 export const metadata: Metadata = pageMetadata(
     '/docs',
     'Install guides',
-    'Add Thravic to a website on HTML, WordPress, Shopify, Webflow or Next.js, or to a React Native or Expo app.',
+    'Add Thravic to a website on WordPress, Shopify, Wix, Squarespace, Webflow, Framer, Ghost, Carrd, Bubble, Blogger, Joomla, Drupal, Google Tag Manager, Next.js or plain HTML, or to a React Native or Expo app.',
 );
 
 export default function DocsIndexPage() {
