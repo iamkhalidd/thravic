@@ -6,6 +6,8 @@ import { AlertTriangle, Bell, Gauge, MousePointerClick, TrendingDown, TrendingUp
 import { alerts as alertsApi, type AlertKind, type SiteAlert } from '@/lib/api';
 import { useDomain } from '@/contexts/DomainContext';
 import { PageHeader } from '@/components/PageHeader';
+import { explainHref } from '@/components/AnalystPanel';
+import { useSubscription } from '@/hooks/useSubscription';
 
 const KIND_ICON: Record<AlertKind, { icon: LucideIcon; color: string }> = {
     traffic_drop: { icon: TrendingDown, color: 'var(--color-error)' },
@@ -16,6 +18,24 @@ const KIND_ICON: Record<AlertKind, { icon: LucideIcon; color: string }> = {
     slow_page: { icon: Gauge, color: 'var(--color-warning)' },
 };
 
+// What the AI analyst explains for each alert, over the day before it was raised.
+const EXPLAIN_METRIC: Record<AlertKind, string> = {
+    traffic_drop: 'sessions',
+    traffic_spike: 'sessions',
+    silent: 'sessions',
+    new_error: 'errors',
+    rage_clicks: 'rage_clicks',
+    slow_page: 'bounce_rate',
+};
+
+function explainAlert(alert: SiteAlert): string | null {
+    const metric = EXPLAIN_METRIC[alert.kind];
+    if (!metric) return null;
+    const end = new Date(alert.createdAt);
+    const start = new Date(end.getTime() - 24 * 60 * 60 * 1000);
+    return explainHref(metric, { start: start.toISOString(), end: end.toISOString() });
+}
+
 function when(iso: string): string {
     const date = new Date(iso);
     const minutes = Math.round((Date.now() - date.getTime()) / 60_000);
@@ -25,7 +45,9 @@ function when(iso: string): string {
 }
 
 export default function AlertsPage() {
-    const { selectedDomainId, loading: domainLoading } = useDomain();
+    const { selectedDomainId, selectedDomain, loading: domainLoading } = useDomain();
+    const { hasFeature } = useSubscription();
+    const canExplain = hasFeature('insights', selectedDomain?.features || undefined);
     const [list, setList] = useState<SiteAlert[]>([]);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
@@ -95,6 +117,7 @@ export default function AlertsPage() {
                                     </p>
                                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, fontSize: '0.8125rem' }}>
                                         {alert.link && <Link href={alert.link}>Open</Link>}
+                                        {canExplain && explainAlert(alert) && <Link href={explainAlert(alert)!}>Explain this</Link>}
                                         {alert.recordings.map((id, n) => (
                                             <Link key={id} href={`/dashboard/sessions?recording=${id}`}>Watch recording {n + 1}</Link>
                                         ))}

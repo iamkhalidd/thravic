@@ -21,6 +21,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { ChartCard } from '@/components/ChartCard';
 import { StatCard } from '@/components/StatCard';
 import { ASK_EVENT } from '@/components/AskThravic';
+import { AnalystPanel } from '@/components/AnalystPanel';
 import { TimeSeriesChart } from '@/components/charts/TimeSeriesChart';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
@@ -280,6 +281,8 @@ export default function InsightsPage() {
                         hint={summary.avgSessionSecondsBefore !== undefined ? `${formatDuration(summary.avgSessionSecondsBefore)} the period before` : undefined} />
                 </div>
             )}
+
+            {report && <AnalystPanel domainId={selectedDomainId} />}
 
             <div className="split-grid">
                 <ChartCard

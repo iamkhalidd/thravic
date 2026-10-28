@@ -34,6 +34,8 @@ import { BarList } from '@/components/charts/BarList';
 import { duration } from '@/components/charts/format';
 import { useDomain } from '@/contexts/DomainContext';
 import { useApiRange } from '@/contexts/DateRangeContext';
+import { useSubscription } from '@/hooks/useSubscription';
+import { explainHref } from '@/components/AnalystPanel';
 
 // Fallback when the script request fails; the API normally supplies the snippet.
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
@@ -48,6 +50,9 @@ function change(now?: number, before?: number): number | undefined {
     if (now === undefined || before === undefined || before === 0) return undefined;
     return ((now - before) / before) * 100;
 }
+
+// A change this big gets a "Why?" link to the AI analyst.
+const BIG_CHANGE_PCT = 20;
 
 export default function DashboardPage() {
     // The site and the date range come from the sidebar switcher and the header
@@ -67,6 +72,12 @@ export default function DashboardPage() {
     const [showInstructions, setShowInstructions] = useState(false);
     // An app's overview: screens for pages, and versions where a site shows its sources.
     const app = isApp(selectedDomain);
+    const { hasFeature } = useSubscription();
+    const canExplain = hasFeature('insights', selectedDomain?.features || undefined);
+    const why = (metric: string, pct: number | undefined) =>
+        canExplain && pct !== undefined && Math.abs(pct) >= BIG_CHANGE_PCT
+            ? <Link href={explainHref(metric)} style={{ fontSize: '0.75rem' }}>Why?</Link>
+            : undefined;
     const [versionData, setVersionData] = useState<{ label: string; value: number }[]>([]);
 
     useEffect(() => {
@@ -297,13 +308,17 @@ export default function DashboardPage() {
 
             <div className="stat-grid">
                 <StatCard label="Visitors" icon={Users} value={(metrics?.uniqueVisitors ?? 0).toLocaleString()}
-                    change={change(metrics?.uniqueVisitors, previous?.uniqueVisitors)} />
+                    change={change(metrics?.uniqueVisitors, previous?.uniqueVisitors)}
+                    hint={why('visitors', change(metrics?.uniqueVisitors, previous?.uniqueVisitors))} />
                 <StatCard label={app ? 'Screen views' : 'Pageviews'} icon={Eye} value={(metrics?.pageviews ?? 0).toLocaleString()}
-                    change={change(metrics?.pageviews, previous?.pageviews)} />
+                    change={change(metrics?.pageviews, previous?.pageviews)}
+                    hint={why('pageviews', change(metrics?.pageviews, previous?.pageviews))} />
                 <StatCard label="Sessions" icon={Activity} value={(metrics?.sessions ?? 0).toLocaleString()}
-                    change={change(metrics?.sessions, previous?.sessions)} />
+                    change={change(metrics?.sessions, previous?.sessions)}
+                    hint={why('sessions', change(metrics?.sessions, previous?.sessions))} />
                 <StatCard label="Bounce rate" icon={MousePointer2} value={`${Number(metrics?.bounceRate ?? 0).toFixed(1)}%`}
-                    change={change(metrics?.bounceRate, previous?.bounceRate)} lowerIsBetter />
+                    change={change(metrics?.bounceRate, previous?.bounceRate)} lowerIsBetter
+                    hint={why('bounce_rate', change(metrics?.bounceRate, previous?.bounceRate))} />
                 <StatCard label="Avg. session" icon={Clock} value={duration(metrics?.avgSessionDuration ?? 0)}
                     change={change(metrics?.avgSessionDuration, previous?.avgSessionDuration)} />
             </div>

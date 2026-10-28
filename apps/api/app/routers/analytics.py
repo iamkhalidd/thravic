@@ -455,20 +455,9 @@ async def devices(domainId: str, request: Request, user: AuthUser = Depends(requ
         )
 
         browser_rows = await query(
-            """
+            f"""
             SELECT
-                CASE
-                    WHEN s.user_agent ILIKE '%Edg/%' OR s.user_agent ILIKE '%Edge/%' THEN 'Edge'
-                    WHEN s.user_agent ILIKE '%OPR/%' OR s.user_agent ILIKE '%Opera%' THEN 'Opera'
-                    WHEN s.user_agent ILIKE '%Firefox/%' THEN 'Firefox'
-                    WHEN s.user_agent ILIKE '%Chrome/%'
-                         AND s.user_agent NOT ILIKE '%Chromium%' THEN 'Chrome'
-                    WHEN s.user_agent ILIKE '%Safari/%'
-                         AND s.user_agent NOT ILIKE '%Chrome%' THEN 'Safari'
-                    WHEN s.user_agent ILIKE '%Chromium%' THEN 'Chromium'
-                    WHEN s.user_agent IS NULL THEN 'Unknown'
-                    ELSE 'Other'
-                END AS browser,
+                {session_service.browser_case_sql("s.user_agent")} AS browser,
                 COUNT(DISTINCT s.session_id)::int AS count
             FROM sessions s
             WHERE s.domain_id = $1 AND s.started_at >= $2 AND s.started_at <= $3

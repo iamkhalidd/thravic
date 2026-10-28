@@ -8,13 +8,18 @@ pass the gate.
 `insight_service` (facts in `insight_facts`). The model is any OpenAI-compatible
 API (`AI_*` settings); without one, insights are written by rules from the same
 facts.
+
+`POST /:domainId/explain` is the AI analyst: why one metric changed, see
+`analyst_service`.
 """
 
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel, Field
 
 from ..errors import SimpleError
 from ..js_compat import js_round
@@ -22,7 +27,14 @@ from ..json_response import jsjson
 from ..logging import create_logger
 from ..middleware.auth import AuthUser, require_auth
 from ..middleware.feature_gate import require_feature
-from ..services import domain_service, event_service, insight_service
+from ..services import (
+    analyst_service,
+    assistant_service,
+    domain_service,
+    event_service,
+    insight_facts,
+    insight_service,
+)
 from .analytics import _parse_date
 
 log = create_logger("Insights")
@@ -184,6 +196,80 @@ async def insights(
     except Exception as exc:
         log.error(f"Insights error: {exc}")
         raise SimpleError(FAILED_INSIGHTS, 500) from None
+
+
+class _ExplainBody(BaseModel):
+    # Either a question, or a metric (and event) from the picker or an "Explain this" button.
+    question: str = Field("", max_length=500)
+    metric: str | None = Field(None, max_length=40)
+    event: str | None = Field(None, max_length=200)
+    start: str | None = None
+    end: str | None = None
+    # The dashboard's range (startDate, endDate) and the browser's tzOffset, as Ask Thravic sends.
+    context: dict[str, Any] = Field(default_factory=dict)
+
+
+@router.get("/{domainId}/explain/options")
+async def explain_options(
+    domainId: str,
+    user: AuthUser = Depends(require_auth),
+    _feature: None = Depends(require_feature("insights")),
+):
+    """What the analyst can explain on this site, for the picker, and the questions left today."""
+    domain = await _require_domain(domainId, user.user_id)
+    events = await analyst_service.site_events(str(domain["id"]), datetime.now(UTC))
+    return jsjson({**analyst_service.options(events), "usage": await _usage(domainId, user)})
+
+
+async def _usage(domain_id: str, user: AuthUser) -> dict[str, int]:
+    limit = await assistant_service.daily_limit(domain_id)
+    used = await assistant_service.asked_today(user.user_id, datetime.now(UTC))
+    return {"used": used, "limit": limit, "left": max(0, limit - used)}
+
+
+@router.post("/{domainId}/explain")
+async def explain(
+    domainId: str,
+    body: _ExplainBody,
+    user: AuthUser = Depends(require_auth),
+    _feature: None = Depends(require_feature("insights")),
+):
+    """Why a metric changed: the likely cause, the breakdown, evidence, recordings and fixes.
+
+    Each analysis counts as one Ask Thravic question. When the metric can't be
+    told from the question, answers `status: "choose"` with the picker's options
+    (free).
+    """
+    domain = await _require_domain(domainId, user.user_id)
+    now = datetime.now(UTC)
+    question = body.question.strip()
+    events = await analyst_service.site_events(str(domain["id"]), now)
+
+    metric, event = body.metric, (body.event or "").strip() or None
+    if metric is None:
+        metric, event = analyst_service.parse_metric(question, events)
+    if metric not in insight_facts.EXPLAIN_METRICS or (metric == "event" and not event):
+        return jsjson({"status": "choose", **analyst_service.options(events)})
+
+    counts = await _usage(domainId, user)
+    if counts["left"] <= 0:
+        raise SimpleError(
+            f"You've asked {counts['limit']} questions today, the most your plan allows. "
+            "You can ask again tomorrow.",
+            429,
+        )
+    clock = assistant_service.clock_for(body.context, now)
+    start, end = analyst_service.choose_period(question, clock, *_range(body.start, body.end))
+    try:
+        result = await analyst_service.analyse(domain, metric, event, start, end, question)
+    except Exception as exc:
+        log.error(f"Analyst error: {exc}")
+        raise SimpleError("Couldn't explain that just now. Please try again.", 500) from None
+
+    if result["status"] == "ok":
+        await assistant_service.record_question(user.user_id, domainId)
+        counts = {**counts, "used": counts["used"] + 1, "left": counts["left"] - 1}
+    return jsjson({**result, "usage": counts})
 
 
 @router.post("/{domainId}/refresh")

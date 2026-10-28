@@ -303,7 +303,8 @@ async def _slow_pages(domain_id: str, end: datetime) -> list[dict[str, Any]]:
     )
 
 
-async def _recordings(domain_id: str, session_ids: Sequence[str]) -> list[str]:
+async def recordings_for(domain_id: str, session_ids: Sequence[str]) -> list[str]:
+    """Up to `MAX_RECORDINGS` recordings of these sessions, newest first."""
     if not session_ids:
         return []
     rows = await query(
@@ -319,7 +320,7 @@ async def _recordings(domain_id: str, session_ids: Sequence[str]) -> list[str]:
 
 async def _raise(domain_id: str, alert: Alert, now: datetime) -> bool:
     """Store the alert unless one of its kind was raised for the site recently."""
-    alert.recordings = await _recordings(domain_id, alert.sessions)
+    alert.recordings = await recordings_for(domain_id, alert.sessions)
     row = await query_one(
         """
         INSERT INTO alerts (domain_id, kind, title, message, link, recordings)

@@ -870,6 +870,71 @@ export const assistant = {
     },
 };
 
+// AI analyst - why one metric changed: /api/insights/{domainId}/explain
+// Each analysis uses one Ask Thravic question; `status: 'choose'` (free) means
+// the metric couldn't be told from the question, so show the picker.
+export interface AnalystOptions {
+    metrics: Array<{ value: string; label: string }>;
+    events: string[];
+}
+export interface AnalystSegment {
+    dimension: string; // its label, e.g. "landing page", "device"
+    key: string;
+    now: number | null; // for the bounce rate: that segment's rate, in %
+    before: number | null;
+    delta: number | null;
+    changePct: number | null;
+    shareOfChangePct: number | null;
+    link: string;
+}
+export interface AnalystEvidence {
+    kind: 'error' | 'rage_click' | 'slow_page';
+    subject: string;
+    scope: string | null;
+    numbers: Record<string, number | null>;
+    link: string;
+}
+export interface AnalystAnswer {
+    status: 'ok' | 'no_data';
+    metric: string;
+    metricLabel: string;
+    event: string | null;
+    isRate: boolean;
+    period: { current: { start: string; end: string }; previous: { start: string; end: string } };
+    headline: { now: number; before: number; delta: number; changePct: number | null };
+    cause: string;
+    explanation: string;
+    fixes: string[];
+    aiGenerated: boolean;
+    segments: AnalystSegment[];
+    evidence: AnalystEvidence[];
+    recordings: string[];
+    generatedAt: string;
+    usage: AssistantUsage;
+}
+export interface AnalystRequest {
+    question?: string;
+    metric?: string;
+    event?: string;
+    start?: string;
+    end?: string;
+    context?: Partial<AssistantContext>;
+}
+
+export const analyst = {
+    async options(domainId: string) {
+        return apiRequest<AnalystOptions & { usage: AssistantUsage }>(
+            `/api/insights/${domainId}/explain/options`,
+        );
+    },
+    async explain(domainId: string, body: AnalystRequest) {
+        return apiRequest<AnalystAnswer | ({ status: 'choose' } & AnalystOptions)>(
+            `/api/insights/${domainId}/explain`,
+            { method: 'POST', body: JSON.stringify(body) },
+        );
+    },
+};
+
 // Payments API (Paystack)
 // GET /api/payments/plans: the admin-managed plans, active ones only.
 // `bullets` are generated from the plan's real limits and features plus the

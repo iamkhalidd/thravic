@@ -84,18 +84,30 @@ def _day_start(now: datetime) -> datetime:
 
 async def ask_model(facts: list[dict[str, Any]]) -> list[dict[str, Any]] | None:
     """The model's raw insight list, or None when it isn't configured or fails."""
+    parsed = await ask_json(SYSTEM_PROMPT, facts)
+    if parsed is None:
+        return None
+    items = parsed.get("insights") if isinstance(parsed, dict) else parsed
+    return [item for item in items if isinstance(item, dict)] if isinstance(items, list) else None
+
+
+async def ask_json(system: str, facts: Any, max_tokens: int = AI_MAX_TOKENS) -> Any:
+    """The model's JSON reply to `system` and the facts, or None when it isn't configured or fails.
+
+    One request, and one more only when the reply comes back cut off or malformed.
+    """
     settings = get_settings()
     if not settings.AI_API_KEY:
         return None
     payload = {
         "model": settings.AI_MODEL,
         "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": "FACTS (JSON):\n" + json.dumps(facts, ensure_ascii=False)},
+            {"role": "system", "content": system},
+            {"role": "user", "content": "FACTS (JSON):\n" + json.dumps(facts, ensure_ascii=False, default=str)},
         ],
         "response_format": {"type": "json_object"},
         "temperature": 0.3,
-        "max_tokens": AI_MAX_TOKENS,
+        "max_tokens": max_tokens,
         "stream": False,
     }
     parsed: Any = None
@@ -114,7 +126,7 @@ async def ask_model(facts: list[dict[str, Any]]) -> list[dict[str, Any]] | None:
                 return None
             choice = response.json()["choices"][0]
             if choice.get("finish_reason") == "length":
-                log.warning(f"AI reply hit the {AI_MAX_TOKENS}-token limit (attempt {attempt})")
+                log.warning(f"AI reply hit the {max_tokens}-token limit (attempt {attempt})")
             parsed = json.loads(choice["message"]["content"] or "")
             break
         except json.JSONDecodeError as exc:
@@ -123,11 +135,7 @@ async def ask_model(facts: list[dict[str, Any]]) -> list[dict[str, Any]] | None:
         except Exception as exc:  # noqa: BLE001 - any failure falls back to rules
             log.error(f"AI request failed: {exc}")
             return None
-    if parsed is None:
-        return None
-
-    items = parsed.get("insights") if isinstance(parsed, dict) else parsed
-    return [item for item in items if isinstance(item, dict)] if isinstance(items, list) else None
+    return parsed
 
 
 # ── Checking the model's answer ────────────────────────────────────────────

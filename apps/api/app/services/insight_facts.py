@@ -28,6 +28,7 @@ from ..db import query, query_one
 from ..js_compat import js_round
 from ..routers.funnels import _funnel_progress
 from . import event_service, funnel_service, session_service
+from .alert_service import ERROR_MESSAGE_SQL
 from .event_service import URL_PATH_SQL
 
 WINDOW_DAYS = 7  # the default period (and the daily email's)
@@ -443,3 +444,421 @@ async def _opportunities(sheet: FactSheet, domain: dict, w: Windows) -> None:
             },
             link,
         )
+
+
+# ── Explaining one change ──────────────────────────────────────────────────
+#
+# The AI analyst's facts: one metric in a period against the period before,
+# broken down by page, channel, referrer, campaign, device, country and
+# browser, and ranked by how much of the change each part accounts for. Then
+# the errors, rage clicks and slow pages in the part that moved most, and the
+# sessions to watch.
+
+# What can be explained: label, the dashboard page that shows it, and for the
+# event-based ones the custom event counted (`event` is the owner's own).
+EXPLAIN_METRICS: dict[str, tuple[str, str]] = {
+    "visitors": ("Visitors", "/dashboard/traffic/trends"),
+    "sessions": ("Visits", "/dashboard/traffic/trends"),
+    "pageviews": ("Page views", "/dashboard/behavior/pages"),
+    "bounce_rate": ("Bounce rate", "/dashboard/behavior/pages"),
+    "errors": ("JavaScript errors", "/dashboard/errors"),
+    "rage_clicks": ("Rage clicks", "/dashboard/rage-clicks"),
+    "event": ("Custom event", "/dashboard/funnels"),
+}
+_FIXED_EVENTS = {"errors": "error", "rage_clicks": "rage_click"}
+_SESSION_METRICS = ("visitors", "sessions", "bounce_rate")
+
+MAX_SEGMENTS = 8
+MAX_PER_DIMENSION = 3
+# A bounce-rate segment needs this many visits to say anything, and has to move
+# the site's rate by this many points.
+MIN_RATE_SESSIONS = 10
+MIN_RATE_POINTS = 0.5
+SLOW_GROWTH = 1.2  # a slow page counts as evidence when 20% slower than before
+MAX_EVIDENCE_SESSIONS = 20
+
+_SESSION_COLUMNS = (
+    "s.id::text AS sid, s.source_type, s.referrer, s.utm_campaign, s.screen_width, "
+    "s.country, s.user_agent"
+)
+
+# Each breakdown: name, SQL over the base columns, dashboard link. "page" is the
+# landing page for visit-based metrics and the page the event happened on otherwise.
+EXPLAIN_DIMENSIONS: tuple[tuple[str, str, str], ...] = (
+    ("page", "page", "/dashboard/behavior/pages"),
+    *DIMENSIONS,
+    ("browser", session_service.browser_case_sql("user_agent"), "/dashboard/behavior/devices"),
+)
+_DIMENSION_SQL = {name: sql for name, sql, _ in EXPLAIN_DIMENSIONS}
+_DIMENSION_LINK = {name: link for name, _, link in EXPLAIN_DIMENSIONS}
+
+
+def dimension_label(dimension: str, metric: str) -> str:
+    return "landing page" if dimension == "page" and metric in _SESSION_METRICS else dimension
+
+
+def metric_label(metric: str, event: str | None = None) -> str:
+    if metric == "event":
+        return f"“{event}” events"
+    return EXPLAIN_METRICS[metric][0]
+
+
+def _base_sql(metric: str) -> str:
+    """CTEs ending in `base`: one row per thing counted, with `cur` (in the period),
+    `unit` (what is counted), `bounced`, `page` and the visit's own columns."""
+    if metric in _SESSION_METRICS:
+        unit = "s.visitor_id::text" if metric == "visitors" else "s.id::text"
+        return f"""
+        firsts AS (
+            SELECT DISTINCT ON (session_id) session_id, {URL_PATH_SQL} AS path
+            FROM events
+            WHERE domain_id = $1 AND type = 'pageview' AND session_id IS NOT NULL
+              AND created_at >= $2 AND created_at <= $4
+            ORDER BY session_id, created_at
+        ),
+        base AS (
+            SELECT s.started_at >= $3 AS cur, {unit} AS unit, s.pageviews <= 1 AS bounced,
+                   f.path AS page, {_SESSION_COLUMNS}
+            FROM sessions s LEFT JOIN firsts f ON f.session_id = s.id
+            WHERE s.domain_id = $1 AND s.started_at >= $2 AND s.started_at <= $4
+        )"""
+    kind = "e.type = 'pageview'" if metric == "pageviews" else (
+        "e.type = 'custom' AND e.data->>'event' = $5"
+    )
+    return f"""
+        base AS (
+            SELECT e.created_at >= $3 AS cur, e.id::text AS unit, FALSE AS bounced,
+                   {URL_PATH_SQL} AS page, {_SESSION_COLUMNS}
+            FROM events e LEFT JOIN sessions s ON s.id = e.session_id
+            WHERE e.domain_id = $1 AND {kind} AND e.created_at >= $2 AND e.created_at <= $4
+        )"""
+
+
+_COUNTS = """
+    COUNT(DISTINCT unit) FILTER (WHERE cur)::int AS now,
+    COUNT(DISTINCT unit) FILTER (WHERE NOT cur)::int AS before,
+    COUNT(DISTINCT unit) FILTER (WHERE cur AND bounced)::int AS now_bounced,
+    COUNT(DISTINCT unit) FILTER (WHERE NOT cur AND bounced)::int AS before_bounced"""
+
+
+async def breakdown_rows(
+    domain_id: str, metric: str, w: Windows, event: str | None = None
+) -> list[dict[str, Any]]:
+    """The metric's totals (`dimension` "total") and its counts per segment, both periods."""
+    branches = [f"SELECT 'total' AS dimension, 'all' AS key, {_COUNTS} FROM base"]
+    branches += [
+        f"SELECT '{name}', ({sql})::text, {_COUNTS} FROM base GROUP BY 2"
+        for name, sql, _ in EXPLAIN_DIMENSIONS
+    ]
+    args: list[Any] = [domain_id, w.start, w.mid, w.end]
+    if metric not in _SESSION_METRICS and metric != "pageviews":
+        args.append(_FIXED_EVENTS.get(metric, event))
+    return await query(f"WITH {_base_sql(metric)} " + " UNION ALL ".join(branches), *args)
+
+
+def _segment_rate(bounced: int, total: int) -> float | None:
+    return rate(bounced, total) if total else None
+
+
+def rank_segments(
+    rows: list[dict[str, Any]], is_rate: bool = False
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """The overall change and the segments behind it, biggest share first.
+
+    For a count, a segment's part of the change is its own change. For the
+    bounce rate it is how far the segment moved the site's rate, in points:
+    its bounces above the earlier site rate now, minus the same before, over
+    the site's visits. These add up exactly to the site's change, so a segment
+    that grew but bounces as usual accounts for nothing.
+
+    A segment that is the whole site is skipped. Only segments moving the same
+    way as the whole are kept (`MAX_PER_DIMENSION`
+    from any one breakdown); with no overall change, the biggest movers either way.
+    """
+    total = next((r for r in rows if r["dimension"] == "total"), None) or {
+        "now": 0, "before": 0, "now_bounced": 0, "before_bounced": 0
+    }
+    n_now, n_before = total["now"], total["before"]
+    if is_rate:
+        rate_now = _segment_rate(total["now_bounced"], n_now) or 0.0
+        rate_before = _segment_rate(total["before_bounced"], n_before) or 0.0
+        overall = round(rate_now - rate_before, 1)
+        headline = {
+            "now": rate_now, "before": rate_before, "delta": overall, "changePct": None,
+            "visits": n_now, "visitsBefore": n_before,
+        }
+    else:
+        overall = n_now - n_before
+        headline = {
+            "now": n_now, "before": n_before, "delta": overall,
+            "changePct": pct_change(n_now, n_before),
+        }
+
+    candidates = []
+    for row in rows:
+        if row["dimension"] == "total" or not row["key"]:
+            continue
+        if row["now"] == n_now and row["before"] == n_before:
+            continue  # the whole site (every sign-up is on /signup): explains nothing
+        if is_rate:
+            if max(row["now"], row["before"]) < MIN_RATE_SESSIONS:
+                continue
+            base = rate_before / 100
+            now_part = (row["now_bounced"] - base * row["now"]) / n_now if n_now else 0.0
+            before_part = (
+                (row["before_bounced"] - base * row["before"]) / n_before if n_before else 0.0
+            )
+            effect = round((now_part - before_part) * 100, 1)
+            if abs(effect) < MIN_RATE_POINTS:
+                continue
+            seg_now = _segment_rate(row["now_bounced"], row["now"])
+            seg_before = _segment_rate(row["before_bounced"], row["before"])
+            segment = {
+                "now": seg_now, "before": seg_before,
+                "delta": round(seg_now - seg_before, 1)
+                if seg_now is not None and seg_before is not None else None,
+                "changePct": None, "visits": row["now"], "visitsBefore": row["before"],
+            }
+        else:
+            effect = row["now"] - row["before"]
+            if abs(effect) < MIN_DRIVER_DELTA:
+                continue
+            segment = {
+                "now": row["now"], "before": row["before"], "delta": effect,
+                "changePct": pct_change(row["now"], row["before"]),
+            }
+        candidates.append({"dimension": row["dimension"], "key": row["key"], **segment,
+                           "effect": effect})
+
+    direction = 1 if overall > 0 else -1 if overall < 0 else 0
+    if direction:
+        candidates = [c for c in candidates if c["effect"] * direction > 0]
+        candidates.sort(key=lambda c: c["effect"] * direction, reverse=True)
+    else:
+        candidates.sort(key=lambda c: abs(c["effect"]), reverse=True)
+
+    ranked: list[dict[str, Any]] = []
+    per_dimension: dict[str, int] = {}
+    for c in candidates:
+        if per_dimension.get(c["dimension"], 0) >= MAX_PER_DIMENSION:
+            continue
+        per_dimension[c["dimension"]] = per_dimension.get(c["dimension"], 0) + 1
+        c["shareOfChangePct"] = js_round(c["effect"] / overall * 100) if overall else None
+        c["link"] = _DIMENSION_LINK.get(c["dimension"], "/dashboard")
+        ranked.append(c)
+        if len(ranked) >= MAX_SEGMENTS:
+            break
+    return headline, ranked
+
+
+def _segment_filter(segment: dict[str, Any] | None, param: int) -> str:
+    if not segment:
+        return "TRUE"
+    return f"({_DIMENSION_SQL[segment['dimension']]})::text = ${param}"
+
+
+async def evidence_rows(
+    domain_id: str, w: Windows, segment: dict[str, Any] | None
+) -> list[dict[str, Any]]:
+    """Errors, rage clicks and page speed per page in both periods, in the segment
+    (or the whole site): visits affected, median LCP, and the visits to watch."""
+    rows = await query(
+        f"""
+        WITH ev AS (
+            SELECT e.created_at >= $3 AS cur, e.session_id, e.data->>'event' AS event,
+                   {URL_PATH_SQL} AS page,
+                   CASE e.data->>'event'
+                       WHEN 'error' THEN LEFT({ERROR_MESSAGE_SQL}, 120)
+                       WHEN 'rage_click' THEN LEFT(COALESCE(NULLIF(e.data->>'text', ''),
+                                                            e.data->>'tag', 'element'), 60)
+                   END AS label,
+                   CASE WHEN e.data->>'lcp' ~ '^[0-9]+(\\.[0-9]+)?$'
+                        THEN (e.data->>'lcp')::float8 END AS lcp,
+                   {_SESSION_COLUMNS}
+            FROM events e LEFT JOIN sessions s ON s.id = e.session_id
+            WHERE e.domain_id = $1 AND e.type = 'custom'
+              AND e.data->>'event' IN ('error', 'rage_click', 'performance')
+              AND e.created_at >= $2 AND e.created_at <= $4
+        )
+        SELECT event, page, label,
+               COUNT(DISTINCT session_id) FILTER (WHERE cur)::int AS now,
+               COUNT(DISTINCT session_id) FILTER (WHERE NOT cur)::int AS before,
+               ROUND((percentile_cont(0.5) WITHIN GROUP (ORDER BY lcp)
+                      FILTER (WHERE cur))::numeric)::int AS lcp_now,
+               ROUND((percentile_cont(0.5) WITHIN GROUP (ORDER BY lcp)
+                      FILTER (WHERE NOT cur))::numeric)::int AS lcp_before,
+               COUNT(lcp) FILTER (WHERE cur)::int AS samples,
+               (array_agg(DISTINCT session_id::text) FILTER (WHERE cur))[1:{MAX_EVIDENCE_SESSIONS}]
+                   AS session_ids
+        FROM ev
+        WHERE {_segment_filter(segment, 5)}
+        GROUP BY 1, 2, 3
+        """,
+        domain_id,
+        w.start,
+        w.mid,
+        w.end,
+        *([segment["key"]] if segment else []),
+    )
+    return rows
+
+
+def pick_evidence(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """What in the rows could explain a change: errors and rage clicks that hit at
+    least `MIN_TECHNICAL_COUNT` visits and more than before, and pages slower than
+    `SLOW_LCP_MS` and than before. Most new visits affected first; slow pages last."""
+    errors, rage, slow = [], [], []
+    for r in rows:
+        if r["event"] in ("error", "rage_click"):
+            if r["now"] >= MIN_TECHNICAL_COUNT and r["now"] > r["before"]:
+                (errors if r["event"] == "error" else rage).append(r)
+        elif (
+            r["event"] == "performance"
+            and r["samples"] >= MIN_LCP_SAMPLES
+            and (r["lcp_now"] or 0) > SLOW_LCP_MS
+            and (not r["lcp_before"] or r["lcp_now"] >= r["lcp_before"] * SLOW_GROWTH)
+        ):
+            slow.append(r)
+    errors.sort(key=lambda r: r["now"] - r["before"], reverse=True)
+    rage.sort(key=lambda r: r["now"] - r["before"], reverse=True)
+    slow.sort(key=lambda r: r["lcp_now"], reverse=True)
+
+    out = []
+    for r in errors[:3]:
+        out.append({
+            "kind": "error",
+            "subject": f"JavaScript error on {r['page']}: {r['label'] or 'unknown error'}",
+            "numbers": {"visitsAffected": r["now"], "visitsAffectedBefore": r["before"]},
+            "link": "/dashboard/errors",
+            "sessions": list(r["session_ids"] or []),
+        })
+    for r in rage[:2]:
+        out.append({
+            "kind": "rage_click",
+            "subject": f"Rage clicks on “{r['label']}” at {r['page']}",
+            "numbers": {"visitsAffected": r["now"], "visitsAffectedBefore": r["before"]},
+            "link": "/dashboard/rage-clicks",
+            "sessions": list(r["session_ids"] or []),
+        })
+    for r in slow[:2]:
+        out.append({
+            "kind": "slow_page",
+            "subject": f"Slow page {r['page']} (largest contentful paint)",
+            "numbers": {
+                "lcpMs": r["lcp_now"], "lcpBeforeMs": r["lcp_before"],
+                "samples": r["samples"], "goodLcpMs": SLOW_LCP_MS,
+            },
+            "link": "/dashboard/performance",
+            "sessions": list(r["session_ids"] or []),
+        })
+    return out
+
+
+async def segment_sessions(
+    domain_id: str, w: Windows, segment: dict[str, Any] | None
+) -> list[str]:
+    """Recent visits in the segment during the period, for recordings to watch."""
+    rows = await query(
+        f"WITH {_base_sql('pageviews')} "
+        f"SELECT sid FROM base WHERE cur AND sid IS NOT NULL AND {_segment_filter(segment, 5)} "
+        f"GROUP BY sid LIMIT {MAX_EVIDENCE_SESSIONS * 10}",
+        domain_id,
+        w.start,
+        w.mid,
+        w.end,
+        *([segment["key"]] if segment else []),
+    )
+    return [r["sid"] for r in rows]
+
+
+@dataclass
+class Explanation:
+    metric: str
+    event: str | None
+    headline: dict[str, Any]
+    segments: list[dict[str, Any]]
+    evidence: list[dict[str, Any]]
+    # Evidence and segment sessions in order of interest; recordings are picked from these.
+    sessions: list[str]
+    sheet: FactSheet
+    windows: Windows
+
+
+async def explain(
+    domain: dict[str, Any], metric: str, w: Windows, event: str | None = None
+) -> Explanation:
+    """Every number the analyst may use about one metric's change, as facts."""
+    domain_id = str(domain["id"])
+    is_rate = metric == "bounce_rate"
+    sheet = FactSheet()
+    await _overview(sheet, domain, w)
+
+    headline, segments = rank_segments(
+        await breakdown_rows(domain_id, metric, w, event), is_rate
+    )
+    label = metric_label(metric, event)
+    link = EXPLAIN_METRICS[metric][1]
+    if is_rate:
+        sheet.add(
+            "change",
+            f"{label}, {w.describe()}",
+            {
+                "bounceRatePct": headline["now"],
+                "bounceRateBeforePct": headline["before"],
+                "changePoints": headline["delta"],
+                "visits": headline["visits"],
+                "visitsBefore": headline["visitsBefore"],
+            },
+            link,
+        )
+    else:
+        sheet.add(
+            "change",
+            f"{label}, {w.describe()}",
+            {
+                "count": headline["now"],
+                "countBefore": headline["before"],
+                "delta": headline["delta"],
+                "changePct": headline["changePct"],
+            },
+            link,
+        )
+
+    for seg in segments:
+        subject = f"{label} from {dimension_label(seg['dimension'], metric)} “{seg['key']}”"
+        if is_rate:
+            numbers = {
+                "bounceRatePct": seg["now"],
+                "bounceRateBeforePct": seg["before"],
+                "visits": seg["visits"],
+                "visitsBefore": seg["visitsBefore"],
+                "movedSiteRatePoints": seg["effect"],
+                "shareOfChangePct": seg["shareOfChangePct"],
+            }
+        else:
+            numbers = {
+                "count": seg["now"],
+                "countBefore": seg["before"],
+                "delta": seg["delta"],
+                "changePct": seg["changePct"],
+                "shareOfChangePct": seg["shareOfChangePct"],
+            }
+        sheet.add("segment", subject, numbers, seg["link"])
+        seg["fact"] = sheet.facts[-1]["id"]
+
+    top = segments[0] if segments else None
+    evidence = pick_evidence(await evidence_rows(domain_id, w, top))
+    scope = f"{dimension_label(top['dimension'], metric)} “{top['key']}”" if top else None
+    if not evidence and top:
+        evidence, scope = pick_evidence(await evidence_rows(domain_id, w, None)), None
+    for item in evidence:
+        item["scope"] = scope or "whole site"
+        sheet.add("evidence", f"{item['subject']} ({item['scope']})", item["numbers"],
+                  item["link"])
+        item["fact"] = sheet.facts[-1]["id"]
+
+    sessions = [s for item in evidence for s in item["sessions"]]
+    sessions += await segment_sessions(domain_id, w, top)
+    return Explanation(
+        metric, event, headline, segments, evidence, list(dict.fromkeys(sessions)), sheet, w
+    )

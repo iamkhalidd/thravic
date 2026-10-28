@@ -68,6 +68,21 @@ def device_case_sql(width_column: str) -> str:
     return f"CASE WHEN {width_column} IS NULL THEN 'unknown' {branches} ELSE 'desktop' END"
 
 
+def browser_case_sql(ua: str) -> str:
+    """SQL `CASE` naming the browser in the user-agent column `ua`, as the Devices page does."""
+    return (
+        "CASE"
+        f" WHEN {ua} ILIKE '%Edg/%' OR {ua} ILIKE '%Edge/%' THEN 'Edge'"
+        f" WHEN {ua} ILIKE '%OPR/%' OR {ua} ILIKE '%Opera%' THEN 'Opera'"
+        f" WHEN {ua} ILIKE '%Firefox/%' THEN 'Firefox'"
+        f" WHEN {ua} ILIKE '%Chrome/%' AND {ua} NOT ILIKE '%Chromium%' THEN 'Chrome'"
+        f" WHEN {ua} ILIKE '%Safari/%' AND {ua} NOT ILIKE '%Chrome%' THEN 'Safari'"
+        f" WHEN {ua} ILIKE '%Chromium%' THEN 'Chromium'"
+        f" WHEN {ua} IS NULL THEN 'Unknown'"
+        " ELSE 'Other' END"
+    )
+
+
 def device_width_sql(width_column: str, device: str, first_param: int) -> tuple[str, list[int]]:
     """A `WHERE` fragment restricting `width_column` to `device`'s range.
 
