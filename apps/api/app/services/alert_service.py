@@ -27,6 +27,7 @@ from datetime import datetime, timedelta
 from statistics import median
 from typing import Any
 
+from ..config import get_settings
 from ..db import query, query_one
 from .event_service import URL_PATH_SQL
 
@@ -358,6 +359,22 @@ async def check_domain(domain: dict[str, Any], paid: bool, end: datetime) -> lis
         if alert and (paid or alert.kind in FREE_KINDS) and await _raise(domain_id, alert, end):
             raised.append(alert)
     return raised
+
+
+def webhook_data(domain: str, domain_id: str, alert: Alert) -> dict[str, Any]:
+    """An alert as webhooks receive it, with full dashboard links."""
+    base = (get_settings().FRONTEND_URL or "http://localhost:3000").rstrip("/")
+    return {
+        "kind": alert.kind,
+        "title": alert.title,
+        "message": alert.message,
+        "link": f"{base}{alert.link}?site={domain_id}" if alert.link else "",
+        "domain": domain,
+        "recordings": [
+            f"{base}/dashboard/sessions?site={domain_id}&recording={rid}"
+            for rid in alert.recordings
+        ],
+    }
 
 
 async def remove_old(now: datetime) -> None:

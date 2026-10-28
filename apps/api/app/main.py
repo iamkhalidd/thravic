@@ -47,6 +47,7 @@ from .routers import demo as demo_routes
 from .routers import domains as domain_routes
 from .routers import experiments as experiment_routes
 from .routers import export as export_routes
+from .routers import feedback as feedback_routes
 from .routers import funnels as funnel_routes
 from .routers import heatmaps as heatmap_routes
 from .routers import insights as insight_routes
@@ -55,6 +56,7 @@ from .routers import recordings as recording_routes
 from .routers import sources as source_routes
 from .routers import team as team_routes
 from .routers import tracker as tracker_routes
+from .routers import visitors as visitor_routes
 from .routers import webhooks as webhook_routes
 from .security import validate_cors_origins, validate_security_config
 from .services import live_service
@@ -233,6 +235,14 @@ app.include_router(
 )
 app.include_router(
     alert_routes.router, prefix="/api/alerts", tags=["alerts"],
+    dependencies=PROFILE_REQUIRED,
+)
+app.include_router(
+    visitor_routes.router, prefix="/api/visitors", tags=["visitors"],
+    dependencies=PROFILE_REQUIRED,
+)
+app.include_router(
+    feedback_routes.router, prefix="/api/feedback", tags=["feedback"],
     dependencies=PROFILE_REQUIRED,
 )
 app.include_router(

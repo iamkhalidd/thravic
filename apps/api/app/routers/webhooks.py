@@ -10,6 +10,8 @@ are refused (see `webhook_service.destination_error`).
 
 from __future__ import annotations
 
+from urllib.parse import urlparse
+
 from fastapi import APIRouter, Depends, Request
 
 from ..db import query, query_one
@@ -36,9 +38,24 @@ def _public(webhook: dict) -> dict:
 
 ACCESS_DENIED = "Access denied"
 
-# Event types the collector stores; a webhook subscribes to one or more of them.
-EVENT_TYPES = ("pageview", "click", "scroll", "form", "custom", "session_end")
+# Event types the collector stores, plus smart alerts and feedback widget answers;
+# a webhook subscribes to one or more of them.
+EVENT_TYPES = (
+    "pageview", "click", "scroll", "form", "custom", "session_end", "alert", "feedback"
+)
 FAILED_CREATE = "Failed to create webhook"
+
+
+def _kind_error(kind: str, url: str, events: list[str]) -> str | None:
+    """Why this connection type can't take this URL or these events, if it can't."""
+    if kind not in webhook_service.KINDS:
+        return f"kind must be one of: {', '.join(webhook_service.KINDS)}"
+    if kind == "slack":
+        if urlparse(url).hostname != webhook_service.SLACK_HOST:
+            return "Paste a Slack incoming webhook URL (https://hooks.slack.com/…)"
+        if set(events) - set(webhook_service.SLACK_EVENTS):
+            return "Slack can receive alerts and feedback only"
+    return None
 
 
 async def _require_domain_access(domain_id: str, user_id: str) -> None:
@@ -91,6 +108,7 @@ async def create_webhook(
         events = body.get("events")
         secret = body.get("secret")
         enabled = body.get("enabled")
+        kind = body.get("kind") or "custom"
 
         issues: list[dict] = []
         if issue:
@@ -136,27 +154,56 @@ async def create_webhook(
                 400,
             )
 
-        refusal = await webhook_service.destination_error(url)
+        refusal = _kind_error(str(kind), url, events) or await webhook_service.destination_error(
+            url
+        )
         if refusal:
             raise SimpleError(refusal, 400)
 
         result = await query(
             """
-            INSERT INTO webhooks (domain_id, url, events, secret, enabled)
-            VALUES ($1, $2, $3, $4, $5)
+            INSERT INTO webhooks (domain_id, url, events, secret, enabled, kind)
+            VALUES ($1, $2, $3, $4, $5, $6)
             RETURNING *
             """,
             domainId,
             url,
             events,
-            secret or None,
+            None if kind == "slack" else secret or None,
             True if enabled is None else enabled,
+            kind,
         )
         return jsjson(_public(result[0]), status_code=201)
     except (PayloadError, SimpleError):
         raise
     except Exception:
         raise SimpleError(FAILED_CREATE, 500) from None
+
+
+@router.post("/{domainId}/{webhookId}/test")
+async def test_webhook(
+    domainId: str,
+    webhookId: str,
+    user: AuthUser = Depends(require_auth),
+    _feature: None = Depends(require_feature("webhooks")),
+):
+    """Send one sample event to this webhook only, so a new connection can be checked."""
+    await _require_domain_access(domainId, user.user_id)
+    webhook = await query_one(
+        """
+        SELECT w.url, w.secret, w.events, w.kind, d.domain
+        FROM webhooks w JOIN domains d ON d.id = w.domain_id
+        WHERE w.id::text = $1 AND w.domain_id::text = $2
+        """,
+        webhookId,
+        domainId,
+    )
+    if webhook is None:
+        raise SimpleError("Webhook not found", 404)
+    error = await webhook_service.send_test(webhook)
+    if error:
+        raise SimpleError(error, 502)
+    return jsjson({"message": "Test sent"})
 
 
 @router.delete("/{domainId}/{webhookId}")

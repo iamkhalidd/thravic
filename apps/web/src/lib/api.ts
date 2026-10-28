@@ -357,6 +357,10 @@ export interface DomainSettings {
     recordingSampleRate: number;
     /** Recordings started per UTC day; the server refuses more. */
     recordingDailyLimit: number;
+    /** Show visitors the one-question feedback widget (websites only). */
+    feedbackWidget: boolean;
+    /** The question the widget asks, up to 120 characters. */
+    feedbackQuestion: string;
 }
 
 export type DomainSwitch = 'trackClicks' | 'trackScrolls' | 'trackForms' | 'sessionRecording';
@@ -1079,11 +1083,17 @@ export const exportData = {
 // them (Pro plan and above). Each subscribed event is POSTed as JSON, signed with
 // HMAC-SHA256 of the body in X-Thravic-Signature when a secret is set. The secret
 // is write-only: responses say only whether one is set.
-export const WEBHOOK_EVENTS = ['pageview', 'click', 'scroll', 'form', 'custom', 'session_end'] as const;
+//
+// A Slack webhook gets a readable message instead of raw JSON, and only alert and
+// feedback events. Zapier uses a plain "Catch Hook" URL from Webhooks by Zapier.
+export const WEBHOOK_EVENTS = ['pageview', 'click', 'scroll', 'form', 'custom', 'session_end', 'alert', 'feedback'] as const;
 export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number];
+export const SLACK_WEBHOOK_EVENTS: WebhookEvent[] = ['alert', 'feedback'];
+export type WebhookKind = 'custom' | 'slack' | 'zapier';
 
 export interface Webhook {
     id: string;
+    kind: WebhookKind;
     url: string;
     events: WebhookEvent[];
     enabled: boolean;
@@ -1102,7 +1112,7 @@ export const webhooks = {
         return apiRequest<Webhook[]>(`/api/webhooks/${domainId}`);
     },
 
-    async create(domainId: string, data: { url: string; events: WebhookEvent[]; secret?: string }) {
+    async create(domainId: string, data: { kind?: WebhookKind; url: string; events: WebhookEvent[]; secret?: string }) {
         const result = await apiRequest<Webhook>(`/api/webhooks/${domainId}`, {
             method: 'POST',
             body: JSON.stringify(data),
@@ -1113,6 +1123,13 @@ export const webhooks = {
     async delete(domainId: string, webhookId: string) {
         return apiRequest<{ message: string }>(`/api/webhooks/${domainId}/${webhookId}`, {
             method: 'DELETE',
+        });
+    },
+
+    /** Sends a sample alert so the user can see it arrive. */
+    async test(domainId: string, webhookId: string) {
+        return apiRequest<{ message: string }>(`/api/webhooks/${domainId}/${webhookId}/test`, {
+            method: 'POST',
         });
     },
 };
@@ -1134,5 +1151,116 @@ export interface SiteAlert {
 export const alerts = {
     async list(domainId: string) {
         return apiRequest<{ alerts: SiteAlert[] }>(`/api/alerts/${domainId}`);
+    },
+};
+
+// Visitors API — /api/visitors/{domainId}: retention cohorts, the visitor list and
+// one visitor's profile. Every plan; the owner and team members can read them.
+
+export interface RetentionCohort {
+    /** Monday (UTC) of the week these visitors first came. */
+    week: string;
+    visitors: number;
+    /** Weeks 1, 2, … after the first visit, as far as has happened yet. */
+    weeks: { count: number; percent: number }[];
+}
+
+export interface Retention {
+    cohorts: RetentionCohort[];
+    /** Average share back in week 1 / week 4, or null before there is any. */
+    week1: number | null;
+    week4: number | null;
+}
+
+export interface VisitorSummary {
+    /** The `visitors.id` UUID used in profile links. */
+    id: string;
+    /** The tracker's anonymous id. */
+    visitorId: string;
+    /** From TF('identify', …), when the site identifies its users. */
+    userId: string | null;
+    email: string | null;
+    name: string | null;
+    firstSeen: string;
+    lastSeen: string;
+    sessions: number;
+    pageviews: number;
+    country: string | null;
+    city: string | null;
+    device: string | null;
+    os: string | null;
+    deviceModel: string | null;
+    source: string | null;
+}
+
+export interface VisitorSession {
+    id: string;
+    startedAt: string;
+    endedAt: string | null;
+    pageviews: number;
+    source: string | null;
+    sourceType: string | null;
+    country: string | null;
+    city: string | null;
+    device: string | null;
+    recordingId: string | null;
+}
+
+export type TimelineType = 'pageview' | 'form' | 'error' | 'rage_click' | 'feedback' | 'event';
+
+export interface TimelineItem {
+    type: TimelineType;
+    label: string;
+    url: string;
+    sessionId: string;
+    at: string;
+}
+
+export interface VisitorProfile {
+    visitor: VisitorSummary;
+    sessions: VisitorSession[];
+    /** Newest first. */
+    timeline: TimelineItem[];
+}
+
+export const visitors = {
+    async retention(domainId: string, weeks = 8) {
+        return apiRequest<Retention>(`/api/visitors/${domainId}/retention?weeks=${weeks}`);
+    },
+
+    async list(domainId: string, search?: string) {
+        const query = search ? `?search=${encodeURIComponent(search)}` : '';
+        return apiRequest<{ visitors: VisitorSummary[] }>(`/api/visitors/${domainId}${query}`);
+    },
+
+    async get(domainId: string, visitorId: string) {
+        return apiRequest<VisitorProfile>(`/api/visitors/${domainId}/${visitorId}`);
+    },
+};
+
+// Feedback API — /api/feedback/{domainId}: answers to the feedback widget.
+
+export interface FeedbackAnswer {
+    id: string;
+    answer: 'yes' | 'no';
+    comment: string | null;
+    question: string | null;
+    path: string;
+    /** The `visitors.id` UUID, for a link to the visitor's profile. */
+    visitorId: string | null;
+    at: string;
+}
+
+export interface FeedbackSummary {
+    yes: number;
+    no: number;
+    pages: { path: string; yes: number; no: number; percentYes: number }[];
+    /** The latest answers, newest first. */
+    answers: FeedbackAnswer[];
+}
+
+export const feedback = {
+    async get(domainId: string, days = 30) {
+        return apiRequest<FeedbackSummary>(`/api/feedback/${domainId}?days=${days}`);
     },
 };

@@ -3,7 +3,8 @@
 Every hour, each site of an active account is checked by `alert_service` up to
 the top of the hour. New alerts are stored for the dashboard's Alerts page
 whatever the owner's settings, and the ones whose switch is on (all are, unless
-turned off) go out in one email per owner, however many sites they cover.
+turned off) go out in one email per owner, however many sites they cover. The
+site's webhooks subscribed to `alert` (Slack and Zapier included) get them all.
 """
 
 from __future__ import annotations
@@ -16,7 +17,7 @@ from apscheduler.triggers.cron import CronTrigger
 
 from ..db import query
 from ..logging import create_logger
-from ..services import alert_service, plan_catalog
+from ..services import alert_service, plan_catalog, webhook_service
 from ..services.email_service import send_alerts_email
 from ..services.plan_service import entitled
 from .runner import run_if_due
@@ -65,6 +66,13 @@ async def check_sites() -> dict[str, Any]:
             log.error(f"[Jobs] Smart alerts for {site['domain']} failed: {exc}")
             continue
         raised += len(alerts)
+        if alerts:
+            # Webhooks, Slack and Zapier get every new alert, whatever the email switches
+            await webhook_service.trigger_for_events(
+                str(site["id"]),
+                [("alert", alert_service.webhook_data(site["domain"], str(site["id"]), a))
+                 for a in alerts],
+            )
         owner = by_owner.setdefault(
             str(site["user_id"]), {"email": site["email"], "name": site["name"], "alerts": []}
         )

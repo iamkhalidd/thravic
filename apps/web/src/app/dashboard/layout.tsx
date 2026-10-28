@@ -34,7 +34,10 @@ import {
     FileInput,
     MousePointerClick,
     Smartphone,
-    Bell
+    Bell,
+    Repeat,
+    Users,
+    MessageSquare
 } from 'lucide-react';
 import { isApp, pathFits } from '@/lib/platform';
 import { useToast } from '@/components/Toast';
@@ -76,11 +79,13 @@ const navStructure: NavEntry[] = [
             { href: '/dashboard/traffic/sources', icon: Globe, label: 'Sources' },
             { href: '/dashboard/traffic/campaigns', icon: Megaphone, label: 'Campaigns' },
             { href: '/dashboard/traffic/trends', icon: TrendingUp, label: 'Trends' },
+            { href: '/dashboard/traffic/retention', icon: Repeat, label: 'Retention' },
         ],
     },
     {
         label: 'Activity',
         children: [
+            { href: '/dashboard/visitors', icon: Users, label: 'Visitors', appLabel: 'Users' },
             { href: '/dashboard/behavior/pages', icon: FileText, label: 'Pages', appLabel: 'Screens' },
             { href: '/dashboard/behavior/paths', icon: Route, label: 'Page flow', appLabel: 'Screen flow' },
             { href: '/dashboard/funnels', icon: Target, label: 'Funnels' },
@@ -95,6 +100,7 @@ const navStructure: NavEntry[] = [
             { href: '/dashboard/heatmaps', icon: MousePointer2, label: 'Heatmaps' },
             { href: '/dashboard/rage-clicks', icon: MousePointerClick, label: 'Rage clicks' },
             { href: '/dashboard/forms', icon: FileInput, label: 'Forms' },
+            { href: '/dashboard/feedback', icon: MessageSquare, label: 'Feedback' },
         ],
     },
     {

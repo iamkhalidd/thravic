@@ -57,6 +57,8 @@ SETTINGS_KEYS = (
     "recordingConsentPrompt",
     "recordingSampleRate",
     "recordingDailyLimit",
+    "feedbackWidget",
+    "feedbackQuestion",
 )
 STORED_SETTINGS = frozenset(domain_service.DEFAULT_SETTINGS)
 
@@ -112,7 +114,14 @@ def _validate_settings(body: dict[str, Any]) -> tuple[dict[str, Any] | None, str
         if raw is None:
             continue
         choices = domain_service.SETTING_CHOICES.get(key)
-        if choices is not None:
+        max_length = domain_service.TEXT_SETTINGS.get(key)
+        if max_length is not None:
+            if not isinstance(raw, str) or not raw.strip():
+                return None, f"{key} must be some text"
+            if len(raw.strip()) > max_length:
+                return None, f"{key} must be at most {max_length} characters"
+            raw = raw.strip()
+        elif choices is not None:
             if isinstance(raw, bool) or raw not in choices:
                 allowed = ", ".join(str(choice) for choice in choices)
                 return None, f"{key} must be one of: {allowed}"

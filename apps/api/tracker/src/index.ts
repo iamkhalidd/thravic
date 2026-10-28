@@ -68,6 +68,10 @@ interface TFConfig {
      *  When off, recording needs the site's own consent: requireConsent plus
      *  TF('consent', 'granted'). Nothing is recorded without one or the other. */
     recordingConsentPrompt: boolean;
+    /** Ask visitors one yes/no question (the dashboard's feedback widget). Default: false */
+    feedbackWidget: boolean;
+    /** The question the feedback widget asks. */
+    feedbackQuestion: string;
 }
 
 interface TFEvent {
@@ -139,6 +143,8 @@ const defaultConfig: TFConfig = {
     recordingMaxDuration: 600_000,
     recordingSampleRate: 100,
     recordingConsentPrompt: true,
+    feedbackWidget: false,
+    feedbackQuestion: 'Did you find what you were looking for?',
 };
 
 const SCROLL_MILESTONES = [25, 50, 75, 100];
@@ -164,6 +170,7 @@ function beacon(url: string, payload: unknown): void {
 // Settings the dashboard controls (GET {endpoint}/{trackingId}/config).
 const REMOTE_CONFIG_KEYS = [
     'trackClicks', 'trackScrolls', 'trackForms', 'trackRecordings', 'recordingConsentPrompt',
+    'feedbackWidget',
 ] as const;
 const REMOTE_CONFIG_NUMBERS = ['recordingSampleRate'] as const;
 
@@ -180,6 +187,12 @@ const REC_FLUSH_INTERVAL = 5000;         // ms between recording uploads
 const REC_FLUSH_BYTES = 512 * 1024;      // upload early once this much is buffered
 const BEACON_MAX_BYTES = 60 * 1024;      // under the browsers' 64 KB beacon cap
 const RRWEB_FULL_SNAPSHOT = 2;           // rrweb EventType.FullSnapshot
+
+// ── Feedback widget constants ──
+const FEEDBACK_KEY = '_tf_fb';             // when this visitor was last asked
+const FEEDBACK_EVERY_DAYS = 30;            // ask a visitor at most this often
+const FEEDBACK_DELAY = 30_000;             // ms on a page before asking...
+const FEEDBACK_SCROLL = 60;                // ...or this % scrolled, whichever is first
 
 class ThravicAnalytics {
     private trackingId: string = '';
@@ -216,6 +229,9 @@ class ThravicAnalytics {
 
     // ── Performance state ──
     private perfSent: boolean = false;
+
+    // ── Feedback widget state ──
+    private feedbackScheduled: boolean = false;
 
     // ────────────────────────────────────
     //  Utility helpers
@@ -898,8 +914,10 @@ class ThravicAnalytics {
 
         return new Promise((resolve) => {
             const host = document.createElement('div');
+            // The feedback widget waits while this prompt is open
+            host.setAttribute('data-tf-prompt', '');
             const root = host.attachShadow ? host.attachShadow({ mode: 'open' }) : host;
-            const site = window.location.hostname.replace(/^www\./, '');
+            const site =window.location.hostname.replace(/^www\./, '');
             root.innerHTML = `
 <style>
   .box { position: fixed; z-index: 2147483647; left: 16px; bottom: 16px; max-width: 360px;
@@ -1272,10 +1290,148 @@ class ThravicAnalytics {
                     this.config[key] = remote[key] as number;
                 }
             }
+            if (typeof remote.feedbackQuestion === 'string' && !('feedbackQuestion' in this.pageConfig)) {
+                this.config.feedbackQuestion = remote.feedbackQuestion;
+            }
+            if (this.config.feedbackWidget) this.scheduleFeedback();
             if (this.config.trackRecordings && !this.recordingId && this.shouldTrack()) {
                 this.startRecording();
             }
         } catch { /* offline or blocked: keep the defaults */ }
+    }
+
+    // ────────────────────────────────────
+    //  Feedback widget
+    // ────────────────────────────────────
+
+    // One yes/no question, at most once per FEEDBACK_EVERY_DAYS per visitor, after
+    // they have had time to look around. The answer (and an optional comment) is
+    // sent as a `feedback` custom event. Without storage it is never shown: there
+    // would be no way to stop asking on every page.
+
+    private askedFeedbackRecently(): boolean {
+        try {
+            const at = Number(localStorage.getItem(FEEDBACK_KEY) || 0);
+            return Date.now() - at < FEEDBACK_EVERY_DAYS * 86_400_000;
+        } catch {
+            return true;
+        }
+    }
+
+    private scheduleFeedback(): void {
+        if (this.feedbackScheduled || this.askedFeedbackRecently()) return;
+        this.feedbackScheduled = true;
+        let timer = 0;
+        const show = () => {
+            window.clearTimeout(timer);
+            window.removeEventListener('scroll', onScroll);
+            this.showFeedback();
+        };
+        const onScroll = () => {
+            const doc = document.documentElement;
+            const scrollable = doc.scrollHeight - window.innerHeight;
+            if (scrollable > 0 && (window.scrollY / scrollable) * 100 >= FEEDBACK_SCROLL) show();
+        };
+        timer = window.setTimeout(show, FEEDBACK_DELAY);
+        window.addEventListener('scroll', onScroll, { passive: true });
+    }
+
+    private showFeedback(): void {
+        if (!this.shouldTrack() || this.askedFeedbackRecently() || !document.body) return;
+        // Not over the recording prompt: try again once it has been answered
+        if (document.querySelector('[data-tf-prompt]')) {
+            window.setTimeout(() => this.showFeedback(), 5000);
+            return;
+        }
+        try { localStorage.setItem(FEEDBACK_KEY, String(Date.now())); } catch { return; }
+
+        const host = document.createElement('div');
+        const root = host.attachShadow ? host.attachShadow({ mode: 'open' }) : host;
+        root.innerHTML = `
+<style>
+  .box { position: fixed; z-index: 2147483646; right: 16px; bottom: 16px; width: 300px;
+    box-sizing: border-box; padding: 14px 16px; border-radius: 10px; background: #fff; color: #111827;
+    font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    border: 1px solid #e5e7eb; box-shadow: 0 8px 30px rgba(0,0,0,.15); }
+  @media (max-width: 420px) { .box { left: 8px; right: 8px; bottom: 8px; width: auto; } }
+  .q { margin: 0 28px 10px 0; font-weight: 600; }
+  .close { position: absolute; top: 8px; right: 8px; width: 28px; height: 28px; border: 0;
+    background: transparent; color: #6b7280; font-size: 18px; line-height: 1; cursor: pointer; border-radius: 6px; }
+  .row { display: flex; gap: 8px; }
+  button.answer, button.send, button.skip { flex: 1; padding: 7px 12px; border-radius: 6px; font: inherit;
+    cursor: pointer; border: 1px solid #d1d5db; background: #fff; color: #111827; }
+  button.answer:hover, button.skip:hover { background: #f3f4f6; }
+  button.send { background: #111827; color: #fff; border-color: #111827; font-weight: 600; }
+  textarea { width: 100%; box-sizing: border-box; min-height: 64px; margin: 0 0 8px; padding: 8px; resize: vertical;
+    border: 1px solid #d1d5db; border-radius: 6px; font: inherit; color: inherit; }
+  button:focus-visible, textarea:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+  [hidden] { display: none !important; }
+</style>
+<div class="box" role="dialog" aria-labelledby="tf-fb-q">
+  <button type="button" class="close" aria-label="Close">&times;</button>
+  <p class="q" id="tf-fb-q"></p>
+  <div class="row step1">
+    <button type="button" class="answer" data-answer="yes">Yes</button>
+    <button type="button" class="answer" data-answer="no">No</button>
+  </div>
+  <div class="step2" hidden>
+    <textarea maxlength="1000" aria-labelledby="tf-fb-q"></textarea>
+    <div class="row">
+      <button type="button" class="skip">Skip</button>
+      <button type="button" class="send">Send</button>
+    </div>
+  </div>
+</div>`;
+        const $ = (selector: string) => root.querySelector(selector) as HTMLElement;
+        const question = $('.q');
+        question.textContent = this.config.feedbackQuestion;
+        let answer: 'yes' | 'no' | null = null;
+        let sent = false;
+
+        const send = (comment: string) => {
+            if (sent || !answer) return;
+            sent = true;
+            const text = comment.trim().slice(0, 1000);
+            this.queueEvent(this.createEvent('custom', {
+                event: 'feedback',
+                answer,
+                question: this.config.feedbackQuestion,
+                ...(text ? { comment: text } : {}),
+            }));
+            this.flush();
+        };
+        const close = () => {
+            send('');
+            host.remove();
+            document.removeEventListener('keydown', onKey);
+        };
+        const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
+        const thank = () => {
+            question.textContent = 'Thank you for your feedback!';
+            $('.step1').hidden = true;
+            $('.step2').hidden = true;
+            window.setTimeout(close, 2500);
+        };
+
+        root.querySelectorAll('button.answer').forEach((button) => {
+            button.addEventListener('click', () => {
+                answer = (button as HTMLElement).dataset.answer === 'yes' ? 'yes' : 'no';
+                question.textContent = answer === 'yes'
+                    ? 'Great! Anything we could do better?'
+                    : 'Sorry about that. What were you looking for?';
+                $('.step1').hidden = true;
+                $('.step2').hidden = false;
+                ($('textarea') as HTMLTextAreaElement).focus();
+            });
+        });
+        $('.send').addEventListener('click', () => {
+            send(($('textarea') as HTMLTextAreaElement).value);
+            thank();
+        });
+        $('.skip').addEventListener('click', () => { send(''); thank(); });
+        $('.close').addEventListener('click', close);
+        document.addEventListener('keydown', onKey);
+        document.body.appendChild(host);
     }
 
     // Manual event tracking

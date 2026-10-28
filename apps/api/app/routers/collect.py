@@ -30,6 +30,7 @@ from ..middleware.settings_gate import tracking_gate
 from ..services import (
     domain_service,
     event_service,
+    feedback_service,
     live_service,
     plan_service,
     recording_service,
@@ -164,9 +165,20 @@ def _event_issues(body: dict) -> list[dict]:
 FORM_TEXT_FIELDS = ("formId", "formName", "action", "method")
 
 
+def webhook_events(event_type: str, event: dict) -> list[tuple[str, Any]]:
+    """What a stored event is delivered to webhooks as: its own type, and also
+    `feedback` for a feedback widget answer (so Slack can get just those)."""
+    data = event.get("data")
+    if event_type == "custom" and isinstance(data, dict) and data.get("event") == "feedback":
+        return [(event_type, event), ("feedback", {**event, "data": feedback_service.clean(data)})]
+    return [(event_type, event)]
+
+
 def _clean_data(event_type: str, data: Any) -> dict:
     """The event's `data` as stored: form fields that are not text are dropped."""
     data = data if isinstance(data, dict) else {}
+    if event_type == "custom" and data.get("event") == "feedback":
+        return feedback_service.clean(data)
     if event_type != "form":
         return data
     return {
@@ -322,10 +334,11 @@ async def collect_event(trackingId: str, request: Request):
 
         # Fire and forget — the response must not wait on webhook delivery
         _fire_and_forget(
-            webhook_service.trigger_webhooks(
+            webhook_service.trigger_for_events(
                 domain["id"],
-                body["type"],
-                {**body, "location": location, "sourceType": source_type},
+                webhook_events(
+                    body["type"], {**body, "location": location, "sourceType": source_type}
+                ),
             )
         )
 
@@ -415,7 +428,11 @@ async def collect_batch(trackingId: str, request: Request):
             _fire_and_forget(
                 webhook_service.trigger_for_events(
                     domain["id"],
-                    [(row["type"], raw_event[id(row)]) for row in stored],
+                    [
+                        delivery
+                        for row in stored
+                        for delivery in webhook_events(row["type"], raw_event[id(row)])
+                    ],
                 )
             )
         return jsjson({"success": True, "processed": count}, status_code=202)
@@ -595,6 +612,9 @@ async def tracker_config(trackingId: str):
                 "trackRecordings": await _records(domain),
                 "recordingConsentPrompt": settings["recordingConsentPrompt"],
                 "recordingSampleRate": settings["recordingSampleRate"],
+                # Never in an app: the widget is drawn on a web page
+                "feedbackWidget": settings["feedbackWidget"] and not domain_service.is_app(domain),
+                "feedbackQuestion": settings["feedbackQuestion"],
             },
             # Short, so a dashboard change reaches visitors within a minute.
             headers={"Cache-Control": "public, max-age=60"},

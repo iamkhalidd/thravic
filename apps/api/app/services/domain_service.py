@@ -21,7 +21,7 @@ TRACKING_CACHE_TTL_SECONDS = 300  # 5 minutes
 
 # Tracking settings a domain has when it has not overridden them. Recording is off
 # by default, as in the tracker; `domains.settings` stores only overrides.
-DEFAULT_SETTINGS: dict[str, bool | int] = {
+DEFAULT_SETTINGS: dict[str, bool | int | str] = {
     "trackClicks": True,
     "trackScrolls": True,
     "trackForms": True,
@@ -34,7 +34,13 @@ DEFAULT_SETTINGS: dict[str, bool | int] = {
     # Recordings started per UTC day, enforced at /recording/start. Each one is
     # stored for the plan's retention, so this is what bounds recording storage.
     "recordingDailyLimit": 50,
+    # The feedback widget: a yes/no question shown once to visitors (feedback_service).
+    "feedbackWidget": False,
+    "feedbackQuestion": "Did you find what you were looking for?",
 }
+
+# Settings that are text, and their longest allowed length.
+TEXT_SETTINGS: dict[str, int] = {"feedbackQuestion": 120}
 
 # Values the numeric settings may take (the dashboard offers exactly these).
 SETTING_CHOICES: dict[str, tuple[int, ...]] = {
@@ -56,17 +62,20 @@ def is_app(domain: dict[str, Any] | None) -> bool:
     return bool(domain) and (domain.get("platform") or "web") != "web"
 
 
-def effective_settings(domain: dict[str, Any]) -> dict[str, bool | int]:
+def effective_settings(domain: dict[str, Any]) -> dict[str, bool | int | str]:
     """The domain's stored overrides on top of the defaults.
 
     A stored value that is no longer one of a numeric setting's choices falls
     back to the default rather than reaching the collector.
     """
     stored = domain.get("settings") or {}
-    settings: dict[str, bool | int] = {}
+    settings: dict[str, bool | int | str] = {}
     for key, default in DEFAULT_SETTINGS.items():
         value = stored.get(key, default)
-        if key in SETTING_CHOICES:
+        if key in TEXT_SETTINGS:
+            text = value.strip() if isinstance(value, str) else ""
+            settings[key] = text[: TEXT_SETTINGS[key]] or default
+        elif key in SETTING_CHOICES:
             settings[key] = value if value in SETTING_CHOICES[key] else default
         else:
             settings[key] = bool(value)

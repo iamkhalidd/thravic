@@ -4,10 +4,10 @@ import { useState, useEffect, useCallback } from 'react';
 import { useDomain } from '@/contexts/DomainContext';
 import { useSubscription } from '@/hooks/useSubscription';
 import { UpgradeGate } from '@/components/UpgradeGate';
-import { Plus, Trash2, KeyRound } from 'lucide-react';
+import { Plus, Trash2, KeyRound, Send } from 'lucide-react';
 import { PageHeader } from '@/components/PageHeader';
 import { ChartCard } from '@/components/ChartCard';
-import { webhooks, WEBHOOK_EVENTS, type Webhook, type WebhookEvent } from '@/lib/api';
+import { webhooks, WEBHOOK_EVENTS, SLACK_WEBHOOK_EVENTS, type Webhook, type WebhookEvent, type WebhookKind } from '@/lib/api';
 
 const EVENT_LABELS: Record<WebhookEvent, string> = {
     pageview: 'Page views',
@@ -16,7 +16,30 @@ const EVENT_LABELS: Record<WebhookEvent, string> = {
     form: 'Form submissions',
     custom: 'Custom events',
     session_end: 'Session ends',
+    alert: 'Alerts',
+    feedback: 'Feedback answers',
 };
+
+const KINDS: { kind: WebhookKind; label: string; placeholder: string; help: string }[] = [
+    {
+        kind: 'custom',
+        label: 'Custom',
+        placeholder: 'https://example.com/hooks/thravic',
+        help: 'Any endpoint of your own. Each event is POSTed as JSON.',
+    },
+    {
+        kind: 'slack',
+        label: 'Slack',
+        placeholder: 'https://hooks.slack.com/services/…',
+        help: 'In Slack, add the Incoming Webhooks app to a channel and paste its URL. Alerts and feedback arrive as readable messages.',
+    },
+    {
+        kind: 'zapier',
+        label: 'Zapier',
+        placeholder: 'https://hooks.zapier.com/hooks/catch/…',
+        help: 'In Zapier, start a Zap with "Webhooks by Zapier" → "Catch Hook" and paste its URL, then connect it to any app.',
+    },
+];
 
 export default function WebhooksPage() {
     const { selectedDomainId, selectedDomain } = useDomain();
@@ -25,12 +48,16 @@ export default function WebhooksPage() {
 
     const [list, setList] = useState<Webhook[]>([]);
     const [loading, setLoading] = useState(true);
+    const [kind, setKind] = useState<WebhookKind>('custom');
     const [url, setUrl] = useState('');
     const [secret, setSecret] = useState('');
     const [events, setEvents] = useState<WebhookEvent[]>(['pageview']);
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
     const [removingId, setRemovingId] = useState<string | null>(null);
+    const [testingId, setTestingId] = useState<string | null>(null);
+    const kindInfo = KINDS.find(k => k.kind === kind)!;
+    const eventChoices = kind === 'slack' ? SLACK_WEBHOOK_EVENTS : WEBHOOK_EVENTS;
 
     const load = useCallback(async () => {
         if (!selectedDomainId) return;
@@ -49,6 +76,13 @@ export default function WebhooksPage() {
         }
     }, [enabled, selectedDomainId, load]);
 
+    const chooseKind = (next: WebhookKind) => {
+        setKind(next);
+        // Slack only takes alerts and feedback
+        if (next === 'slack') setEvents(['alert', 'feedback']);
+        else if (kind === 'slack') setEvents(['pageview']);
+    };
+
     const toggleEvent = (event: WebhookEvent) => {
         setEvents(prev => prev.includes(event) ? prev.filter(e => e !== event) : [...prev, event]);
     };
@@ -60,9 +94,10 @@ export default function WebhooksPage() {
         setSaving(true);
         setMessage(null);
         const result = await webhooks.create(selectedDomainId, {
+            kind,
             url: url.trim(),
             events,
-            secret: secret.trim() || undefined,
+            secret: kind === 'slack' ? undefined : secret.trim() || undefined,
         });
         if (result.error) {
             setMessage({ type: 'error', text: result.error });
@@ -87,12 +122,23 @@ export default function WebhooksPage() {
         setRemovingId(null);
     };
 
+    const handleTest = async (webhookId: string) => {
+        if (!selectedDomainId) return;
+        setTestingId(webhookId);
+        setMessage(null);
+        const result = await webhooks.test(selectedDomainId, webhookId);
+        setMessage(result.error
+            ? { type: 'error', text: result.error }
+            : { type: 'success', text: 'Test alert sent. Check that it arrived.' });
+        setTestingId(null);
+    };
+
     if (!subLoading && !enabled) {
         return (
             <div className="page-stack">
                 <PageHeader title="Webhooks" subtitle="Send tracked events to your own systems." />
                 <UpgradeGate feature="webhooks" requiredPlan="pro"
-                    message="Forward page views, clicks and custom events to your own endpoints as they happen. Upgrade to Pro to unlock webhooks." />
+                    message="Send alerts and feedback to Slack or Zapier, and forward page views, clicks and custom events to your own endpoints as they happen. Upgrade to Pro to unlock webhooks." />
             </div>
         );
     }
@@ -107,20 +153,36 @@ export default function WebhooksPage() {
             {/* Add form */}
             <ChartCard title="Add a webhook">
                 <form onSubmit={handleCreate}>
+                    <div role="radiogroup" aria-label="Destination" style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
+                        {KINDS.map(option => (
+                            <button
+                                key={option.kind}
+                                type="button"
+                                role="radio"
+                                aria-checked={kind === option.kind}
+                                className={kind === option.kind ? 'btn btn-primary' : 'btn btn-secondary'}
+                                onClick={() => chooseKind(option.kind)}
+                                style={{ padding: '6px 14px', fontSize: '0.8125rem' }}
+                            >
+                                {option.label}
+                            </button>
+                        ))}
+                    </div>
+                    <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)', margin: '0 0 12px', lineHeight: 1.5 }}>{kindInfo.help}</p>
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
                         <div style={{ flex: '2 1 280px', minWidth: 0 }}>
-                            <label style={labelStyle} htmlFor="webhook-url">Endpoint URL</label>
+                            <label style={labelStyle} htmlFor="webhook-url">{kind === 'custom' ? 'Endpoint URL' : `${kindInfo.label} webhook URL`}</label>
                             <input
                                 id="webhook-url"
                                 className="input"
                                 type="url"
-                                placeholder="https://example.com/hooks/thravic"
+                                placeholder={kindInfo.placeholder}
                                 value={url}
                                 onChange={e => setUrl(e.target.value)}
                                 required
                             />
                         </div>
-                        <div style={{ flex: '1 1 200px', minWidth: 0 }}>
+                        {kind !== 'slack' && <div style={{ flex: '1 1 200px', minWidth: 0 }}>
                             <label style={labelStyle} htmlFor="webhook-secret">Signing secret <span style={{ color: 'var(--color-text-muted)', fontWeight: 400 }}>(optional)</span></label>
                             <input
                                 id="webhook-secret"
@@ -131,13 +193,13 @@ export default function WebhooksPage() {
                                 value={secret}
                                 onChange={e => setSecret(e.target.value)}
                             />
-                        </div>
+                        </div>}
                     </div>
 
                     <fieldset style={{ border: 'none', padding: 0, margin: '0 0 12px' }}>
                         <legend style={labelStyle}>Events</legend>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 20px' }}>
-                            {WEBHOOK_EVENTS.map(event => (
+                            {eventChoices.map(event => (
                                 <label key={event} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.8125rem', cursor: 'pointer' }}>
                                     <input
                                         type="checkbox"
@@ -187,10 +249,11 @@ export default function WebhooksPage() {
                             <thead>
                                 <tr>
                                     <th style={{ paddingLeft: 20 }}>Endpoint</th>
+                                    <th>Type</th>
                                     <th>Events</th>
                                     <th>Status</th>
                                     <th className="num">Added</th>
-                                    <th aria-label="Actions" style={{ width: 52, paddingRight: 20 }} />
+                                    <th aria-label="Actions" style={{ width: 96, paddingRight: 20 }} />
                                 </tr>
                             </thead>
                             <tbody>
@@ -201,6 +264,7 @@ export default function WebhooksPage() {
                                                 {webhook.url}
                                             </div>
                                         </td>
+                                        <td className="muted">{KINDS.find(k => k.kind === webhook.kind)?.label ?? 'Custom'}</td>
                                         <td className="muted" style={{ minWidth: 160 }}>
                                             {webhook.events.map(e => EVENT_LABELS[e] ?? e).join(', ')}
                                         </td>
@@ -217,7 +281,17 @@ export default function WebhooksPage() {
                                             </span>
                                         </td>
                                         <td className="num muted">{new Date(webhook.created_at).toLocaleDateString()}</td>
-                                        <td style={{ paddingRight: 20, textAlign: 'right' }}>
+                                        <td style={{ paddingRight: 20, textAlign: 'right', whiteSpace: 'nowrap' }}>
+                                            <button
+                                                className="btn btn-ghost"
+                                                onClick={() => handleTest(webhook.id)}
+                                                disabled={testingId === webhook.id}
+                                                title="Send a test alert"
+                                                aria-label={`Send a test alert to ${webhook.url}`}
+                                                style={{ padding: 6, color: 'var(--color-text-secondary)' }}
+                                            >
+                                                <Send size={14} />
+                                            </button>
                                             <button
                                                 className="btn btn-ghost"
                                                 onClick={() => handleRemove(webhook.id)}

@@ -136,8 +136,19 @@ def test_config_reports_the_dashboard_settings(client, site, stored):
         "trackRecordings": True,
         "recordingConsentPrompt": True,
         "recordingSampleRate": 100,
+        "feedbackWidget": False,
+        "feedbackQuestion": "Did you find what you were looking for?",
     }
     assert "max-age=60" in response.headers["cache-control"]
+
+
+def test_config_reports_the_feedback_widget(client, site, stored):
+    site["settings"] = {"feedbackWidget": True, "feedbackQuestion": "Was this page useful?"}
+
+    config = client.get(f"/api/collect/{TRACKING_ID}/config").json()
+
+    assert config["feedbackWidget"] is True
+    assert config["feedbackQuestion"] == "Was this page useful?"
 
 
 def test_recording_needs_the_plan_as_well_as_the_setting(client, site, stored):

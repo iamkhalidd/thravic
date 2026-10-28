@@ -24,6 +24,8 @@ async def test_updates_merge_into_the_stored_overrides(seeded_domain, db_pool):
         "recordingConsentPrompt": True,
         "recordingSampleRate": 100,
         "recordingDailyLimit": 50,
+        "feedbackWidget": False,
+        "feedbackQuestion": "Did you find what you were looking for?",
     }
 
 

@@ -26,6 +26,7 @@ const WEB_ONLY = [
     '/dashboard/rage-clicks',
     '/dashboard/heatmaps',
     '/dashboard/sessions',
+    '/dashboard/feedback',
 ];
 
 /** Pages with nothing to show for a website. */
