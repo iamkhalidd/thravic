@@ -186,7 +186,7 @@ async def current(user: AuthUser = Depends(require_auth)):
                     "eventsLimit": plan.events_limit,
                     "domainsLimit": plan.domains_limit,
                     "teamLimit": plan.team_limit,
-                    "recordingsPerDay": plan.recordings_per_day,
+                    "recordingsPerMonth": plan.recordings_per_month,
                     "currentPeriodEnd": subscription["current_period_end"],
                     "features": list(plan.features),
                 },
@@ -643,7 +643,6 @@ async def usage(user: AuthUser = Depends(require_auth)):
             js_round((events_used / events_limit) * 100) if events_limit > 0 else 0
         )
         projected = projected_limit_at(events_used, events_limit, start, resets_at, now)
-        tomorrow = datetime(now.year, now.month, now.day, tzinfo=UTC) + timedelta(days=1)
 
         meters: list[dict[str, Any]] = [
             {
@@ -676,10 +675,12 @@ async def usage(user: AuthUser = Depends(require_auth)):
             meters.append(
                 {
                     "key": "recordings",
-                    "label": "Recordings today",
-                    "used": await recording_service.count_started_today_for_owner(user.user_id),
-                    "limit": plan.recordings_per_day,
-                    "resetsAt": tomorrow,
+                    "label": "Recordings",
+                    "used": await recording_service.count_started_for_owner(
+                        user.user_id, start
+                    ),
+                    "limit": plan.recordings_per_month,
+                    "resetsAt": resets_at,
                 }
             )
 

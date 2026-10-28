@@ -3,10 +3,10 @@
 import { meterTone, percent, shortDate, timeUntil, TONE_COLORS, type UsageMeter } from '@/lib/usage';
 
 const LIMIT_REACHED: Record<string, string> = {
-    events: 'New events and recordings are not being stored until the allowance renews, or until you upgrade.',
+    events: 'We keep collecting up to 120% of the allowance, then new events and recordings stop until it renews. Upgrade to keep everything.',
     websites: 'Remove a site or upgrade to add another.',
     team: 'Upgrade to invite more people.',
-    recordings: 'New recordings start again when the daily allowance renews.',
+    recordings: 'New recordings start again when the allowance renews.',
 };
 
 /** What hitting a limit means; past the website limit (a lapsed plan) the extra

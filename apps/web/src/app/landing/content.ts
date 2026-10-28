@@ -20,7 +20,7 @@ export const faqs: { q: string; a: string }[] = [
     },
     {
         q: 'What happens when I reach my event limit?',
-        a: 'We email you at 80% and again at 100%. At the limit, new events stop being stored until your allowance resets: at the start of each paid period, or each calendar month on the free plan. Everything already collected stays, and you can upgrade at any time.',
+        a: 'We email you at 80% and again at 100%, and keep collecting up to 120% so a busy month loses nothing while you decide. Past that, new events stop being stored until your allowance resets: at the start of each paid period, or each calendar month on the free plan. Everything already collected stays, and you can upgrade at any time.',
     },
     {
         q: 'Do paid plans renew automatically?',

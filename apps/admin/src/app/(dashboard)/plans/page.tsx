@@ -16,7 +16,7 @@ interface Plan {
     events_limit: number;
     domains_limit: number;
     team_limit: number | null;
-    recordings_per_day: number | null;
+    recordings_per_month: number | null;
     features: string[];
     active: boolean;
     sort_order: number;
@@ -42,7 +42,7 @@ function formatPrice(price: number, currency: string) {
 const EMPTY_FORM = {
     id: '', name: '', price: 0, currency: 'NGN', interval: 'monthly',
     events_limit: 5000, domains_limit: 1,
-    team_limit: '' as string, recordings_per_day: '' as string,
+    team_limit: '' as string, recordings_per_month: '' as string,
     features: [] as string[], active: true, sort_order: 0,
     tagline: '', badge: '', show_on_landing: true, extra_features: '',
 };
@@ -55,7 +55,7 @@ function payloadOf(form: Form) {
     return {
         ...form,
         team_limit: limitValue(form.team_limit),
-        recordings_per_day: limitValue(form.recordings_per_day),
+        recordings_per_month: limitValue(form.recordings_per_month),
         extra_features: form.extra_features.split('\n').map(line => line.trim()).filter(Boolean),
     };
 }
@@ -117,7 +117,7 @@ export default function PlansPage() {
             events_limit: plan.events_limit,
             domains_limit: plan.domains_limit,
             team_limit: plan.team_limit == null ? '' : String(plan.team_limit),
-            recordings_per_day: plan.recordings_per_day == null ? '' : String(plan.recordings_per_day),
+            recordings_per_month: plan.recordings_per_month == null ? '' : String(plan.recordings_per_month),
             features: plan.features,
             active: plan.active,
             sort_order: plan.sort_order,
@@ -237,7 +237,7 @@ export default function PlansPage() {
                                     <td>{plan.events_limit.toLocaleString()}</td>
                                     <td>{plan.domains_limit}</td>
                                     <td>{plan.features.includes('team') ? (plan.team_limit ?? 'Unlimited') : '—'}</td>
-                                    <td>{plan.features.includes('recordings') ? (plan.recordings_per_day ?? 'Unlimited') : '—'}</td>
+                                    <td>{plan.features.includes('recordings') ? (plan.recordings_per_month ?? 'Unlimited') : '—'}</td>
                                     <td>{plan.retention?.events ? `${plan.retention.events} days` : '—'}</td>
                                     <td>{plan.show_on_landing ? 'Yes' : 'Hidden'}</td>
                                     <td>
@@ -313,10 +313,10 @@ export default function PlansPage() {
                                             disabled={!form.features.includes('team')}
                                             onChange={e => setForm(f => ({ ...f, team_limit: e.target.value }))} />
                                     </Field>
-                                    <Field label="Recordings per day (blank = unlimited)">
-                                        <input className="input" type="number" min={0} value={form.recordings_per_day} placeholder="Unlimited"
+                                    <Field label="Recordings per month (blank = unlimited)">
+                                        <input className="input" type="number" min={0} value={form.recordings_per_month} placeholder="Unlimited"
                                             disabled={!form.features.includes('recordings')}
-                                            onChange={e => setForm(f => ({ ...f, recordings_per_day: e.target.value }))} />
+                                            onChange={e => setForm(f => ({ ...f, recordings_per_month: e.target.value }))} />
                                     </Field>
                                 </div>
                                 <p style={hintStyle}>

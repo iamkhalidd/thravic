@@ -5,8 +5,9 @@ alerts on (the default), today's report for each site is read — generated now
 if nobody opened Insights yet, the same report the dashboard then shows — and
 its high-priority insights are emailed, one email per site. An insight with the
 same title is not sent again for that site within `REPEAT_AFTER`, so a problem
-that persists doesn't arrive every morning. Claims live in `notification_log`
-and are released if delivery fails.
+that persists doesn't arrive every morning. Owners on a plan without AI
+insights get a weekly preview instead (`WEEKLY_PREVIEW_DAY`). Claims live in
+`notification_log` and are released if delivery fails.
 """
 
 from __future__ import annotations
@@ -30,6 +31,10 @@ JOB_NAME = "insight_alerts"
 KIND = "insight"
 SEND_FROM_HOUR = 9  # UTC
 REPEAT_AFTER = timedelta(days=7)
+# Plans without AI insights (the free plan) get a preview on Mondays only: the
+# report's top insights whatever their priority, so a small site still hears
+# something, with a button to the plans.
+WEEKLY_PREVIEW_DAY = 0  # Monday
 MAX_PER_EMAIL = 3
 
 RECIPIENTS_QUERY = f"""
@@ -58,7 +63,8 @@ async def send_insight_alerts() -> dict[str, Any]:
     sent = failed = 0
     for user in await query(RECIPIENTS_QUERY):
         plan = await plan_catalog.get(user["plan"])
-        if "insights" not in plan.features:
+        weekly = "insights" not in plan.features
+        if weekly and now.weekday() != WEEKLY_PREVIEW_DAY:
             continue
         for domain in await query(
             "SELECT id, domain FROM domains WHERE user_id = $1 ORDER BY domain", user["id"]
@@ -70,7 +76,12 @@ async def send_insight_alerts() -> dict[str, Any]:
                 continue
             if report.get("status") != "ok":
                 continue
-            high = [i for i in (report.get("insights") or []) if i.get("priority") == "high"]
+            insights = report.get("insights") or []
+            high = (
+                insights[:MAX_PER_EMAIL]
+                if weekly
+                else [i for i in insights if i.get("priority") == "high"]
+            )
             if not high:
                 continue
 
@@ -91,7 +102,12 @@ async def send_insight_alerts() -> dict[str, Any]:
                 continue
             try:
                 await send_insight_alert_email(
-                    user["email"], user["name"], domain["domain"], fresh, str(domain["id"])
+                    user["email"],
+                    user["name"],
+                    domain["domain"],
+                    fresh,
+                    str(domain["id"]),
+                    weekly=weekly,
                 )
                 sent += 1
             except Exception as exc:  # noqa: BLE001 — release the claims and retry tomorrow

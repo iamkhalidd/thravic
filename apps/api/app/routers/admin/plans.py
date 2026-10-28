@@ -40,7 +40,7 @@ UPDATE_FIELDS = (
     "active",
     "sort_order",
     "team_limit",
-    "recordings_per_day",
+    "recordings_per_month",
     "tagline",
     "extra_features",
     "badge",
@@ -100,7 +100,7 @@ async def preview_plan(request: Request):
         events_limit=data["events_limit"],
         domains_limit=data["domains_limit"],
         team_limit=data["team_limit"],
-        recordings_per_day=data["recordings_per_day"],
+        recordings_per_month=data["recordings_per_month"],
         features=tuple(data["features"]),
         active=data["active"],
         sort_order=data["sort_order"],
@@ -135,7 +135,7 @@ async def create_plan(request: Request, admin: AdminUser = Depends(admin_auth)):
             """
             INSERT INTO plans (id, name, price, currency, interval, events_limit,
                                domains_limit, retention_days, features, active, sort_order,
-                               team_limit, recordings_per_day, tagline, extra_features,
+                               team_limit, recordings_per_month, tagline, extra_features,
                                badge, show_on_landing)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
                     $16, $17) RETURNING *
@@ -152,7 +152,7 @@ async def create_plan(request: Request, admin: AdminUser = Depends(admin_auth)):
             data["active"],
             data["sort_order"],
             data["team_limit"],
-            data["recordings_per_day"],
+            data["recordings_per_month"],
             data["tagline"],
             data["extra_features"],
             data["badge"],

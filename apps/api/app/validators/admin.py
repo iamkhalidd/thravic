@@ -486,9 +486,9 @@ def _plan_extras(
 ) -> None:
     """Limits added with the plan catalog and the pricing card's copy.
 
-    `team_limit` / `recordings_per_day`: null means unlimited.
+    `team_limit` / `recordings_per_month`: null means unlimited.
     """
-    for field in ("team_limit", "recordings_per_day"):
+    for field in ("team_limit", "recordings_per_month"):
         value = _int(
             body,
             field,

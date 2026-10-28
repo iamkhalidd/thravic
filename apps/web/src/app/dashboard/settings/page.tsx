@@ -34,7 +34,7 @@ const fallbackPlans: Array<{ id: string; name: string; price: number; currency: 
         price: 0,
         currency: 'NGN',
         interval: 'monthly',
-        features: ['1 domain', '5,000 events/mo', '30-day history', 'Core analytics & UTM'],
+        features: ['1 domain', '50,000 events/mo', '100 recordings/mo', '30-day history', 'Core analytics, UTM & heatmaps'],
     },
     {
         id: 'pro',
@@ -42,7 +42,7 @@ const fallbackPlans: Array<{ id: string; name: string; price: number; currency: 
         price: 45000,
         currency: 'NGN',
         interval: 'monthly',
-        features: ['3 domains', '100,000 events/mo', '1-year history', 'Heatmaps & recordings', 'Funnels & AI insights', 'CSV export & team'],
+        features: ['5 domains', '250,000 events/mo', '1,000 recordings/mo', '1-year history', 'Funnels & AI insights', 'CSV export & team'],
     },
     {
         id: 'agency',
@@ -50,7 +50,7 @@ const fallbackPlans: Array<{ id: string; name: string; price: number; currency: 
         price: 125000,
         currency: 'NGN',
         interval: 'monthly',
-        features: ['20 domains', '500,000 events/mo', '2-year history', 'Everything in Pro', 'Unlimited team members', 'Priority support'],
+        features: ['25 domains', '1,000,000 events/mo', '5,000 recordings/mo', '2-year history', 'Everything in Pro', 'Priority support'],
     },
 ];
 
@@ -885,7 +885,7 @@ function SettingsPageInner() {
 const NOTIFICATION_COPY: Record<string, { label: string; description: string }> = {
     weeklyReport: { label: 'Weekly report', description: 'Every Monday: last week for each site against the week before' },
     trafficAlerts: { label: 'Traffic alerts', description: 'When an hour of traffic rises or falls by more than half' },
-    insightAlerts: { label: 'AI insight alerts', description: 'High-priority insights, at most once a day (Pro plan)' },
+    insightAlerts: { label: 'AI insight alerts', description: 'High-priority insights, at most once a day (a weekly preview on the free plan)' },
     productUpdates: { label: 'Product updates', description: 'Occasional emails about new features' },
 };
 

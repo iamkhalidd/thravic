@@ -252,15 +252,18 @@ async def test_team_size_is_limited_by_the_plan(seeded_domain, db_pool, make_pla
 
 
 @requires_test_db
-async def test_recordings_per_day_counts_across_the_owners_sites(seeded_domain, db_pool, make_plan):
-    plan = await make_plan(features=["analytics", "recordings"], recordings_per_day=2)
+async def test_recordings_per_month_counts_across_the_owners_sites(
+    seeded_domain, db_pool, make_plan
+):
+    plan = await make_plan(features=["analytics", "recordings"], recordings_per_month=2)
     owner = await _owner(db_pool, seeded_domain)
     await _subscribe(db_pool, owner, plan)
     for _ in range(2):
         await recording_service.create(seeded_domain, None, "https://ingest.example.invalid/")
 
-    assert await recording_service.count_started_today_for_owner(owner) == 2
-    assert (await plan_service.owner_plan(seeded_domain)).recordings_per_day == 2
+    since, _ = await plan_service.current_window(owner)
+    assert await recording_service.count_started_for_owner(owner, since) == 2
+    assert (await plan_service.owner_plan(seeded_domain)).recordings_per_month == 2
 
 
 def test_the_catalog_falls_back_to_defaults_without_a_database(monkeypatch):
@@ -272,4 +275,5 @@ def test_the_catalog_falls_back_to_defaults_without_a_database(monkeypatch):
 
     plans = asyncio.run(plan_catalog.all_plans())
     assert {"free", "pro", "agency"} <= set(plans)
-    assert plans["pro"].events_limit == 100_000
+    assert plans["pro"].events_limit == 250_000
+    assert plans["free"].recordings_per_month == 100

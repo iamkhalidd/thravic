@@ -1,7 +1,9 @@
-"""Email account owners when their events reach 80% and 100% of the plan.
+"""Email account owners when their events reach 80% and 100% of the plan, and
+when collection stops at the grace limit (`plan_service.EVENT_GRACE_PERCENT`).
 
-At the limit the collector stops storing events (plan_service.over_event_limit),
-so owners must hear about it from us, not from a gap in their charts. Usage is
+Past the grace limit the collector stops storing events
+(plan_service.over_event_limit), so owners must hear about it from us, not from
+a gap in their charts. Usage is
 counted over each owner's own allowance window (`plan_service.usage_window`:
 the paid plan's 30-day cycle, else the calendar month). Each threshold is emailed
 once per user per window: sending is claimed in `limit_notifications` (its
@@ -21,14 +23,14 @@ from ..db import query
 from ..logging import create_logger
 from ..services import plan_catalog
 from ..services.email_service import send_usage_limit_email
-from ..services.plan_service import entitled, usage_window
+from ..services.plan_service import EVENT_GRACE_PERCENT, entitled, usage_window
 from .runner import run_if_due
 
 log = create_logger("Job")
 
 JOB_NAME = "usage_alerts"
 RUN_EVERY = timedelta(minutes=55)
-THRESHOLDS = (80, 100)
+THRESHOLDS = (80, 100, EVENT_GRACE_PERCENT)
 
 # Every owner with a site, their plan (latest entitled subscription, else free)
 # and, for a paid plan, the start its allowance cycles count from.
@@ -93,7 +95,7 @@ async def send_usage_alerts() -> dict[str, Any]:
         reached = [t for t in THRESHOLDS if used_now * 100 >= t * limit]
 
         # Claim every threshold reached; only the ones newly claimed are news. A
-        # user who jumps straight past 100% gets the 100% email, not both.
+        # user who jumps straight past several gets only the highest one's email.
         claimed = await query(
             """
             INSERT INTO limit_notifications (user_id, month, threshold)

@@ -322,7 +322,7 @@ def test_create_plan_applies_defaults_and_reports_every_missing_required_field()
         "sort_order": 0,
         # Plan-catalog fields: unlimited by default, empty pricing-card copy.
         "team_limit": None,
-        "recordings_per_day": None,
+        "recordings_per_month": None,
         "tagline": "",
         "badge": "",
         "show_on_landing": True,

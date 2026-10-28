@@ -22,13 +22,22 @@ def sent(monkeypatch):
     return messages
 
 
-async def test_the_100_percent_email_says_collection_has_stopped(sent):
+async def test_the_100_percent_email_says_nothing_is_lost_yet(sent):
     await email_service.send_usage_limit_email("a@b.c", "Ada", 100, 5_012, 5_000, "Hobby", RENEWS)
 
     message = sent[0]
     assert message["subject"] == "Your Thravic event limit has been reached"
-    assert "5,012" in message["text"] and "not being stored" in message["text"]
+    assert "5,012" in message["text"] and "Nothing is lost yet" in message["text"]
+    assert "not being stored" not in message["text"]
     assert "renews on Tue Nov 3 2026" in message["text"]  # the plan's cycle, not "the 1st"
+
+
+async def test_the_grace_email_says_collection_has_stopped(sent):
+    await email_service.send_usage_limit_email("a@b.c", "Ada", 120, 6_010, 5_000, "Hobby", RENEWS)
+
+    message = sent[0]
+    assert message["subject"] == "Thravic has stopped storing your events"
+    assert "extra 20%" in message["text"] and "not being stored" in message["text"]
 
 
 async def test_the_80_percent_email_warns_ahead(sent):

@@ -45,6 +45,11 @@ def entitled(alias: str = "", extra_days: int = 0) -> str:
     )
 
 
+# Collection carries on past the plan's events up to this percentage of them, so
+# a busy month never loses data the moment the limit is reached: the owner is
+# emailed at 100% and has this headroom to upgrade before anything is dropped.
+EVENT_GRACE_PERCENT = 120
+
 # How long a "this owner is over their event limit" answer is reused. Collection
 # runs per tracker batch, so without this every batch would count the month's
 # events; the cost is overshooting the limit by up to this much traffic.
@@ -108,7 +113,7 @@ class Plan:
     domains_limit: int
     # None = unlimited.
     team_limit: int | None = None
-    recordings_per_day: int | None = None
+    recordings_per_month: int | None = None
 
 
 async def for_user(user_id: str) -> Plan:
@@ -128,7 +133,7 @@ async def for_user(user_id: str) -> Plan:
         plan.events_limit,
         plan.domains_limit,
         plan.team_limit,
-        plan.recordings_per_day,
+        plan.recordings_per_month,
     )
 
 
@@ -205,7 +210,8 @@ async def team_member_ids(owner_id: str) -> set[str]:
 
 
 async def over_event_limit(owner_id: str) -> bool:
-    """Whether the owner has used their plan's events for this allowance window.
+    """Whether the owner has used their plan's events, plus the grace headroom
+    (`EVENT_GRACE_PERCENT`), for this allowance window.
 
     Fails open: if the check itself errors, events are accepted, so a problem
     here can never cost a customer data. A cached "over" can outlive a reset by
@@ -221,7 +227,7 @@ async def over_event_limit(owner_id: str) -> bool:
             return local[1]
 
         plan = await for_user(owner_id)
-        over = await events_this_period(owner_id) >= plan.events_limit
+        over = await events_this_period(owner_id) * 100 >= plan.events_limit * EVENT_GRACE_PERCENT
 
         await cache.set(key, over, QUOTA_CACHE_SECONDS)
         _local_quota[key] = (time.monotonic() + QUOTA_CACHE_SECONDS, over)

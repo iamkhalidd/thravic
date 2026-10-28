@@ -50,7 +50,7 @@ async def test_every_meter_is_reported(seeded_domain, db_pool, make_plan, config
         events_limit=1000,
         domains_limit=3,
         team_limit=2,
-        recordings_per_day=50,
+        recordings_per_month=50,
         features=["analytics", "team", "recordings"],
     )
     async with db_pool.acquire() as conn:

@@ -5,8 +5,9 @@ pass the gate.
 
 `GET /:domainId?start=&end=` serves today's insight report for that range
 (default: the last 7 days) and `POST /:domainId/refresh` makes a new one; see
-`insight_service` (facts in `insight_facts`). The model is any OpenAI-compatible API (`AI_*` settings); without one, insights are written
-by rules from the same facts.
+`insight_service` (facts in `insight_facts`). The model is any OpenAI-compatible
+API (`AI_*` settings); without one, insights are written by rules from the same
+facts.
 """
 
 from __future__ import annotations

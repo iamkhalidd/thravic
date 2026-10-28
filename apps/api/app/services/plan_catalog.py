@@ -51,7 +51,7 @@ class PlanDef:
     domains_limit: int = 0
     # None = unlimited.
     team_limit: int | None = None
-    recordings_per_day: int | None = None
+    recordings_per_month: int | None = None
     features: tuple[str, ...] = ()
     active: bool = True
     sort_order: int = 0
@@ -79,6 +79,7 @@ def _fallback() -> dict[str, PlanDef]:
             price=int(tier["price"]),
             events_limit=int(tier["eventsLimit"]),
             domains_limit=int(tier["domainsLimit"]),
+            recordings_per_month=int(tier["recordingsPerMonth"]),
             features=tuple(defaults.PLAN_FEATURES.get(key, [])),
             sort_order=index,
             retention={"events": int(tier["retentionDays"])},
@@ -97,7 +98,7 @@ def _from_row(row: dict[str, Any], retention: dict[str, Any] | None) -> PlanDef:
         events_limit=int(row["events_limit"] or 0),
         domains_limit=int(row["domains_limit"] or 0),
         team_limit=row.get("team_limit"),
-        recordings_per_day=row.get("recordings_per_day"),
+        recordings_per_month=row.get("recordings_per_month"),
         features=tuple(row["features"] or ()),
         active=bool(row["active"]),
         sort_order=int(row["sort_order"] or 0),
@@ -173,8 +174,8 @@ def _feature_label(feature: str, plan: PlanDef) -> str:
         if plan.team_limit is None:
             return "Unlimited team members"
         return f"Up to {plan.team_limit} team member{'' if plan.team_limit == 1 else 's'}"
-    if feature == "recordings" and plan.recordings_per_day is not None:
-        return f"Session recordings ({_amount(plan.recordings_per_day)}/day)"
+    if feature == "recordings" and plan.recordings_per_month is not None:
+        return f"Session recordings ({_amount(plan.recordings_per_month)}/month)"
     return FEATURE_LABELS.get(feature, feature.replace("_", " ").capitalize())
 
 
@@ -224,7 +225,7 @@ def public(plan: PlanDef, plans: list[PlanDef]) -> dict[str, Any]:
         "events_limit": plan.events_limit,
         "domains_limit": plan.domains_limit,
         "team_limit": plan.team_limit,
-        "recordings_per_day": plan.recordings_per_day,
+        "recordings_per_month": plan.recordings_per_month,
         "retention_days": plan.retention.get("events"),
         "features": list(plan.features),
         "tagline": plan.tagline,

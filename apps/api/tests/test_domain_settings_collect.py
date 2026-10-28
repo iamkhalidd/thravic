@@ -66,7 +66,7 @@ def site(monkeypatch):
 
     async def _owner_plan(_domain_id):
         name = record["plan"]
-        return Plan("owner", name, PLAN_FEATURES[name], 100_000, 3)
+        return Plan("owner", name, record.get("features", PLAN_FEATURES[name]), 100_000, 3)
 
     monkeypatch.setattr(domain_service, "get_by_tracking_id", _get_by_tracking_id)
     async def _over_event_limit(_owner_id):
@@ -142,7 +142,7 @@ def test_config_reports_the_dashboard_settings(client, site, stored):
 
 def test_recording_needs_the_plan_as_well_as_the_setting(client, site, stored):
     site["settings"] = {"sessionRecording": True}
-    site["plan"] = "free"
+    site["features"] = ["analytics", "realtime", "utm"]  # a plan without recordings
 
     config = client.get(f"/api/collect/{TRACKING_ID}/config").json()
     start = client.post(

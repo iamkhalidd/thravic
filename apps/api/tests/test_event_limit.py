@@ -58,9 +58,18 @@ async def test_under_the_limit_is_accepted(seeded_domain, db_pool, owner_with_li
     assert await plan_service.over_event_limit(owner) is False
 
 
-async def test_reaching_the_limit_stops_collection(seeded_domain, db_pool, owner_with_limit):
-    owner = await owner_with_limit(seeded_domain, 3)
-    await _store_events(seeded_domain, 3)
+async def test_reaching_the_limit_keeps_collecting_within_the_grace(
+    seeded_domain, db_pool, owner_with_limit
+):
+    owner = await owner_with_limit(seeded_domain, 10)
+    await _store_events(seeded_domain, 11)
+
+    assert await plan_service.over_event_limit(owner) is False
+
+
+async def test_passing_the_grace_stops_collection(seeded_domain, db_pool, owner_with_limit):
+    owner = await owner_with_limit(seeded_domain, 10)
+    await _store_events(seeded_domain, 12)  # EVENT_GRACE_PERCENT of 10
 
     assert await plan_service.over_event_limit(owner) is True
 
@@ -69,7 +78,7 @@ async def test_the_answer_is_cached_between_batches(seeded_domain, db_pool, owne
     owner = await owner_with_limit(seeded_domain, 3)
     assert await plan_service.over_event_limit(owner) is False
 
-    await _store_events(seeded_domain, 3)
+    await _store_events(seeded_domain, 4)
 
     # Reused for QUOTA_CACHE_SECONDS rather than counted on every batch.
     assert await plan_service.over_event_limit(owner) is False
@@ -86,7 +95,7 @@ async def test_an_inactive_subscription_falls_back_to_the_free_limit(
 
     plan = await plan_service.for_user(owner)
 
-    assert (plan.name, plan.events_limit) == ("free", 5_000)
+    assert (plan.name, plan.events_limit) == ("free", 50_000)
 
 
 async def test_a_failing_check_accepts_events(monkeypatch):

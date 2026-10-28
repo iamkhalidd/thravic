@@ -621,38 +621,55 @@ async def send_usage_limit_email(
     plan: str,
     resets_at: datetime,
 ) -> None:
-    """Event allowance at 80% or used up. `resets_at` is when the allowance renews
-    (the plan's billing cycle, or the 1st for free accounts). Raises if the
-    provider rejects it, so the caller can try again later instead of losing it."""
+    """Event allowance at 80%, used up (100%: still collecting, within the grace
+    headroom), or past the grace limit (collection stopped). `resets_at` is when
+    the allowance renews (the plan's billing cycle, or the 1st for free accounts).
+    Raises if the provider rejects it, so the caller can try again later instead
+    of losing it."""
     billing_url = f"{_frontend()}/dashboard/settings?tab=subscription"
     used_text, limit_text = f"{used:,}", f"{limit:,}"
     safe_plan = _esc(plan)
     renews = _js_date_string(resets_at)
 
-    if threshold >= 100:
-        subject = "Your Thravic event limit has been reached"
+    if threshold > 100:
+        subject = "Thravic has stopped storing your events"
         lead = (
-            f"Your sites have sent {used_text} events, the {limit_text} included in the "
-            f"{safe_plan} plan for this period. "
+            f"Your sites have sent {used_text} events, past the {limit_text} included in "
+            f"the {safe_plan} plan and the extra {threshold - 100}% we allow on top. "
             f"{_strong('New events and session recordings are not being stored')} until the "
             f"allowance renews on {renews}, or until you upgrade."
         )
         text_lead = (
+            f"Your sites have sent {used_text} events, past the {limit_text} included in "
+            f"the {plan} plan and the extra {threshold - 100}% we allow on top. New events "
+            f"and session recordings are not being stored until the allowance renews on "
+            f"{renews}, or until you upgrade."
+        )
+    elif threshold == 100:
+        subject = "Your Thravic event limit has been reached"
+        lead = (
             f"Your sites have sent {used_text} events, the {limit_text} included in the "
-            f"{plan} plan for this period. New events and session recordings are not being "
-            f"stored until the allowance renews on {renews}, or until you upgrade."
+            f"{safe_plan} plan for this period. {_strong('Nothing is lost yet')}: we keep "
+            f"collecting for a while longer, then new events stop being stored until the "
+            f"allowance renews on {renews}. Upgrade now to keep everything."
+        )
+        text_lead = (
+            f"Your sites have sent {used_text} events, the {limit_text} included in the "
+            f"{plan} plan for this period. Nothing is lost yet: we keep collecting for a "
+            f"while longer, then new events stop being stored until the allowance renews "
+            f"on {renews}. Upgrade now to keep everything."
         )
     else:
         subject = f"You have used {threshold}% of your Thravic events"
         lead = (
             f"Your sites have sent {used_text} of the {limit_text} events included in the "
-            f"{safe_plan} plan for this period. If the allowance runs out, new events stop "
-            f"being stored until it renews on {renews}."
+            f"{safe_plan} plan for this period. Past the allowance we keep collecting for a "
+            f"while, then new events stop being stored until it renews on {renews}."
         )
         text_lead = (
             f"Your sites have sent {used_text} of the {limit_text} events included in the "
-            f"{plan} plan for this period. If the allowance runs out, new events stop being "
-            f"stored until it renews on {renews}."
+            f"{plan} plan for this period. Past the allowance we keep collecting for a "
+            f"while, then new events stop being stored until it renews on {renews}."
         )
 
     await send_email_or_raise(
@@ -780,9 +797,18 @@ async def send_insight_alert_email(
     domain: str,
     insights: Sequence[dict[str, Any]],
     domain_id: str | None = None,
+    weekly: bool = False,
 ) -> None:
-    """High-priority insights for one site. Raises on failure so the job can retry."""
-    link = _site_link("/dashboard/insights", domain_id)
+    """High-priority insights for one site. Raises on failure so the job can retry.
+
+    `weekly` is the free plan's Monday preview: its button leads to the plans,
+    since the Insights page itself needs a paid plan."""
+    link = (
+        f"{_frontend()}/dashboard/settings?tab=subscription"
+        if weekly
+        else _site_link("/dashboard/insights", domain_id)
+    )
+    button = "Get daily insights" if weekly else "See all insights"
     count = len(insights)
     subject = (
         f"{insights[0]['title']} ({domain})" if count == 1
@@ -811,15 +837,19 @@ async def send_insight_alert_email(
             preheader=insights[0]["title"],
             blocks=[
                 _greeting(name),
-                _p(f"Today's analysis of {_strong(domain)} found something worth a look:"),
+                _p(
+                    f"This week's analysis of {_strong(domain)} found something worth a look:"
+                    if weekly
+                    else f"Today's analysis of {_strong(domain)} found something worth a look:"
+                ),
                 items,
-                _button(link, "See all insights"),
+                _button(link, button),
             ],
             reason="You're receiving this because AI insight alerts are on for your account.",
             manage_link=True,
         ),
         f"Hi {name or 'there'},\n\nNew insights for {domain}:\n\n{text}\n\n"
-        f"See all insights: {link}",
+        f"{button}: {link}",
     )
 
 
