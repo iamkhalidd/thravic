@@ -1,0 +1,53 @@
+{%- comment -%}
+  Thravic tracker, as an app embed: loads on every storefront page once the
+  merchant switches it on (Online Store > Themes > Customize > App embeds).
+
+  The tracking ID is the one typed below, or else the one saved from the
+  Thravic app page in the Shopify admin (app metafield thravic.tracking_id).
+  A Thravic tracking ID is "TF-" and 8 hex characters, e.g. TF-1A2B3C4D.
+
+  The tag is the same one the Thravic dashboard gives every website.
+{%- endcomment -%}
+{%- liquid
+  assign tracking_id = block.settings.tracking_id | strip | upcase
+  if tracking_id == blank
+    assign tracking_id = app.metafields.thravic.tracking_id.value | strip | upcase
+  endif
+
+  assign id_prefix = tracking_id | slice: 0, 3
+  assign id_hex = tracking_id | slice: 3, 8
+  assign id_rest = id_hex | remove: '0' | remove: '1' | remove: '2' | remove: '3' | remove: '4' | remove: '5' | remove: '6' | remove: '7' | remove: '8' | remove: '9' | remove: 'A' | remove: 'B' | remove: 'C' | remove: 'D' | remove: 'E' | remove: 'F'
+
+  assign valid = false
+  if tracking_id.size == 11 and id_prefix == 'TF-' and id_rest == ''
+    assign valid = true
+  endif
+-%}
+{%- if valid -%}
+  <script async src="https://api.thravic.com/tf.js" data-tracking-id="{{ tracking_id | escape }}"></script>
+{%- elsif request.design_mode -%}
+  {%- comment -%} Only the merchant sees this, in the theme editor. {%- endcomment -%}
+  <div style="position:fixed;bottom:16px;left:16px;z-index:2147483647;max-width:320px;padding:12px 14px;background:#fff4e5;color:#5c3b00;border:1px solid #f0b46a;border-radius:8px;font:14px/1.4 sans-serif;">
+    {%- if tracking_id == blank -%}
+      Thravic: add your tracking ID in App embeds &gt; Thravic tracker. You can find it in your Thravic dashboard.
+    {%- else -%}
+      Thravic: "{{ tracking_id | escape }}" is not a tracking ID. It looks like TF-1A2B3C4D.
+    {%- endif -%}
+  </div>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "Thravic tracker",
+  "target": "head",
+  "settings": [
+    {
+      "type": "text",
+      "id": "tracking_id",
+      "label": "Tracking ID",
+      "placeholder": "TF-1A2B3C4D",
+      "info": "It starts with TF- and is in your Thravic install code. Leave empty to use the ID saved in the Thravic app."
+    }
+  ]
+}
+{% endschema %}

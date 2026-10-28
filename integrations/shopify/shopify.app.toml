@@ -1,0 +1,45 @@
+# Thravic Shopify app — https://shopify.dev/docs/apps/build/cli-for-apps/app-configuration
+#
+# FILL THIS IN: after you create the app in your Shopify Partner account
+# (Apps > Create app > Create app manually), copy its "Client ID" here.
+# `shopify app config link` can also write it for you. See README.md.
+client_id = "REPLACE_WITH_YOUR_CLIENT_ID"
+name = "Thravic"
+handle = "thravic"
+# The app's page inside the Shopify admin, where the merchant types their
+# Thravic tracking ID. Served by the Thravic API (apps/api/app/routers/shopify.py).
+application_url = "https://api.thravic.com/shopify/app"
+embedded = true
+
+[access_scopes]
+# Only what the web pixel needs: write_pixels lets the app page save the
+# pixel's tracking ID, read_customer_events lets the pixel receive checkout
+# and cart events. https://shopify.dev/docs/apps/build/marketing-analytics/build-web-pixels
+scopes = "write_pixels,read_customer_events"
+use_legacy_install_flow = false
+
+[access.admin]
+# The app page calls the Admin API straight from the browser through App
+# Bridge, so the Thravic server never stores a Shopify access token.
+direct_api_mode = "online"
+embedded_app_direct_api_access = true
+
+[auth]
+redirect_urls = [ "https://api.thravic.com/shopify/app" ]
+
+[webhooks]
+api_version = "2026-10"
+
+# Mandatory for the App Store. Thravic keeps no Shopify customer data (the
+# pixel sends no names, emails or addresses), so the endpoint checks the
+# signature and confirms. https://shopify.dev/docs/apps/build/compliance/privacy-law-compliance
+[[webhooks.subscriptions]]
+compliance_topics = [ "customers/data_request", "customers/redact", "shop/redact" ]
+uri = "https://api.thravic.com/api/shopify/webhooks"
+
+[pos]
+embedded = false
+
+[build]
+automatically_update_urls_on_dev = false
+include_config_on_deploy = true

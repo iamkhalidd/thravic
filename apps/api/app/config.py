@@ -102,6 +102,10 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_SECRET: str | None = None
     GITHUB_CLIENT_ID: str | None = None
     GITHUB_CLIENT_SECRET: str | None = None
+    # The Thravic Shopify app (integrations/shopify): its client id is shown to
+    # App Bridge on the app's admin page, the secret checks Shopify's webhooks.
+    SHOPIFY_CLIENT_ID: str | None = None
+    SHOPIFY_CLIENT_SECRET: str | None = None
     # AI insights: any OpenAI-compatible chat completions API (DeepSeek by default).
     # Without a key, insights fall back to rules over the same computed facts.
     AI_API_KEY: str | None = None

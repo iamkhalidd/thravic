@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Thravic</title>
+    <meta name="shopify-api-key" content="{{CLIENT_ID}}">
+    <script src="https://cdn.shopify.com/shopifycloud/app-bridge.js"></script>
+    <link rel="stylesheet" href="/shopify/app.css">
+</head>
+<body>
+<main>
+    <h1>Thravic analytics</h1>
+    <p>See who visits your store, what they look at, and what they buy. Type your Thravic tracking ID to connect this store.</p>
+
+    <form id="connect" novalidate>
+        <label for="tracking-id">Tracking ID</label>
+        <input id="tracking-id" name="trackingId" placeholder="TF-1A2B3C4D" autocomplete="off" spellcheck="false" maxlength="11">
+        <p class="hint">It starts with TF- and is in your install code on <a href="https://thravic.com/dashboard" target="_blank" rel="noopener">thravic.com</a>. No account yet? <a href="https://thravic.com/register" target="_blank" rel="noopener">Sign up free</a> and add your store's web address.</p>
+        <p id="message" role="status"></p>
+        <button type="submit" id="save">Connect store</button>
+    </form>
+
+    <section id="next" hidden>
+        <h2>Last step: switch Thravic on in your theme</h2>
+        <p>This lets Thravic see page visits on your store. Click the button, make sure "Thravic tracker" is on, then click Save.</p>
+        <button type="button" id="embed">Open theme editor</button>
+    </section>
+</main>
+<script src="/shopify/app.js"></script>
+</body>
+</html>

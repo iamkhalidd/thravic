@@ -1,0 +1,4 @@
+# Made by the Shopify CLI on your computer; not source.
+.shopify/
+node_modules/
+dist/

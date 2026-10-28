@@ -383,3 +383,50 @@ async def rage_clicks(
     except Exception as exc:
         log.error(f"Error fetching rage click data: {exc}")
         raise SimpleError(FAILED_RAGE_CLICKS, 500) from None
+
+
+FAILED_REVENUE = "Failed to fetch revenue data"
+
+# One row per order: a re-sent purchase with the same `orderId` counts once.
+# Purchases without an order id count individually. Amounts only in the clean
+# shape the collector stores (`clean_commerce`), so no cast can fail.
+REVENUE_SQL = """
+    SELECT currency, COUNT(*)::int AS purchases, ROUND(SUM(value), 2)::float AS total
+      FROM (
+        SELECT DISTINCT ON (COALESCE(data->>'orderId', id::text))
+               UPPER(data->>'currency') AS currency,
+               (data->>'value')::numeric AS value
+          FROM events
+         WHERE domain_id = $1
+           AND type = 'custom'
+           AND data->>'event' = 'purchase'
+           AND created_at >= $2
+           AND created_at <= $3
+           AND jsonb_typeof(data->'value') = 'number'
+           AND data->>'currency' ~ '^[A-Za-z]{3}$'
+         ORDER BY COALESCE(data->>'orderId', id::text), created_at
+      ) orders
+     GROUP BY currency
+     ORDER BY total DESC
+"""
+
+
+@router.get("/{domainId}/revenue")
+async def revenue(
+    domainId: str, request: Request, user: AuthUser = Depends(require_auth)
+):
+    """Store purchases (from the Shopify app) and their total, per currency.
+
+    Currencies are never added together: a shop selling in NGN and USD gets one
+    line for each.
+    """
+    try:
+        await _require_owned_domain(domainId, user.user_id)
+        start, end = _get_date_range(request)
+        rows = await query(REVENUE_SQL, domainId, start, end)
+        return jsjson({"currencies": [dict(row) for row in rows]})
+    except SimpleError:
+        raise
+    except Exception as exc:
+        log.error(f"Error fetching revenue data: {exc}")
+        raise SimpleError(FAILED_REVENUE, 500) from None

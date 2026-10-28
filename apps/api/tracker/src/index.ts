@@ -116,6 +116,14 @@ const VISITOR_KEY = '_tf_vid';
 const SESSION_KEY = '_tf_sid';
 const SESSION_EXPIRY = 30 * 60 * 1000; // 30 minutes
 
+// On a Shopify store the ids are also mirrored into first-party cookies, so the
+// Thravic web pixel (which runs in Shopify's sandbox, including on checkout
+// pages, and can read cookies through `browser.cookie`) reports purchases under
+// the same visitor and session. Only written once tracking is allowed.
+const VISITOR_COOKIE = '_tf_vid';
+const SESSION_COOKIE = '_tf_sid';
+const VISITOR_COOKIE_DAYS = 365;
+
 // Undelivered events are mirrored here so a failed send, a reload or a closed
 // tab cannot lose them. The server dedupes on `eventId`, so re-sending is safe.
 const QUEUE_KEY = '_tf_queue';
@@ -377,6 +385,10 @@ class ThravicAnalytics {
         this.eventQueue = [];
         this.persistQueue();
         this.endRecording();
+        if ((window as any).Shopify) {
+            this.setSharedCookie(VISITOR_COOKIE, '', 0);
+            this.setSharedCookie(SESSION_COOKIE, '', 0);
+        }
     }
 
     // ────────────────────────────────────
@@ -435,9 +447,34 @@ class ThravicAnalytics {
         } catch { /* storage blocked — the queue stays in memory only */ }
     }
 
+    // Write `name=value` on the widest domain the browser accepts (shop.com rather
+    // than www.shop.com) so checkout on another subdomain still sees it. A public
+    // suffix such as myshopify.com is refused, which leaves the full host.
+    private setSharedCookie(name: string, value: string, maxAgeSeconds: number): void {
+        const base = `${name}=${encodeURIComponent(value)}; path=/; max-age=${maxAgeSeconds}; SameSite=Lax`
+            + (location.protocol === 'https:' ? '; Secure' : '');
+        const parts = location.hostname.split('.');
+        try {
+            for (let i = parts.length - 2; i >= 0; i--) {
+                const domain = parts.slice(i).join('.');
+                document.cookie = `${base}; domain=${domain}`;
+                if (document.cookie.indexOf(`${name}=${encodeURIComponent(value)}`) !== -1) return;
+            }
+            document.cookie = base;
+        } catch { /* cookies blocked */ }
+    }
+
+    // Mirror the ids for the Shopify web pixel (see VISITOR_COOKIE).
+    private shareIds(event: TFEvent): void {
+        if (!(window as any).Shopify) return;
+        this.setSharedCookie(VISITOR_COOKIE, event.visitorId, VISITOR_COOKIE_DAYS * 86400);
+        this.setSharedCookie(SESSION_COOKIE, event.sessionId, SESSION_EXPIRY / 1000);
+    }
+
     // Queue an event
     private queueEvent(event: TFEvent): void {
         if (!this.shouldTrack()) return;
+        this.shareIds(event);
 
         this.eventQueue.push(event);
         // Bound the queue: an unreachable endpoint must not grow it forever.

@@ -1,0 +1,11 @@
+{
+  "name": "thravic-pixel",
+  "version": "1.0.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "type": "module",
+  "main": "dist/main.js",
+  "dependencies": {
+    "@shopify/web-pixels-extension": "2.18.0"
+  }
+}

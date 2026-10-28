@@ -32,6 +32,10 @@ DOCS_PATHS = frozenset({"/docs", "/docs/", "/redoc", "/redoc/", "/openapi.json"}
 # (ERR_BLOCKED_BY_RESPONSE.NotSameOrigin), so these paths opt out of that header.
 CROSS_ORIGIN_SCRIPT_PATHS = frozenset({"/tf.js", "/v.js", "/recorder.js"})
 
+# The Shopify app's admin page is framed by admin.shopify.com, so it sets its own
+# CSP (with `frame-ancestors`, see routers/shopify.py) and has no X-Frame-Options.
+SHOPIFY_APP_PATH = "/shopify/app"
+
 CallNext = Callable[[Request], Awaitable[Response]]
 
 
@@ -77,9 +81,13 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
         # Relax the CSP only for the interactive docs routes.
         csp = self.docs_csp if request.url.path in DOCS_PATHS else self.csp
-        response.headers["Content-Security-Policy"] = csp
+        framed_by_shopify = (
+            request.url.path == SHOPIFY_APP_PATH and "content-security-policy" in response.headers
+        )
+        if not framed_by_shopify:
+            response.headers["Content-Security-Policy"] = csp
+            response.headers["X-Frame-Options"] = "SAMEORIGIN"
         response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["X-Frame-Options"] = "SAMEORIGIN"
         response.headers["X-DNS-Prefetch-Control"] = "off"
         response.headers["X-Download-Options"] = "noopen"
         response.headers["X-Permitted-Cross-Domain-Policies"] = "none"

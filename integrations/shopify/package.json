@@ -1,0 +1,19 @@
+{
+  "name": "thravic-shopify",
+  "version": "1.0.0",
+  "private": true,
+  "description": "The Thravic Shopify app: a theme app embed that loads the tracker, and a web pixel that reports checkouts and purchases.",
+  "license": "UNLICENSED",
+  "scripts": {
+    "dev": "shopify app dev",
+    "deploy": "shopify app deploy",
+    "info": "shopify app info",
+    "test": "node --test tests/pixel.test.mjs"
+  },
+  "workspaces": [
+    "extensions/*"
+  ],
+  "devDependencies": {
+    "@shopify/cli": "4.9.4"
+  }
+}

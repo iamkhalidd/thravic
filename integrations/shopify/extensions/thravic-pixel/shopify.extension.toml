@@ -1,0 +1,21 @@
+# https://shopify.dev/docs/apps/build/marketing-analytics/build-web-pixels
+type = "web_pixel_extension"
+name = "thravic-pixel"
+runtime_context = "strict"
+
+# Shopify runs the pixel only for visitors who allowed analytics (where the
+# law asks for consent). Thravic does no marketing and sells no data.
+[customer_privacy]
+analytics = true
+marketing = false
+preferences = false
+sale_of_data = "disabled"
+
+# Saved by the Thravic app page in the admin (webPixelCreate / webPixelUpdate).
+[settings]
+type = "object"
+
+[settings.fields.trackingId]
+name = "Tracking ID"
+description = "Your Thravic tracking ID, like TF-1A2B3C4D"
+type = "single_line_text_field"

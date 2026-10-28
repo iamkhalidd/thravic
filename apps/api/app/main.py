@@ -53,6 +53,7 @@ from .routers import heatmaps as heatmap_routes
 from .routers import insights as insight_routes
 from .routers import payments as payment_routes
 from .routers import recordings as recording_routes
+from .routers import shopify as shopify_routes
 from .routers import sources as source_routes
 from .routers import team as team_routes
 from .routers import tracker as tracker_routes
@@ -271,6 +272,8 @@ app.include_router(payment_routes.router, prefix="/api/payments", tags=["payment
 app.include_router(admin_routes.router, prefix="/api/admin", tags=["admin"])
 # Served from the root, like the `app.get(['/tf.js', '/v.js'])` handler in index.ts
 app.include_router(tracker_routes.router, tags=["tracker"])
+# The Shopify app's admin page (/shopify/app) and its privacy webhooks
+app.include_router(shopify_routes.router, tags=["shopify"])
 
 
 # ── Email diagnostic ─────────────────────────────────────────────────────────

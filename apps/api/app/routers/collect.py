@@ -174,11 +174,52 @@ def webhook_events(event_type: str, event: dict) -> list[tuple[str, Any]]:
     return [(event_type, event)]
 
 
+# Shop events, sent by the Shopify web pixel (or `TF('track', 'purchase', ...)`).
+# Their money fields are stored in one shape so revenue can be summed.
+COMMERCE_EVENTS = ("purchase", "checkout_started", "add_to_cart")
+CURRENCY_LENGTH = 3
+ORDER_ID_MAX = 100
+
+
+def _number(value: Any) -> float | None:
+    """A finite, non-negative amount from a number or numeric string, else None."""
+    if isinstance(value, bool):
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if number != number or number in (float("inf"), float("-inf")) or number < 0:
+        return None
+    return round(number, 2)
+
+
+def clean_commerce(data: dict) -> dict:
+    """`value`, `currency`, `items` and `orderId` in a fixed shape; a field that
+    does not fit is dropped rather than failing the event."""
+    cleaned = {k: v for k, v in data.items() if k not in ("value", "currency", "items", "orderId")}
+    value = _number(data.get("value"))
+    if value is not None:
+        cleaned["value"] = value
+    currency = data.get("currency")
+    if isinstance(currency, str) and len(currency.strip()) == CURRENCY_LENGTH:
+        cleaned["currency"] = currency.strip().upper()
+    items = _number(data.get("items"))
+    if items is not None:
+        cleaned["items"] = int(items)
+    order_id = data.get("orderId")
+    if isinstance(order_id, (str, int)) and not isinstance(order_id, bool) and str(order_id):
+        cleaned["orderId"] = str(order_id)[:ORDER_ID_MAX]
+    return cleaned
+
+
 def _clean_data(event_type: str, data: Any) -> dict:
     """The event's `data` as stored: form fields that are not text are dropped."""
     data = data if isinstance(data, dict) else {}
     if event_type == "custom" and data.get("event") == "feedback":
         return feedback_service.clean(data)
+    if event_type == "custom" and data.get("event") in COMMERCE_EVENTS:
+        return clean_commerce(data)
     if event_type != "form":
         return data
     return {
