@@ -1,9 +1,5 @@
 # Thravic Shopify app — https://shopify.dev/docs/apps/build/cli-for-apps/app-configuration
-#
-# FILL THIS IN: after you create the app in your Shopify Partner account
-# (Apps > Create app > Create app manually), copy its "Client ID" here.
-# `shopify app config link` can also write it for you. See README.md.
-client_id = "REPLACE_WITH_YOUR_CLIENT_ID"
+client_id = "25e9bfc3afeac42cba26f72ea3511e6f"
 name = "Thravic"
 handle = "thravic"
 # The app's page inside the Shopify admin, where the merchant types their
