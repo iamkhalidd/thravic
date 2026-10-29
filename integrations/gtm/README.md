@@ -58,7 +58,7 @@ Google only accepts a template from its **own public GitHub repository** with
 these files at the root, on the main branch: `template.tpl`, `metadata.yaml`
 and `LICENSE` (Apache 2.0, already filled in). One template per repository.
 
-1. Create a new public GitHub repository, for example `thravic/gtm-template`,
+1. Create a new public GitHub repository, for example `iamkhalidd/thravic-gtm-template` (the live one),
    and turn on **Issues** (Google files review problems there) and email
    notifications.
 2. Copy everything in this folder (`template.tpl`, `metadata.yaml`, `LICENSE`,

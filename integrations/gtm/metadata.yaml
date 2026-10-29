@@ -3,5 +3,5 @@ documentation: "https://thravic.com/docs/gtm"
 versions:
   # Newest first. `sha` is the commit in the PUBLIC gallery repository that holds
   # this version of template.tpl (see README.md). Replace it after the first push.
-  - sha: REPLACE_WITH_COMMIT_SHA
+  - sha: 3fe9532352aa179da0d69b1264e4a428b4d0a7af
     changeNotes: First release. Loads the Thravic tracker with your tracking ID, with optional switches for clicks, scrolls, forms, errors, page speed, recordings, Do Not Track and consent.
