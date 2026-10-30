@@ -10,6 +10,8 @@ export interface ChartColors {
     bar: string;
     text: string;
     muted: string;
+    /** The card surface, for rings around marks. */
+    surface: string;
 }
 
 const FALLBACK: ChartColors = {
@@ -19,6 +21,7 @@ const FALLBACK: ChartColors = {
     bar: 'rgba(57,135,229,0.22)',
     text: '#f4f5f6',
     muted: '#737883',
+    surface: '#08090a',
 };
 
 /**
@@ -39,6 +42,7 @@ export function useChartColors(): ChartColors {
             bar: read('--chart-bar', FALLBACK.bar),
             text: read('--color-text-primary', FALLBACK.text),
             muted: read('--color-text-muted', FALLBACK.muted),
+            surface: read('--color-bg-card', FALLBACK.surface),
         });
     }, [resolvedTheme]);
     return colors;

@@ -9,6 +9,7 @@ import { useApiRange } from '@/contexts/DateRangeContext';
 import { PageHeader } from '@/components/PageHeader';
 import { StatCard } from '@/components/StatCard';
 import { ChartCard } from '@/components/ChartCard';
+import { FunnelColumns } from '@/components/charts/FunnelColumns';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
@@ -73,6 +74,26 @@ async function deleteFunnel(domainId: string, funnelId: string) {
     await authFetch(`${API_URL}/api/funnels/${domainId}/${funnelId}`, {
         method: 'DELETE'
     });
+}
+
+/** "Of 1,200 people who started, 96 finished. Most left after "Add to cart"." */
+function funnelSummary(steps: Array<{ name: string; visitors: number }>) {
+    const first = steps[0]?.visitors ?? 0;
+    if (first <= 0) return 'Nobody started this funnel in this period.';
+    const last = steps[steps.length - 1].visitors;
+    let worst = -1;
+    let worstRate = 0;
+    steps.slice(1).forEach((step, i) => {
+        const before = steps[i].visitors;
+        const rate = before > 0 ? (before - step.visitors) / before : 0;
+        if (rate > worstRate) { worstRate = rate; worst = i; }
+    });
+    return (
+        <>
+            Of <strong>{first.toLocaleString()}</strong> people who started, <strong>{last.toLocaleString()}</strong> finished.
+            {worst >= 0 && <> Most left after <strong>{steps[worst].name}</strong>, so start there.</>}
+        </>
+    );
 }
 
 export default function FunnelsPage() {
@@ -213,53 +234,22 @@ export default function FunnelsPage() {
                                 </div>
 
                                 <ChartCard
-                                    flush
                                     loading={detailLoading}
                                     title={current?.name ?? 'Funnel'}
-                                    subtitle="Visitors who reached each step in the selected period"
+                                    subtitle="People who reached each step in the selected period"
+                                    info="Each column is the people who reached that step, as a share of those who started. The chip between two steps shows how many left there."
                                 >
                                     {funnelMetrics && funnelMetrics.steps.length > 0 ? (
-                                        <div style={{ overflowX: 'auto' }}>
-                                            <table className="data-table" style={{ marginTop: 6 }}>
-                                                <thead>
-                                                    <tr>
-                                                        <th style={{ paddingLeft: 20 }}>Step</th>
-                                                        <th className="num">Visitors</th>
-                                                        <th className="num" title="Share of the previous step's visitors who reached this one">Step conversion</th>
-                                                        <th className="num" style={{ paddingRight: 20 }}>Drop-off</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {funnelMetrics.steps.map((step, index) => {
-                                                        const width = first > 0 ? Math.max((step.visitors / first) * 100, 1.5) : 0;
-                                                        return (
-                                                            <tr key={step.stepId}>
-                                                                <td style={{ paddingLeft: 20, width: '55%', minWidth: 200 }}>
-                                                                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 8, minHeight: 26, padding: '0 8px' }}>
-                                                                        <span aria-hidden="true" style={{
-                                                                            position: 'absolute', inset: '0 auto 0 0', width: `${width}%`,
-                                                                            background: 'var(--chart-bar)', borderLeft: width > 0 ? '2px solid var(--chart-1)' : undefined,
-                                                                            borderRadius: 4,
-                                                                        }} />
-                                                                        <span style={{ position: 'relative', color: 'var(--color-text-secondary)', fontVariantNumeric: 'tabular-nums', fontSize: '0.75rem' }}>
-                                                                            {index + 1}
-                                                                        </span>
-                                                                        <span style={{ position: 'relative', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={step.name}>
-                                                                            {step.name}
-                                                                        </span>
-                                                                    </div>
-                                                                </td>
-                                                                <td className="num" style={{ fontWeight: 500 }}>{step.visitors.toLocaleString()}</td>
-                                                                <td className="num">{index === 0 ? <span className="muted">—</span> : `${step.conversionRate.toFixed(1)}%`}</td>
-                                                                <td className="num muted" style={{ paddingRight: 20 }}>
-                                                                    {index === 0 ? '—' : `${step.dropoffs.toLocaleString()} (${step.dropoffRate.toFixed(1)}%)`}
-                                                                </td>
-                                                            </tr>
-                                                        );
-                                                    })}
-                                                </tbody>
-                                            </table>
-                                        </div>
+                                        <>
+                                            <div className="funnel-head">
+                                                <p className="chart-summary">{funnelSummary(funnelMetrics.steps)}</p>
+                                                <div className="funnel-total">
+                                                    <b>{Number(funnelMetrics.overallConversionRate ?? 0).toFixed(1)}%</b>
+                                                    <small>finish all steps</small>
+                                                </div>
+                                            </div>
+                                            <FunnelColumns steps={funnelMetrics.steps.map(step => ({ id: step.stepId, name: step.name, visitors: step.visitors }))} />
+                                        </>
                                     ) : (
                                         <div className="empty-note">This funnel has no steps.</div>
                                     )}

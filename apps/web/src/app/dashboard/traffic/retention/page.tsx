@@ -6,6 +6,7 @@ import { useDomain } from '@/contexts/DomainContext';
 import { PageHeader } from '@/components/PageHeader';
 import { ChartCard } from '@/components/ChartCard';
 import { StatCard } from '@/components/StatCard';
+import { inEvery } from '@/components/charts/format';
 import { visitors as visitorsApi, type Retention } from '@/lib/api';
 
 const WEEK_CHOICES = [4, 8, 12] as const;
@@ -14,13 +15,29 @@ function weekLabel(iso: string): string {
     return new Date(`${iso}T00:00:00Z`).toLocaleDateString(undefined, { day: 'numeric', month: 'short', timeZone: 'UTC' });
 }
 
-/** Darker cells for a higher share, on the theme's text color. */
-function cellStyle(percent: number): React.CSSProperties {
-    const strength = Math.min(percent, 60) / 60;
-    return {
-        background: `color-mix(in srgb, var(--color-text-primary) ${Math.round(strength * 55 + 4)}%, transparent)`,
-        color: strength > 0.55 ? 'var(--color-bg-primary)' : 'var(--color-text-primary)',
-    };
+/** A stronger blue for a higher share; 40% and up is full strength. */
+function cellAlpha(percent: number): number {
+    return Math.min(percent / 40, 1) * 0.8 + 0.1;
+}
+
+function cellBackground(alpha: number): string {
+    return `color-mix(in srgb, var(--chart-1) ${Math.round(alpha * 100)}%, transparent)`;
+}
+
+function weekHeader(i: number): string {
+    return i === 0 ? '1 week later' : `${i + 1} weeks`;
+}
+
+/** "About 1 in 5 new visitors come back a week later." */
+function retentionSummary(week1?: number | null, week4?: number | null) {
+    if (week1 == null) return undefined;
+    if (week1 <= 0) return 'No new visitors have come back a week later yet.';
+    return (
+        <>
+            <strong>{inEvery(week1 / 100)}</strong> new visitors come back a week later
+            {week4 != null && <>, and <strong>{inEvery(week4 / 100)}</strong> after four weeks</>}.
+        </>
+    );
 }
 
 export default function RetentionPage() {
@@ -76,43 +93,66 @@ export default function RetentionPage() {
                         <StatCard loading={loading} icon={Repeat} label="Back after 4 weeks" value={rate(data?.week4)} hint="of new visitors, on average" />
                     </div>
 
-                    <ChartCard flush title="Weekly cohorts" subtitle="Each row is the visitors who first came that week, and the share seen again each week after.">
+                    <ChartCard
+                        title="Do visitors come back?"
+                        subtitle="Each row is the people who first came that week"
+                        info="A cohort is everyone whose first visit was in the same week. Each cell is the share of them seen again that many weeks later."
+                        summary={retentionSummary(data?.week1, data?.week4)}
+                    >
                         {loading ? (
-                            <div className="skeleton" style={{ height: 200, margin: '0 20px 20px' }} />
+                            <div className="skeleton" style={{ height: 200 }} />
                         ) : !data || data.cohorts.every(c => c.visitors === 0) ? (
                             <div className="empty-note">No new visitors in this period yet.</div>
                         ) : (
-                            <div style={{ overflowX: 'auto', marginTop: 6 }}>
-                                <table className="data-table">
-                                    <thead>
-                                        <tr>
-                                            <th style={{ paddingLeft: 20 }}>First visit</th>
-                                            <th className="num">New visitors</th>
-                                            {Array.from({ length: columns }, (_, i) => (
-                                                <th key={i} className="num">Week {i + 1}</th>
-                                            ))}
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {data.cohorts.map(cohort => (
-                                            <tr key={cohort.week}>
-                                                <td style={{ paddingLeft: 20, whiteSpace: 'nowrap' }}>Week of {weekLabel(cohort.week)}</td>
-                                                <td className="num">{cohort.visitors.toLocaleString()}</td>
-                                                {Array.from({ length: columns }, (_, i) => {
-                                                    const cell = cohort.weeks[i];
-                                                    if (!cell || cohort.visitors === 0) return <td key={i} className="num muted" />;
-                                                    return (
-                                                        <td key={i} className="num" title={`${cell.count} of ${cohort.visitors} came back`}
-                                                            style={{ ...cellStyle(cell.percent), fontVariantNumeric: 'tabular-nums' }}>
-                                                            {cell.percent}%
-                                                        </td>
-                                                    );
-                                                })}
+                            <>
+                                <div style={{ overflowX: 'auto', margin: '0 -4px' }}>
+                                    <table className="cohort-table">
+                                        <thead>
+                                            <tr>
+                                                <th scope="col">First visit</th>
+                                                <th scope="col">People</th>
+                                                {Array.from({ length: columns }, (_, i) => (
+                                                    <th key={i} scope="col">{weekHeader(i)}</th>
+                                                ))}
                                             </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
+                                        </thead>
+                                        <tbody>
+                                            {data.cohorts.map(cohort => (
+                                                <tr key={cohort.week}>
+                                                    <th scope="row" style={{ fontWeight: 400, color: 'var(--color-text-primary)', fontSize: '0.8125rem', paddingRight: 8 }}>
+                                                        Week of {weekLabel(cohort.week)}
+                                                    </th>
+                                                    <td className="people">{cohort.visitors.toLocaleString()}</td>
+                                                    {Array.from({ length: columns }, (_, i) => {
+                                                        const cell = cohort.weeks[i];
+                                                        // Weeks that haven't happened yet for this cohort
+                                                        if (!cell) return <td key={i}><div className="cohort-cell future" aria-label="Not yet" /></td>;
+                                                        if (cohort.visitors === 0) return <td key={i}><div className="cohort-cell" style={{ color: 'var(--color-text-muted)' }}>–</div></td>;
+                                                        const alpha = cellAlpha(cell.percent);
+                                                        return (
+                                                            <td key={i}>
+                                                                <div className={`cohort-cell${alpha > 0.5 ? ' strong' : ''}`}
+                                                                    style={{ background: cellBackground(alpha) }}
+                                                                    title={`${cell.count} of ${cohort.visitors} came back`}>
+                                                                    {cell.percent}%
+                                                                </div>
+                                                            </td>
+                                                        );
+                                                    })}
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div className="chart-foot">
+                                    <span className="cohort-legend" aria-hidden="true">
+                                        Fewer came back
+                                        {[0, 12, 24, 40].map(p => <i key={p} style={{ background: cellBackground(cellAlpha(p)) }} />)}
+                                        More came back
+                                    </span>
+                                    <span>Dashed cells are weeks still to come</span>
+                                </div>
+                            </>
                         )}
                     </ChartCard>
 

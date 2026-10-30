@@ -1,11 +1,18 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import { InfoTip } from './InfoTip';
 
-/** A card with a title row (and optional action) around a chart or list. */
-export function ChartCard({ title, subtitle, action, children, loading, height = 240, flush }: {
+/**
+ * A card with a title row (and optional action) around a chart or list. The
+ * summary is one plain sentence saying what the chart shows; `info` explains
+ * the metric behind an ⓘ.
+ */
+export function ChartCard({ title, subtitle, info, summary, action, children, loading, height = 240, flush }: {
     title: ReactNode;
     subtitle?: ReactNode;
+    info?: string;
+    summary?: ReactNode;
     action?: ReactNode;
     children: ReactNode;
     loading?: boolean;
@@ -18,14 +25,19 @@ export function ChartCard({ title, subtitle, action, children, loading, height =
         <section className={`card${flush ? ' card-flush' : ''}`} style={{ minWidth: 0 }}>
             <div className="card-header">
                 <div style={{ minWidth: 0 }}>
-                    <h2 className="card-title">{title}</h2>
+                    <h2 className="card-title">{title}{info && <InfoTip text={info} />}</h2>
                     {subtitle && <p className="card-subtitle">{subtitle}</p>}
                 </div>
                 {action}
             </div>
             {loading
                 ? <div className="skeleton" style={{ height, margin: flush ? '0 20px 20px' : 0 }} />
-                : children}
+                : (
+                    <>
+                        {summary && <p className="chart-summary" style={flush ? { padding: '0 20px' } : undefined}>{summary}</p>}
+                        {children}
+                    </>
+                )}
         </section>
     );
 }

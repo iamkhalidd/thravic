@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { MessageSquare, ThumbsDown, ThumbsUp } from 'lucide-react';
+import { ThumbsDown, ThumbsUp } from 'lucide-react';
 import { useDomain } from '@/contexts/DomainContext';
 import { PageHeader } from '@/components/PageHeader';
 import { ChartCard } from '@/components/ChartCard';
-import { StatCard } from '@/components/StatCard';
+import { SplitBar } from '@/components/charts/SplitBar';
+import { inEvery } from '@/components/charts/format';
 import { domains, feedback as feedbackApi, type DomainSettings, type FeedbackSummary } from '@/lib/api';
 
 const DAY_CHOICES = [7, 30, 90] as const;
@@ -73,7 +74,6 @@ export default function FeedbackPage() {
 
     const on = !!settings?.feedbackWidget;
     const total = (data?.yes ?? 0) + (data?.no ?? 0);
-    const share = total ? `${Math.round(((data?.yes ?? 0) / total) * 100)}%` : '–';
     const trimmed = question.trim();
     const questionChanged = !!settings && trimmed !== settings.feedbackQuestion;
 
@@ -156,11 +156,24 @@ export default function FeedbackPage() {
                 <div role="alert" className="card" style={{ color: 'var(--color-error)', fontSize: '0.875rem' }}>{error}</div>
             ) : (
                 <>
-                    <div className="stat-grid">
-                        <StatCard loading={loading} icon={MessageSquare} label="Answers" value={total.toLocaleString()} />
-                        <StatCard loading={loading} icon={ThumbsUp} label="Said yes" value={share} hint={`${data?.yes ?? 0} of ${total}`} />
-                        <StatCard loading={loading} icon={ThumbsDown} label="Said no" value={(data?.no ?? 0).toLocaleString()} />
-                    </div>
+                    <ChartCard
+                        title="Was this page helpful?"
+                        subtitle="Every answer in this period"
+                        info="Visitors answer yes or no in the feedback widget at the bottom of your pages."
+                        loading={loading}
+                        height={120}
+                        summary={total > 0
+                            ? <><strong>{inEvery((data?.yes ?? 0) / total).replace(/^./, c => c.toUpperCase())}</strong> said yes ({total.toLocaleString()} {total === 1 ? 'answer' : 'answers'}).</>
+                            : undefined}
+                    >
+                        <SplitBar
+                            emptyText={on ? 'No answers in this period yet.' : 'Switch the widget on to start collecting answers.'}
+                            parts={[
+                                { label: 'Yes', value: data?.yes ?? 0, icon: <ThumbsUp size={12} aria-hidden="true" /> },
+                                { label: 'No', value: data?.no ?? 0, icon: <ThumbsDown size={12} aria-hidden="true" />, negative: true },
+                            ]}
+                        />
+                    </ChartCard>
 
                     <ChartCard flush title="By page" subtitle="Pages with the most answers.">
                         {loading ? (

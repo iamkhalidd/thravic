@@ -30,8 +30,8 @@ import { PageHeader } from '@/components/PageHeader';
 import { StatCard } from '@/components/StatCard';
 import { ChartCard } from '@/components/ChartCard';
 import { TimeSeriesChart } from '@/components/charts/TimeSeriesChart';
-import { BarList } from '@/components/charts/BarList';
-import { duration } from '@/components/charts/format';
+import { BarList, leaderSummary } from '@/components/charts/BarList';
+import { changeWords, duration } from '@/components/charts/format';
 import { useDomain } from '@/contexts/DomainContext';
 import { useApiRange } from '@/contexts/DateRangeContext';
 import { useSubscription } from '@/hooks/useSubscription';
@@ -53,6 +53,15 @@ function change(now?: number, before?: number): number | undefined {
 
 // A change this big gets a "Why?" link to the AI analyst.
 const BIG_CHANGE_PCT = 20;
+
+// The tiles that have a series per day, so picking one redraws the chart
+type ChartMetric = 'visitors' | 'pageviews';
+
+/** "the 30 days before", "the day before" for the comparison period. */
+function periodBefore(start: string, end: string): string {
+    const days = Math.max(1, Math.round((new Date(end).getTime() - new Date(start).getTime()) / 86_400_000));
+    return days === 1 ? 'the day before' : `the ${days} days before`;
+}
 
 export default function DashboardPage() {
     // The site and the date range come from the sidebar switcher and the header
@@ -79,6 +88,8 @@ export default function DashboardPage() {
             ? <Link href={explainHref(metric)} style={{ fontSize: '0.75rem' }}>Why?</Link>
             : undefined;
     const [versionData, setVersionData] = useState<{ label: string; value: number }[]>([]);
+    // The tile picked above the chart: the chart and its sentence follow it
+    const [metric, setMetric] = useState<ChartMetric>('visitors');
 
     useEffect(() => {
         if (!selectedDomainId) return;
@@ -208,8 +219,25 @@ export default function DashboardPage() {
     // The previous period, aligned day by day, as a dashed comparison line.
     const chartData = timeseries.map((row, i) => ({
         ...row,
-        ...(comparing ? { previousVisitors: previousSeries[i]?.visitors ?? null } : {}),
+        ...(comparing ? { previous: previousSeries[i]?.[metric] ?? null } : {}),
     }));
+
+    const visitorsChange = change(metrics?.uniqueVisitors, previous?.uniqueVisitors);
+    const pageviewsChange = change(metrics?.pageviews, previous?.pageviews);
+    const metricUnit = metric === 'visitors' ? 'visitors' : (app ? 'screen views' : 'page views');
+    const metricTotal = metric === 'visitors' ? metrics?.uniqueVisitors ?? 0 : metrics?.pageviews ?? 0;
+    const metricChange = metric === 'visitors' ? visitorsChange : pageviewsChange;
+    const trafficSummary = !hasData ? undefined : (
+        <>
+            <strong>{metricTotal.toLocaleString()}</strong>{' '}
+            {metric === 'visitors'
+                ? (app ? 'people used your app' : 'people visited your site')
+                : (app ? 'screens were opened' : 'pages were viewed')}
+            {comparing && metricChange !== undefined && range.compare
+                ? <>, <strong>{changeWords(metricChange)}</strong> {periodBefore(range.compare.start, range.compare.end)}.</>
+                : '.'}
+        </>
+    );
 
     return (
         <div className="page-stack">
@@ -308,49 +336,64 @@ export default function DashboardPage() {
 
             <div className="stat-grid">
                 <StatCard label="Visitors" icon={Users} value={(metrics?.uniqueVisitors ?? 0).toLocaleString()}
-                    change={change(metrics?.uniqueVisitors, previous?.uniqueVisitors)}
-                    hint={why('visitors', change(metrics?.uniqueVisitors, previous?.uniqueVisitors))} />
-                <StatCard label={app ? 'Screen views' : 'Pageviews'} icon={Eye} value={(metrics?.pageviews ?? 0).toLocaleString()}
-                    change={change(metrics?.pageviews, previous?.pageviews)}
-                    hint={why('pageviews', change(metrics?.pageviews, previous?.pageviews))} />
-                <StatCard label="Sessions" icon={Activity} value={(metrics?.sessions ?? 0).toLocaleString()}
+                    change={visitorsChange} hint={why('visitors', visitorsChange)}
+                    info={app ? 'Different people who opened your app.' : 'Different people who came to your site. Someone who visits twice counts once.'}
+                    selected={metric === 'visitors'} onSelect={() => setMetric('visitors')} />
+                <StatCard label={app ? 'Screen views' : 'Page views'} icon={Eye} value={(metrics?.pageviews ?? 0).toLocaleString()}
+                    change={pageviewsChange} hint={why('pageviews', pageviewsChange)}
+                    info={app ? 'Every time a screen was opened.' : 'Every time a page was opened, counting repeat views.'}
+                    selected={metric === 'pageviews'} onSelect={() => setMetric('pageviews')} />
+                <StatCard label="Visits" icon={Activity} value={(metrics?.sessions ?? 0).toLocaleString()}
                     change={change(metrics?.sessions, previous?.sessions)}
-                    hint={why('sessions', change(metrics?.sessions, previous?.sessions))} />
-                <StatCard label="Bounce rate" icon={MousePointer2} value={`${Number(metrics?.bounceRate ?? 0).toFixed(1)}%`}
+                    hint={why('sessions', change(metrics?.sessions, previous?.sessions))}
+                    info="A visit (session) ends after 30 minutes without activity. One person can make several." />
+                <StatCard label="Left after one page" icon={MousePointer2} value={`${Number(metrics?.bounceRate ?? 0).toFixed(1)}%`}
                     change={change(metrics?.bounceRate, previous?.bounceRate)} lowerIsBetter
-                    hint={why('bounce_rate', change(metrics?.bounceRate, previous?.bounceRate))} />
-                <StatCard label="Avg. session" icon={Clock} value={duration(metrics?.avgSessionDuration ?? 0)}
-                    change={change(metrics?.avgSessionDuration, previous?.avgSessionDuration)} />
+                    hint={why('bounce_rate', change(metrics?.bounceRate, previous?.bounceRate))}
+                    info="Bounce rate: the share of visits that saw one page and left. Lower is better." />
+                <StatCard label="Time on site" icon={Clock} value={duration(metrics?.avgSessionDuration ?? 0)}
+                    change={change(metrics?.avgSessionDuration, previous?.avgSessionDuration)}
+                    info="How long an average visit lasts, from the first page to the last." />
             </div>
 
             <div className="split-grid">
-                <ChartCard title="Traffic" subtitle={app ? 'Users and screen views per day' : 'Visitors and pageviews per day'}>
+                <ChartCard
+                    title={metric === 'visitors' ? 'Visitors' : (app ? 'Screen views' : 'Page views')}
+                    subtitle="Per day"
+                    info="Pick the Visitors or Page views tile above to switch what this chart shows."
+                    summary={trafficSummary}
+                >
                     <TimeSeriesChart
                         data={chartData}
                         xKey="date"
                         height={260}
+                        unit={metricUnit}
                         series={[
-                            { key: 'visitors', label: 'Visitors' },
-                            { key: 'pageviews', label: app ? 'Screen views' : 'Pageviews' },
-                            ...(comparing ? [{ key: 'previousVisitors', label: 'Visitors, previous period', muted: true }] : []),
+                            { key: metric, label: comparing ? 'This period' : (metric === 'visitors' ? 'Visitors' : metricUnit) },
+                            ...(comparing && range.compare ? [{ key: 'previous', label: periodBefore(range.compare.start, range.compare.end).replace(/^the /, ''), muted: true }] : []),
                         ]}
                     />
                 </ChartCard>
                 {app ? (
                     <ChartCard
                         title="Versions"
-                        subtitle="Sessions by app version"
+                        subtitle="Visits by app version"
+                        info="Which version of your app people were running."
+                        summary={leaderSummary(versionData, 'had', 'visits')}
                         action={<Link href="/dashboard/behavior/versions" className="btn btn-ghost" style={{ padding: '4px 8px', fontSize: '0.8125rem' }}>Details</Link>}
                     >
                         <BarList items={versionData} emptyText="No sessions in this period" />
                     </ChartCard>
                 ) : (
                     <ChartCard
-                        title="Sources"
-                        subtitle="Sessions by channel"
+                        title="Where visitors come from"
+                        subtitle="Visits by channel"
+                        info="Organic search is unpaid results, like Google. Direct means someone typed your address or used a bookmark. Referral is a link on another site."
+                        summary={leaderSummary(sourceData, 'brought', 'visits')}
                         action={<Link href="/dashboard/traffic/sources" className="btn btn-ghost" style={{ padding: '4px 8px', fontSize: '0.8125rem' }}>Details</Link>}
                     >
-                        <BarList items={sourceData} emptyText="No sessions in this period" />
+                        <BarList items={sourceData} emptyText="No sessions in this period"
+                            footer="Open Details to see each website that sent visitors" />
                     </ChartCard>
                 )}
             </div>
@@ -358,12 +401,14 @@ export default function DashboardPage() {
             <div className="split-grid">
                 <ChartCard
                     title={app ? 'Top screens' : 'Top pages'}
-                    subtitle={app ? 'Screen views' : 'Pageviews'}
+                    subtitle={app ? 'Screen views' : 'Page views'}
+                    info={app ? 'The screens opened most often.' : 'The pages opened most often, counting repeat views.'}
+                    summary={leaderSummary(topPages.map(p => ({ label: p.path, value: p.views })), 'got', app ? 'screen views' : 'page views')}
                     action={<Link href="/dashboard/behavior/pages" className="btn btn-ghost" style={{ padding: '4px 8px', fontSize: '0.8125rem' }}>{app ? 'All screens' : 'All pages'}</Link>}
                 >
                     <BarList items={topPages.map(p => ({ label: p.path, value: p.views }))} emptyText={app ? 'No screen views in this period' : 'No pageviews in this period'} />
                 </ChartCard>
-                <ChartCard title="Right now" subtitle="Visitors in the last 5 minutes">
+                <ChartCard title="Right now" subtitle="Visitors in the last 5 minutes" info="People active on your site in the last 5 minutes, updated every 30 seconds.">
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 12 }}>
                         <span className="stat-value" style={{ fontSize: '2rem' }}>{realtime?.activeVisitors || 0}</span>
                         <span className="stat-hint">

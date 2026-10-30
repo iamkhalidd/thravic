@@ -1,13 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Gauge, Zap, Clock, Eye, LayoutList, Timer } from 'lucide-react';
+import { Gauge, Clock, Timer } from 'lucide-react';
 import { customEvents } from '@/lib/api';
 import { useDomain } from '@/contexts/DomainContext';
 import { useApiRange } from '@/contexts/DateRangeContext';
 import { PageHeader } from '@/components/PageHeader';
 import { StatCard } from '@/components/StatCard';
 import { ChartCard } from '@/components/ChartCard';
+import { VitalScale } from '@/components/charts/VitalScale';
 
 // Web Vitals thresholds (Google's official ranges)
 const THRESHOLDS: Record<string, { good: number; poor: number; unit: string; label: string }> = {
@@ -59,6 +60,31 @@ function pathOf(url: string | null): string {
     }
 }
 
+// The three Core Web Vitals in plain words; the chip names each band for that check
+const VITALS: Array<{ key: string; name: string; desc: string; chips: [string, string, string] }> = [
+    { key: 'lcp', name: 'Loading (LCP)', desc: 'How long until the main content shows', chips: ['Fast', 'Okay', 'Slow'] },
+    { key: 'fid', name: 'Reacting (FID)', desc: 'How fast the page responds to the first tap or click', chips: ['Fast', 'Okay', 'Slow'] },
+    { key: 'cls', name: 'Stability (CLS)', desc: 'How much the page jumps around while loading', chips: ['Steady', 'Some shifting', 'Jumpy'] },
+];
+const CHIP_TONES = ['good', 'warn', 'bad'];
+
+function vitalsSummary(metrics: Record<string, number | string | null>) {
+    const rated = VITALS.map(v => ({ ...v, status: getStatus(v.key, metrics[`avg_${v.key}`]) })).filter(v => v.status.rank >= 0);
+    if (!rated.length) return undefined;
+    const worst = rated.reduce((a, b) => (b.status.rank > a.status.rank ? b : a));
+    if (worst.status.rank === 0) return <>Your pages feel <strong>fast and steady</strong>: every check is in the good range.</>;
+    const t = THRESHOLDS[worst.key];
+    return (
+        <>
+            <strong>{worst.name.replace(/ \(.*\)/, '')}</strong> {worst.status.rank === 2 ? 'is poor' : 'needs work'}:{' '}
+            {worst.key === 'lcp' && <>the main content takes <strong>{formatValue(worst.key, metrics[`avg_${worst.key}`])}</strong> to show.</>}
+            {worst.key === 'fid' && <>pages take <strong>{formatValue(worst.key, metrics[`avg_${worst.key}`])}</strong> to react to the first tap.</>}
+            {worst.key === 'cls' && <>the layout shift score is <strong>{formatValue(worst.key, metrics[`avg_${worst.key}`])}</strong>.</>}
+            {' '}Aim for under {worst.key === 'cls' ? t.good : formatValue(worst.key, t.good)}.
+        </>
+    );
+}
+
 function StatusBadge({ status }: { status: Status }) {
     return <span className={status.badge} style={{ whiteSpace: 'nowrap' }}>{status.label}</span>;
 }
@@ -102,9 +128,6 @@ export default function PerformancePage() {
     const byPage: Array<{ url: string; avg_lcp: number; avg_fcp: number; count: number }> = data?.byPage || [];
     const samples = Number(m.sample_count || 0);
     const vitals = [
-        { key: 'lcp', icon: Eye, value: m.avg_lcp },
-        { key: 'fid', icon: Zap, value: m.avg_fid },
-        { key: 'cls', icon: LayoutList, value: m.avg_cls },
         { key: 'ttfb', icon: Clock, value: m.avg_ttfb },
         { key: 'fcp', icon: Gauge, value: m.avg_fcp },
     ];
@@ -124,8 +147,36 @@ export default function PerformancePage() {
                 </div>
             )}
 
-            {/* Six tiles: at most three per row so they read as 3 + 3, never 5 + 1. */}
-            <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(max(260px, calc((100% - 24px) / 3)), 1fr))' }}>
+            <ChartCard
+                title="Core Web Vitals"
+                subtitle="Google's three checks of how a page feels, from real visits"
+                info="Google uses these three numbers to judge page experience, and they can affect search ranking. Each one is the average across visits."
+                summary={busy ? undefined : vitalsSummary(m)}
+                loading={busy}
+                height={220}
+            >
+                {VITALS.map(v => {
+                    const t = THRESHOLDS[v.key];
+                    const raw = m[`avg_${v.key}`];
+                    const status = getStatus(v.key, raw);
+                    const value = raw === null || raw === undefined ? null : Number(raw);
+                    return (
+                        <div key={v.key} className="vital-row">
+                            <div>
+                                <div className="vital-name">{v.name}</div>
+                                <div className="vital-desc">{v.desc}</div>
+                            </div>
+                            <div className="vital-value">
+                                {formatValue(v.key, raw)}
+                                {status.rank >= 0 && <span className={`chip ${CHIP_TONES[status.rank]}`}>{v.chips[status.rank]}</span>}
+                            </div>
+                            <VitalScale value={value} good={t.good} poor={t.poor} />
+                        </div>
+                    );
+                })}
+            </ChartCard>
+
+            <div className="stat-grid">
                 {vitals.map(({ key, icon, value }) => {
                     const t = THRESHOLDS[key];
                     const status = getStatus(key, value);
