@@ -8,13 +8,13 @@ export interface SplitPart {
     label: string;
     value: number;
     icon?: ReactNode;
-    /** A negative answer ("No"): drawn in the soft red, not a blue shade. */
+    /** A negative answer ("No"): drawn in neutral grey, apart from the orange shades. */
     negative?: boolean;
 }
 
 /**
  * One bar cut into parts, for a whole that splits a few ways (devices, yes or
- * no). Shades of one blue from strongest to lightest, the share printed inside
+ * no). Shades of the brand orange from strongest to lightest, the share printed inside
  * each part wide enough to hold it, and a column per part underneath with its
  * name and count, so nothing depends on telling shades apart.
  */
@@ -27,7 +27,7 @@ export function SplitBar({ parts, formatValue = compactNumber, emptyText = 'No d
 }) {
     const total = parts.reduce((sum, p) => sum + p.value, 0);
     if (total <= 0) return <div className="empty-note">{emptyText}</div>;
-    // Up to three blue shades; the rest fold into the grey slot
+    // Up to three orange shades; the rest fold into the grey slot
     let shade = 0;
     const shown = parts.filter(p => p.value > 0).map(p => ({
         ...p,

@@ -15,10 +15,10 @@ export interface ChartColors {
 }
 
 const FALLBACK: ChartColors = {
-    series: ['#3987e5', '#ff5a1f', '#199e70'],
+    series: ['#ff5a1f', '#3987e5', '#199e70'],
     grid: 'rgba(255,255,255,0.06)',
     axis: '#737883',
-    bar: 'rgba(57,135,229,0.22)',
+    bar: 'rgba(255,90,31,0.22)',
     text: '#f4f5f6',
     muted: '#737883',
     surface: '#08090a',

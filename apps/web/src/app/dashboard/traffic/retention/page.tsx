@@ -15,7 +15,7 @@ function weekLabel(iso: string): string {
     return new Date(`${iso}T00:00:00Z`).toLocaleDateString(undefined, { day: 'numeric', month: 'short', timeZone: 'UTC' });
 }
 
-/** A stronger blue for a higher share; 40% and up is full strength. */
+/** A stronger orange for a higher share; 40% and up is full strength. */
 function cellAlpha(percent: number): number {
     return Math.min(percent / 40, 1) * 0.8 + 0.1;
 }

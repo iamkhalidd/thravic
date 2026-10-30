@@ -90,6 +90,8 @@
   color: var(--chart-1);
   background: color-mix(in srgb, var(--chart-1) 14%, transparent);
 }
+/* Orange text needs a deeper step to read on the light surface */
+[data-theme="light"] .chip { color: color-mix(in srgb, var(--chart-1) 70%, #000); }
 .chip.good { color: var(--color-success); background: var(--color-success-bg); }
 .chip.warn { color: var(--color-warning); background: var(--color-warning-bg); }
 .chip.bad { color: var(--color-error); background: var(--color-danger-bg); }
@@ -169,16 +171,17 @@ a.rank-label:hover .rank-name { text-decoration: underline; }
   overflow: hidden;
 }
 .s0 { --seg: var(--chart-1); }
-.s1 { --seg: color-mix(in srgb, var(--chart-1) 55%, var(--color-bg-card)); }
+.s1 { --seg: color-mix(in srgb, var(--chart-1) 55%, #fff); }
 .s2 { --seg: color-mix(in srgb, var(--chart-1) 25%, var(--color-bg-card)); }
 .s3 { --seg: var(--color-bg-tertiary); }
-.neg { --seg: var(--color-danger-bg); }
+.neg { --seg: var(--color-bg-tertiary); }
 .split-seg { background: var(--seg); color: var(--color-text-primary); }
 .split-seg.s0 { color: #fff; }
+.split-seg.s1 { color: #7c2d12; }
 .split-seg.s3 { color: var(--color-text-secondary); }
-.split-seg.neg { color: var(--color-error); }
+.split-seg.neg { color: var(--color-text-secondary); }
 .split-key { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; background: var(--seg); }
-.split-key.neg { background: var(--color-error); }
+.split-key.neg { background: var(--color-text-muted); }
 .split-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 12px; margin-top: 14px; }
 .split-stat { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .split-stat > span { display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: var(--color-text-secondary); }
@@ -220,6 +223,8 @@ a.rank-label:hover .rank-name { text-decoration: underline; }
   padding-bottom: 28px;
   text-align: center;
 }
+/* Ordinary drops stay neutral so the red biggest drop stands out from the orange bars */
+.funnel-gap .chip:not(.bad) { color: var(--color-text-secondary); background: var(--color-bg-tertiary); }
 .funnel-gap small { font-size: 0.625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--color-error); }
 
 /* Retention cells */
@@ -239,7 +244,7 @@ a.rank-label:hover .rank-name { text-decoration: underline; }
   font-variant-numeric: tabular-nums;
   color: var(--color-text-primary);
 }
-[data-theme="light"] .cohort-cell { color: #0c447c; }
+[data-theme="light"] .cohort-cell { color: #7c2d12; }
 .cohort-cell.strong, [data-theme="light"] .cohort-cell.strong { color: #fff; }
 .cohort-cell.future { border: 1px dashed var(--color-border-hover); }
 .cohort-legend { display: flex; align-items: center; gap: 4px; font-size: 0.75rem; color: var(--color-text-muted); }
