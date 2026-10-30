@@ -35,7 +35,22 @@ async def run_if_due(
                 return False
 
             log.info(f"[Jobs] Running {name}")
-            details = await job()
+            try:
+                details = await job()
+            except Exception as exc:
+                # Kept for the admin's job panel; `last_run_at` stays at the last
+                # run that worked, so the job is still due on the next check.
+                await conn.execute(
+                    """
+                    INSERT INTO job_runs (name, last_run_at, last_error, last_error_at)
+                    VALUES ($1, NULL, $2, NOW())
+                    ON CONFLICT (name) DO UPDATE
+                    SET last_error = EXCLUDED.last_error, last_error_at = EXCLUDED.last_error_at
+                    """,
+                    name,
+                    f"{type(exc).__name__}: {exc}"[:1000],
+                )
+                raise
             await conn.execute(
                 """
                 INSERT INTO job_runs (name, last_run_at, details) VALUES ($1, NOW(), $2::jsonb)

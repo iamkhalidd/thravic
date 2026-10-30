@@ -9,7 +9,7 @@ import { ThemeToggle } from '@/components/ThemeToggle';
 import {
     LayoutDashboard, Users, Globe, CreditCard, Activity,
     Server, FileText, Settings, Database, Menu,
-    LogOut, X, Layers, Tag, Mail, Wallet, TrendingUp, type LucideIcon,
+    LogOut, X, Layers, Tag, Mail, Wallet, TrendingUp, ShoppingBag, Sparkles, type LucideIcon,
 } from 'lucide-react';
 
 interface NavItem {
@@ -32,6 +32,7 @@ const navSections: { label: string; items: NavItem[] }[] = [
             { href: '/users', icon: Users, label: 'Users', description: 'Everyone with an account. Change plans, suspend or reset access.' },
             { href: '/domains', icon: Globe, label: 'Domains', description: 'Every site and app sending data, with its owner and volume.' },
             { href: '/subscriptions', icon: CreditCard, label: 'Subscriptions', description: 'Paid plans, renewals and accounts in their grace period.' },
+            { href: '/integrations', icon: ShoppingBag, label: 'Shopify stores', description: 'Stores using the Thravic Shopify app, and whether they still send data.' },
         ]
     },
     {
@@ -49,7 +50,8 @@ const navSections: { label: string; items: NavItem[] }[] = [
         label: 'Platform', items: [
             { href: '/settings', icon: Settings, label: 'Settings', description: 'Sign-ups, tracking, maintenance, blocking and the site-wide announcement.' },
             { href: '/retention', icon: Database, label: 'Data retention', description: 'How long each plan keeps its data.' },
-            { href: '/system', icon: Server, label: 'System health', description: 'The API server, database and cache.' },
+            { href: '/system', icon: Server, label: 'System health', description: 'The API server, database and scheduled jobs.' },
+            { href: '/ai', icon: Sparkles, label: 'AI usage', description: 'AI calls, tokens and estimated cost, by feature and account.' },
             { href: '/audit', icon: FileText, label: 'Audit log', description: 'Every admin action, who did it and when.' },
             { href: '/events', icon: Activity, label: 'Raw events', description: 'The latest events as they arrive, for debugging.' },
         ]

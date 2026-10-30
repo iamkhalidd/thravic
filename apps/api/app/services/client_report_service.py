@@ -714,6 +714,7 @@ async def deliver(
                 reply_to=(owner or {}).get("email") or "",
                 sender=sender,
                 attachments=[attachment],
+                kind="client_report",
             )
             sent += 1
         except Exception as exc:  # noqa: BLE001 — try the other recipients

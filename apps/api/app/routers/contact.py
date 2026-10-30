@@ -137,7 +137,9 @@ async def submit(request: Request):
 
         subject, html_body, text_body = contact_form_email(data)
         # Reply goes straight to the person who wrote in
-        await send_email(RECIPIENT, subject, html_body, text_body, reply_to=data["email"])
+        await send_email(
+            RECIPIENT, subject, html_body, text_body, reply_to=data["email"], kind="contact"
+        )
 
         return jsjson({"success": True, "message": "Message sent successfully"})
     except PayloadError:

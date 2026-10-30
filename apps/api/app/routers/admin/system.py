@@ -205,3 +205,68 @@ async def db_stats():
     except Exception as exc:  # noqa: BLE001
         log.error(f"DB stats error: {exc}")
         raise SimpleError("Failed to get database stats", 500) from None
+
+
+# The scheduled jobs (see `jobs/`): a label, and how often each should complete.
+# Every job is checked hourly while the API is awake, so one is "late" only when
+# it has missed that by over LATE_AFTER, which a sleeping host can also cause.
+JOBS: dict[str, tuple[str, timedelta]] = {
+    "smart_alerts": ("Smart alerts", timedelta(minutes=50)),
+    "insight_alerts": ("AI insight emails", timedelta(days=1)),
+    "weekly_report": ("Weekly report emails", timedelta(minutes=55)),
+    "usage_alerts": ("Usage limit emails", timedelta(minutes=55)),
+    "subscription_reminders": ("Renewal reminders", timedelta(minutes=55)),
+    "client_reports": ("Client reports", timedelta(minutes=55)),
+    "payment_reconcile": ("Pending payment check", timedelta(minutes=55)),
+    "daily_domain_stats": ("Daily totals", timedelta(minutes=55)),
+    "restricted_accounts": ("Under-18 account cleanup", timedelta(hours=6)),
+    "retention": ("Data retention", timedelta(hours=23)),
+    "log_cleanup": ("Log cleanup", timedelta(hours=23)),
+}
+LATE_AFTER = timedelta(hours=2)
+
+
+def job_status(
+    last_run: datetime | None, last_error_at: datetime | None, every: timedelta, now: datetime
+) -> str:
+    """failing (the latest attempt raised), late, ok, or never (no run recorded)."""
+    if last_error_at and (last_run is None or last_error_at > last_run):
+        return "failing"
+    if last_run is None:
+        return "never"
+    return "late" if now - last_run > every + LATE_AFTER else "ok"
+
+
+@router.get("/jobs")
+@router.get("/jobs/")
+async def jobs():
+    try:
+        rows = {
+            row["name"]: row
+            for row in await query(
+                "SELECT name, last_run_at, details, last_error, last_error_at FROM job_runs"
+            )
+        }
+        now = datetime.now(UTC)
+        names = list(JOBS) + sorted(set(rows) - set(JOBS))
+        result = []
+        for name in names:
+            label, every = JOBS.get(name, (name, timedelta(days=1)))
+            row = rows.get(name) or {}
+            last_run, last_error_at = row.get("last_run_at"), row.get("last_error_at")
+            result.append(
+                {
+                    "name": name,
+                    "label": label,
+                    "everyMinutes": int(every.total_seconds() // 60),
+                    "status": job_status(last_run, last_error_at, every, now),
+                    "lastRunAt": last_run,
+                    "details": row.get("details"),
+                    "lastError": row.get("last_error"),
+                    "lastErrorAt": last_error_at,
+                }
+            )
+        return jsjson({"jobs": result, "retentionMode": get_settings().RETENTION_MODE})
+    except Exception as exc:  # noqa: BLE001
+        log.error(f"Jobs error: {exc}")
+        raise SimpleError("Failed to load jobs", 500) from None

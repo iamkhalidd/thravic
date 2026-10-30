@@ -18,12 +18,14 @@ from fastapi import APIRouter, Depends
 from ...json_response import jsjson
 from ...middleware.admin_auth import AdminUser, admin_auth
 from . import (
+    ai,
     audit,
     dashboard,
     domains,
     events,
     export,
     growth,
+    integrations,
     plans,
     product_updates,
     promos,
@@ -54,6 +56,8 @@ _SUBROUTERS = (
     (product_updates, "/product-updates"),
     (revenue, "/revenue"),
     (growth, "/growth"),
+    (ai, "/ai"),
+    (integrations, "/integrations"),
 )
 
 for _module, _prefix in _SUBROUTERS:

@@ -25,6 +25,7 @@ from ..config import get_settings
 from ..db import execute, query, query_one
 from ..logging import create_logger
 from . import (
+    ai_usage_service,
     domain_service,
     event_service,
     insight_facts,
@@ -464,10 +465,14 @@ async def _chat(messages: list[dict], tools: bool) -> dict | None:
             )
         if response.status_code >= 400:
             log.error(f"AI request failed ({response.status_code}): {response.text[:500]}")
+            await ai_usage_service.record(None, ok=False)
             return None
-        return response.json()["choices"][0]["message"]
+        body = response.json()
+        await ai_usage_service.record(body.get("usage"), ok=True)
+        return body["choices"][0]["message"]
     except Exception as exc:  # noqa: BLE001 - any failure becomes a polite answer
         log.error(f"AI request failed: {exc}")
+        await ai_usage_service.record(None, ok=False)
         return None
 
 
@@ -538,7 +543,8 @@ async def answer(
     used: list[str] = []
     reply: dict | None = None
     for _ in range(MAX_LOOKUPS + 1):
-        reply = await _chat(messages, tools=len(used) < MAX_LOOKUPS)
+        with ai_usage_service.scope("assistant", domain.get("id")):
+            reply = await _chat(messages, tools=len(used) < MAX_LOOKUPS)
         if reply is None:
             return {"answer": NO_ANSWER, "links": []}
         calls = reply.get("tool_calls") or []
@@ -581,7 +587,8 @@ async def answer(
                 + "). Rewrite the answer using only numbers that appear in the results, without explaining the change.",
             }
         )
-        retry = await _chat(messages, tools=False)
+        with ai_usage_service.scope("assistant", domain.get("id")):
+            retry = await _chat(messages, tools=False)
         text = _clip((retry or {}).get("content"), 3000)
         if not text or unchecked_numbers(text, sources):
             text = UNCHECKED

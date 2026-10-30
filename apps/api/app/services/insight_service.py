@@ -28,7 +28,7 @@ import httpx
 from ..config import get_settings
 from ..db import query, query_one
 from ..logging import create_logger
-from . import insight_facts
+from . import ai_usage_service, insight_facts
 
 log = create_logger("Insights")
 
@@ -123,8 +123,11 @@ async def ask_json(system: str, facts: Any, max_tokens: int = AI_MAX_TOKENS) -> 
                 # The body says why (wrong model name, no balance, bad key) without
                 # echoing the key, so it is safe and useful to log.
                 log.error(f"AI request failed ({response.status_code}): {response.text[:500]}")
+                await ai_usage_service.record(None, ok=False)
                 return None
-            choice = response.json()["choices"][0]
+            body = response.json()
+            await ai_usage_service.record(body.get("usage"), ok=True)
+            choice = body["choices"][0]
             if choice.get("finish_reason") == "length":
                 log.warning(f"AI reply hit the {max_tokens}-token limit (attempt {attempt})")
             parsed = json.loads(choice["message"]["content"] or "")
@@ -134,6 +137,7 @@ async def ask_json(system: str, facts: Any, max_tokens: int = AI_MAX_TOKENS) -> 
             log.error(f"AI reply was not valid JSON (attempt {attempt}): {exc}")
         except Exception as exc:  # noqa: BLE001 - any failure falls back to rules
             log.error(f"AI request failed: {exc}")
+            await ai_usage_service.record(None, ok=False)
             return None
     return parsed
 
@@ -402,7 +406,10 @@ async def generate(
         status, ai_generated, insights = "insufficient_data", False, []
     else:
         use_model = await ai_reports_today(str(domain["id"]), now) < MAX_AI_REPORTS_PER_DAY
-        raw = await ask_model(sheet.facts) if use_model else None
+        raw = None
+        if use_model:
+            with ai_usage_service.scope("insights", domain.get("id")):
+                raw = await ask_model(sheet.facts)
         insights = validate(raw, sheet.facts) if raw else []
         if raw and not insights:
             log.warning(f"All {len(raw)} AI insights failed the checks; using the rules")

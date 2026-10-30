@@ -302,7 +302,7 @@ async def test_email(request: Request, admin: AdminUser = Depends(admin_auth)):
     now = js_iso_datetime(datetime.now(UTC))
     try:
         subject, html_body, text_body = diagnostic_email(now, settings.SERVER_URL or "localhost")
-        await send_email_or_raise(to, subject, html_body, text_body)
+        await send_email_or_raise(to, subject, html_body, text_body, kind="test")
         return jsjson({"ok": True, "message": f"Test email sent to {to}"})
     except Exception as error:
         return jsjson(

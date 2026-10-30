@@ -23,7 +23,7 @@ from typing import Any
 
 from ..db import query
 from ..logging import create_logger
-from . import alert_service, assistant_service, insight_facts, insight_service
+from . import ai_usage_service, alert_service, assistant_service, insight_facts, insight_service
 
 log = create_logger("Analyst")
 
@@ -315,11 +315,12 @@ async def analyse(
 
     answer, ai = None, False
     if has_data:
-        raw = await insight_service.ask_json(
-            SYSTEM_PROMPT,
-            {"question": question or f"Why did {label.lower()} change?", "facts": exp.sheet.facts},
-            AI_MAX_TOKENS,
-        )
+        with ai_usage_service.scope("explain", domain.get("id")):
+            raw = await insight_service.ask_json(
+                SYSTEM_PROMPT,
+                {"question": question or f"Why did {label.lower()} change?", "facts": exp.sheet.facts},
+                AI_MAX_TOKENS,
+            )
         answer = validate(raw, exp.sheet.facts, question) if raw else None
         ai = answer is not None
     if answer is None:

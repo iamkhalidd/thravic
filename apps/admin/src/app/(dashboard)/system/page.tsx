@@ -11,6 +11,39 @@ interface HealthData {
     database: { pool: { totalCount: number; idleCount: number }; size: string; connected: boolean };
 }
 
+interface Job {
+    name: string;
+    label: string;
+    everyMinutes: number;
+    status: 'ok' | 'late' | 'failing' | 'never';
+    lastRunAt: string | null;
+    details: Record<string, unknown> | null;
+    lastError: string | null;
+    lastErrorAt: string | null;
+}
+
+const JOB_BADGE: Record<Job['status'], [string, string]> = {
+    ok: ['badge-success', 'OK'],
+    late: ['badge-warning', 'Late'],
+    failing: ['badge-error', 'Failing'],
+    never: ['badge', 'Not run yet'],
+};
+
+function every(minutes: number) {
+    if (minutes < 60) return `${minutes} min`;
+    const hours = Math.round(minutes / 60);
+    return hours < 24 ? `${hours} h` : `${Math.round(hours / 24)} d`;
+}
+
+/** The job's last result, as short `key: value` pairs. */
+function summary(details: Job['details']) {
+    if (!details) return '';
+    return Object.entries(details)
+        .filter(([, v]) => typeof v !== 'object' || v === null)
+        .map(([k, v]) => `${k}: ${v}`)
+        .join(', ');
+}
+
 interface DbStats {
     tables: { table_name: string; row_count: number; total_size: string }[];
     activeConnections: number;
@@ -19,17 +52,20 @@ interface DbStats {
 export default function SystemPage() {
     const [health, setHealth] = useState<HealthData | null>(null);
     const [dbStats, setDbStats] = useState<DbStats | null>(null);
+    const [jobs, setJobs] = useState<Job[]>([]);
     const [loading, setLoading] = useState(true);
 
     const loadData = async () => {
         setLoading(true);
         try {
-            const [h, d] = await Promise.all([
+            const [h, d, j] = await Promise.all([
                 api.get<HealthData>('/api/admin/system/health'),
                 api.get<DbStats>('/api/admin/system/db-stats'),
+                api.get<{ jobs: Job[] }>('/api/admin/system/jobs').catch(() => ({ jobs: [] })),
             ]);
             setHealth(h);
             setDbStats(d);
+            setJobs(j.jobs);
         } catch (err) { console.error(err); }
         finally { setLoading(false); }
     };
@@ -62,6 +98,52 @@ export default function SystemPage() {
                         <span className="stat-hint">{t.hint}</span>
                     </div>
                 ))}
+            </div>
+
+            <div className="card card-flush">
+                <div className="card-header">
+                    <div>
+                        <div className="card-title">Scheduled jobs</div>
+                        <div className="card-subtitle">
+                            Emails, alerts, billing checks and clean-up. Late can also mean the server was asleep; a job runs when it wakes.
+                        </div>
+                    </div>
+                </div>
+                <div className="table-scroll" style={{ marginTop: 8 }}>
+                    <table className="data-table">
+                        <thead>
+                            <tr>
+                                <th style={{ paddingLeft: 20 }}>Job</th>
+                                <th>Status</th>
+                                <th>Every</th>
+                                <th>Last run</th>
+                                <th style={{ paddingRight: 20 }}>Result</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {jobs.map(j => {
+                                const [badge, text] = JOB_BADGE[j.status];
+                                return (
+                                    <tr key={j.name}>
+                                        <td style={{ paddingLeft: 20 }}>{j.label}</td>
+                                        <td><span className={`badge ${badge}`}>{text}</span></td>
+                                        <td className="muted">{every(j.everyMinutes)}</td>
+                                        <td className="muted">{j.lastRunAt ? new Date(j.lastRunAt).toLocaleString() : '—'}</td>
+                                        <td style={{ paddingRight: 20, fontSize: 13 }}>
+                                            {j.status === 'failing' && j.lastError ? (
+                                                <span style={{ color: 'var(--color-danger)' }} title={j.lastErrorAt ? new Date(j.lastErrorAt).toLocaleString() : ''}>
+                                                    {j.lastError}
+                                                </span>
+                                            ) : (
+                                                <span className="muted">{summary(j.details)}</span>
+                                            )}
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </div>
             </div>
 
             <div className="card card-flush">

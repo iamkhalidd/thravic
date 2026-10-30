@@ -166,6 +166,34 @@ async def user_detail(user_id: str):
         raise SimpleError("Failed to load user", 500) from None
 
 
+EMAIL_HISTORY_LIMIT = 100
+
+
+@router.get("/{user_id}/emails")
+async def user_emails(user_id: str):
+    """The latest emails sent to this account (kept 90 days), and its email switches."""
+    try:
+        user = await query_one("SELECT preferences FROM users WHERE id = $1", user_id)
+        if not user:
+            raise SimpleError("User not found", 404)
+        emails = await query(
+            """
+            SELECT id, subject, kind, status, error, created_at
+            FROM email_log WHERE user_id = $1
+            ORDER BY created_at DESC LIMIT $2
+            """,
+            user_id,
+            EMAIL_HISTORY_LIMIT,
+        )
+        notifications = (user.get("preferences") or {}).get("notifications") or {}
+        return jsjson({"emails": emails, "notifications": notifications})
+    except SimpleError:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        log.error(f"User emails error: {exc}")
+        raise SimpleError("Failed to load emails", 500) from None
+
+
 @router.patch("/{user_id}")
 async def update_user(
     user_id: str, request: Request, admin: AdminUser = Depends(admin_auth)

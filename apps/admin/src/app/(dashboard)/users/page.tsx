@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
-import { Search, ChevronLeft, ChevronRight, Edit, Trash2, Ban, KeyRound, LogIn, Download, Mail, ShieldOff } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, Edit, Trash2, Ban, KeyRound, LogIn, Download, Mail, ShieldOff, History } from 'lucide-react';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { MaskedEmail } from '@/components/MaskedEmail';
 
@@ -23,6 +23,21 @@ interface User {
     missing_fields: string[];
     restricted_reason: string | null;
 }
+
+interface SentEmail {
+    id: number;
+    subject: string;
+    kind: string;
+    status: 'sent' | 'failed' | 'dev';
+    error: string | null;
+    created_at: string;
+}
+
+const EMAIL_STATUS: Record<SentEmail['status'], [string, string]> = {
+    sent: ['badge-success', 'Sent'],
+    failed: ['badge-error', 'Failed'],
+    dev: ['badge', 'Not sent (no provider)'],
+};
 
 const FIELD_LABELS: Record<string, string> = {
     name: 'name', date_of_birth: 'date of birth', country: 'country', phone: 'phone',
@@ -55,6 +70,8 @@ export default function UsersPage() {
     const [emailUser, setEmailUser] = useState<User | null>(null);
     const [emailForm, setEmailForm] = useState({ subject: '', message: '' });
     const [emailSending, setEmailSending] = useState(false);
+    const [historyUser, setHistoryUser] = useState<User | null>(null);
+    const [history, setHistory] = useState<{ emails: SentEmail[]; notifications: Record<string, boolean> } | null>(null);
     const [isSuperAdmin, setIsSuperAdmin] = useState(false);
     const [dateOfBirth, setDateOfBirth] = useState('');
     const [plans, setPlans] = useState<{ id: string; name: string }[]>([]);
@@ -89,6 +106,17 @@ export default function UsersPage() {
             .then(me => setIsSuperAdmin(me.role === 'super_admin'))
             .catch(() => setIsSuperAdmin(false));
     }, []);
+
+    const openHistory = async (user: User) => {
+        setHistoryUser(user);
+        setHistory(null);
+        try {
+            setHistory(await api.get(`/api/admin/users/${user.id}/emails`));
+        } catch (err: any) {
+            alert(err.message);
+            setHistoryUser(null);
+        }
+    };
 
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault();
@@ -334,6 +362,9 @@ export default function UsersPage() {
                                             <button className="btn btn-primary btn-sm" onClick={() => { setEmailUser(user); setEmailForm({ subject: '', message: '' }); }} title="Email User">
                                                 <Mail size={14} />
                                             </button>
+                                            <button className="btn btn-ghost btn-sm" onClick={() => openHistory(user)} title="Emails sent" aria-label={`Emails sent to ${user.email}`}>
+                                                <History size={14} />
+                                            </button>
                                             <button className="btn btn-ghost btn-sm" onClick={() => handleExport(user)} title="Export GDPR Data">
                                                 <Download size={14} />
                                             </button>
@@ -428,6 +459,54 @@ export default function UsersPage() {
                                 <button className="btn btn-primary" onClick={handleSave}>Save Changes</button>
                             </div>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Email history modal */}
+            {historyUser && (
+                <div className="modal-overlay" onClick={() => setHistoryUser(null)}>
+                    <div className="modal" style={{ maxWidth: 760, width: '100%' }} onClick={e => e.stopPropagation()}>
+                        <h3 className="modal-title">Emails sent to {historyUser.email}</h3>
+                        {!history ? (
+                            <div className="loading"><div className="spinner" /></div>
+                        ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
+                                <p style={{ fontSize: '13px', color: 'var(--color-text-secondary)' }}>
+                                    Email settings:{' '}
+                                    {Object.keys(history.notifications).length === 0
+                                        ? 'all on (never changed)'
+                                        : Object.entries(history.notifications).map(([k, v]) => `${k.replace(/_/g, ' ')} ${v ? 'on' : 'off'}`).join(', ')}
+                                </p>
+                                {history.emails.length === 0 ? (
+                                    <p className="empty-note">No emails recorded yet. Emails are recorded from this release on, and kept for 90 days.</p>
+                                ) : (
+                                    <div className="table-scroll" style={{ maxHeight: 420 }}>
+                                        <table className="data-table">
+                                            <thead>
+                                                <tr><th>Sent</th><th>Subject</th><th>Kind</th><th>Status</th></tr>
+                                            </thead>
+                                            <tbody>
+                                                {history.emails.map(e => {
+                                                    const [badge, text] = EMAIL_STATUS[e.status] ?? ['badge', e.status];
+                                                    return (
+                                                        <tr key={e.id}>
+                                                            <td className="muted" style={{ whiteSpace: 'nowrap' }}>{new Date(e.created_at).toLocaleString()}</td>
+                                                            <td>{e.subject}</td>
+                                                            <td className="muted">{e.kind.replace(/_/g, ' ')}</td>
+                                                            <td><span className={`badge ${badge}`} title={e.error || ''}>{text}</span></td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+                                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                                    <button className="btn btn-ghost" onClick={() => setHistoryUser(null)}>Close</button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}

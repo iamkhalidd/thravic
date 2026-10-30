@@ -15,19 +15,22 @@ names, messages) is escaped before it reaches the HTML.
 from __future__ import annotations
 
 import base64
+import functools
 import html
 import re
 import smtplib
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
+from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from email.message import EmailMessage
 from email.utils import formataddr, parseaddr
-from typing import Any
+from typing import Any, ParamSpec, TypeVar
 
 import anyio
 import httpx
 
+from .. import db
 from ..config import get_settings
 from ..logging import create_logger
 
@@ -144,23 +147,80 @@ def _send_via_smtp_sync(
         return False, str(exc)
 
 
-async def send_email(to: str, subject: str, html: str, text: str = "", reply_to: str = "") -> None:
+# ── Email log ────────────────────────────────────────────────────────────────
+# Every send is written to `email_log` for the admin's per-user email history.
+# The template a send came from is its `kind`: each `send_*_email` below is
+# wrapped in `_kind(...)`, and callers outside this module pass `kind=`.
+
+_current_kind: ContextVar[str] = ContextVar("email_kind", default="other")
+
+_P = ParamSpec("_P")
+_R = TypeVar("_R")
+
+
+def _kind(name: str) -> Callable[[Callable[_P, Awaitable[_R]]], Callable[_P, Awaitable[_R]]]:
+    def wrap(fn: Callable[_P, Awaitable[_R]]) -> Callable[_P, Awaitable[_R]]:
+        @functools.wraps(fn)
+        async def inner(*args: _P.args, **kwargs: _P.kwargs) -> _R:
+            token = _current_kind.set(name)
+            try:
+                return await fn(*args, **kwargs)
+            finally:
+                _current_kind.reset(token)
+
+        return inner
+
+    return wrap
+
+
+async def _log_email(to: str, subject: str, kind: str, status: str, error: str = "") -> None:
+    """One `email_log` row; never lets a logging problem affect the send."""
+    if db.pool is None:
+        return
+    try:
+        await db.execute(
+            """
+            INSERT INTO email_log (user_id, to_email, subject, kind, status, error)
+            VALUES ((SELECT id FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1),
+                    $1, $2, $3, $4, NULLIF($5, ''))
+            """,
+            to[:320],
+            subject[:300],
+            (kind or _current_kind.get())[:40],
+            status,
+            error[:1000],
+        )
+    except Exception as exc:  # noqa: BLE001
+        log.warning(f"Could not log email to {to}: {exc}")
+
+
+async def send_email(
+    to: str, subject: str, html: str, text: str = "", reply_to: str = "", *, kind: str = ""
+) -> None:
     """Deliver an email using Resend, then SMTP, then the dev fallback.
 
     `reply_to` makes the recipient's Reply button answer that address instead
     of the no-reply sender.
     """
     settings = get_settings()
+    error = ""
 
     if settings.RESEND_API_KEY:
-        ok, _ = await _send_via_resend(settings.RESEND_API_KEY, to, subject, html, text, reply_to)
+        ok, error = await _send_via_resend(settings.RESEND_API_KEY, to, subject, html, text, reply_to)
         if ok:
+            await _log_email(to, subject, kind, "sent")
             return
 
-    ok, _ = await anyio.to_thread.run_sync(_send_via_smtp_sync, to, subject, html, text, reply_to)
+    ok, smtp_error = await anyio.to_thread.run_sync(_send_via_smtp_sync, to, subject, html, text, reply_to)
     if ok:
+        await _log_email(to, subject, kind, "sent")
         return
 
+    if settings.RESEND_API_KEY or (settings.SMTP_HOST and settings.SMTP_USER and settings.SMTP_PASS):
+        await _log_email(to, subject, kind, "failed", error or smtp_error)
+        return
+
+    await _log_email(to, subject, kind, "dev")
     log.warning("No email provider configured (set RESEND_API_KEY or SMTP_HOST)")
     log.info(f"[DEV EMAIL] To: {to} | Subject: {subject}")
     log.info(f"[DEV EMAIL] {text or html}")
@@ -175,6 +235,7 @@ async def send_email_or_raise(
     reply_to: str = "",
     sender: str = "",
     attachments: Sequence[Attachment] = (),
+    kind: str = "",
 ) -> None:
     """Express-compatible send that surfaces provider failures.
 
@@ -192,6 +253,7 @@ async def send_email_or_raise(
         ok, error = await _send_via_resend(
             settings.RESEND_API_KEY, to, subject, html, text, reply_to, sender, attachments
         )
+        await _log_email(to, subject, kind, "sent" if ok else "failed", error)
         if not ok:
             raise EmailSendError(error)
         return
@@ -200,10 +262,12 @@ async def send_email_or_raise(
         ok, error = await anyio.to_thread.run_sync(
             _send_via_smtp_sync, to, subject, html, text, reply_to, sender, attachments
         )
+        await _log_email(to, subject, kind, "sent" if ok else "failed", error)
         if not ok:
             raise EmailSendError(error)
         return
 
+    await _log_email(to, subject, kind, "dev")
     log.warning("No email provider configured (set RESEND_API_KEY or SMTP_HOST)")
     log.info(f"[DEV EMAIL] To: {to} | Subject: {subject}")
     log.info(f"[DEV EMAIL] {text or html}")
@@ -383,6 +447,7 @@ def _js_date_string(value: datetime) -> str:
 # ── Account ──────────────────────────────────────────────────────────────────
 
 
+@_kind("welcome")
 async def send_welcome_email(to: str, name: str) -> None:
     base = _frontend()
     subject = "Welcome to Thravic"
@@ -406,6 +471,7 @@ async def send_welcome_email(to: str, name: str) -> None:
     )
 
 
+@_kind("login_alert")
 async def send_login_alert_email(
     to: str, name: str, ip: str, user_agent: str, when: Any
 ) -> None:
@@ -433,6 +499,7 @@ async def send_login_alert_email(
     )
 
 
+@_kind("password_reset")
 async def send_password_reset_email(to: str, reset_link: str, expires_minutes: int = 15) -> None:
     subject = "Reset your Thravic password"
     await send_email(
@@ -458,6 +525,7 @@ async def send_password_reset_email(to: str, reset_link: str, expires_minutes: i
     )
 
 
+@_kind("password_changed")
 async def send_password_changed_email(to: str, name: str, ip: str) -> None:
     base = _frontend()
     subject = "Your Thravic password was changed"
@@ -482,6 +550,7 @@ async def send_password_changed_email(to: str, name: str, ip: str) -> None:
     )
 
 
+@_kind("account_suspended")
 async def send_account_suspended_email(to: str, name: str) -> None:
     base = _frontend()
     subject = "Your Thravic account has been suspended"
@@ -503,6 +572,7 @@ async def send_account_suspended_email(to: str, name: str) -> None:
     )
 
 
+@_kind("account_reactivated")
 async def send_account_reactivated_email(to: str, name: str) -> None:
     base = _frontend()
     subject = "Your Thravic account has been reactivated"
@@ -523,6 +593,7 @@ async def send_account_reactivated_email(to: str, name: str) -> None:
     )
 
 
+@_kind("account_restricted")
 async def send_account_restricted_email(to: str, name: str, grace_days: int) -> None:
     """The account was restricted because its owner is under 18."""
     base = _frontend()
@@ -553,6 +624,7 @@ async def send_account_restricted_email(to: str, name: str, grace_days: int) -> 
 # ── Billing ──────────────────────────────────────────────────────────────────
 
 
+@_kind("payment_receipt")
 async def send_payment_receipt_email(
     to: str,
     name: str,
@@ -593,6 +665,7 @@ async def send_payment_receipt_email(
     )
 
 
+@_kind("subscription_notice")
 async def send_subscription_notice_email(
     to: str,
     name: str,
@@ -667,6 +740,7 @@ async def send_subscription_notice_email(
     )
 
 
+@_kind("usage_limit")
 async def send_usage_limit_email(
     to: str,
     name: str,
@@ -748,6 +822,7 @@ def _site_link(path: str, domain_id: str | None) -> str:
     return f"{_frontend()}{path}" + (f"?site={domain_id}" if domain_id else "")
 
 
+@_kind("alerts")
 async def send_alerts_email(to: str, name: str, items: Sequence[dict[str, Any]]) -> None:
     """New smart alerts across an owner's sites, in one email.
 
@@ -836,6 +911,7 @@ def _site_report(site: dict[str, Any]) -> str:
     )
 
 
+@_kind("weekly_report")
 async def send_weekly_report_email(
     to: str, name: str, sites: Sequence[dict[str, Any]], week_start: datetime, week_end: datetime
 ) -> None:
@@ -875,6 +951,7 @@ async def send_weekly_report_email(
     )
 
 
+@_kind("insight_alert")
 async def send_insight_alert_email(
     to: str,
     name: str,
@@ -943,6 +1020,7 @@ def _message_blocks(message: str) -> list[str]:
     return [_p(_esc(p).replace("\n", "<br>")) for p in paragraphs]
 
 
+@_kind("product_update")
 async def send_product_update_email(to: str, name: str, subject: str, message: str) -> None:
     """An announcement to someone who opted in to product updates. Raises on failure."""
     base = _frontend()
@@ -966,6 +1044,7 @@ async def send_product_update_email(to: str, name: str, subject: str, message: s
 # ── Other mail ───────────────────────────────────────────────────────────────
 
 
+@_kind("direct")
 async def send_direct_email(to: str, name: str, subject: str, message: str) -> None:
     """A message an admin wrote to one user."""
     await send_email(
@@ -1006,6 +1085,7 @@ async def _send_owner_alert(
         log.error(f"Owner alert failed ({subject}): {exc}")
 
 
+@_kind("owner_signup_alert")
 async def send_owner_signup_alert(name: str, email: str, provider: str = "email") -> None:
     via = {"email": "Email and password", "google": "Google", "github": "GitHub"}
     await _send_owner_alert(
@@ -1017,6 +1097,7 @@ async def send_owner_signup_alert(name: str, email: str, provider: str = "email"
     )
 
 
+@_kind("owner_domain_alert")
 async def send_owner_domain_alert(name: str, email: str, domain: str, platform: str) -> None:
     kinds = {"web": "Website", "ios": "iOS app", "android": "Android app", "cross": "Mobile app"}
     await _send_owner_alert(
@@ -1028,6 +1109,7 @@ async def send_owner_domain_alert(name: str, email: str, domain: str, platform: 
     )
 
 
+@_kind("owner_subscription_alert")
 async def send_owner_subscription_alert(
     name: str, email: str, plan_name: str, amount: float, currency: str,
     reference: str, period_end: datetime,
@@ -1043,6 +1125,7 @@ async def send_owner_subscription_alert(
     )
 
 
+@_kind("owner_system_alert")
 async def send_owner_system_alert(
     subject: str, heading: str, rows: Sequence[tuple[str, str]]
 ) -> None:
@@ -1054,6 +1137,7 @@ async def send_owner_system_alert(
 # ── Admin sign-in ────────────────────────────────────────────────────────────
 
 
+@_kind("admin_setup_code")
 async def send_admin_setup_code_email(to: str, name: str, code: str) -> None:
     """The code that proves the admin owns this inbox while setting up the app."""
     subject = f"{code} is your Thravic admin setup code"
@@ -1079,6 +1163,7 @@ async def send_admin_setup_code_email(to: str, name: str, code: str) -> None:
     )
 
 
+@_kind("admin_2fa_enabled")
 async def send_admin_2fa_enabled_email(to: str, name: str, ip: str) -> None:
     subject = "Two-step sign-in is on for your Thravic admin account"
     await send_email(

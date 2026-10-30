@@ -111,6 +111,10 @@ class Settings(BaseSettings):
     AI_API_KEY: str | None = None
     AI_BASE_URL: str = "https://api.deepseek.com"
     AI_MODEL: str = "deepseek-chat"
+    # US dollars per million tokens, for the admin's AI cost estimate. Set them
+    # to the provider's current prices; cache discounts are not counted.
+    AI_PRICE_INPUT_PER_M: float = 0.28
+    AI_PRICE_OUTPUT_PER_M: float = 0.42
 
     # ── Parity harness ────────────────────────
     EXPRESS_BASE_URL: str = "http://localhost:3001"

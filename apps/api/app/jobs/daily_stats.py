@@ -33,19 +33,24 @@ RUN_EVERY = timedelta(minutes=55)
 BACKFILL_DAYS = 90
 
 UPSERT_SQL = """
-INSERT INTO daily_domain_stats (day, domain_id, events, pageviews, sessions, updated_at)
-SELECT $2::date, $1::uuid,
-       (SELECT COUNT(*) FROM events e
-         WHERE e.domain_id = $1 AND e.created_at >= $3 AND e.created_at < $4),
-       (SELECT COUNT(*) FROM events e
-         WHERE e.domain_id = $1 AND e.created_at >= $3 AND e.created_at < $4
-           AND e.type = 'pageview'),
+INSERT INTO daily_domain_stats (day, domain_id, events, pageviews, sessions, shopify_events,
+                                updated_at)
+SELECT $2::date, $1::uuid, e.events, e.pageviews,
        (SELECT COUNT(*) FROM sessions s
          WHERE s.domain_id = $1 AND s.started_at >= $3 AND s.started_at < $4),
+       e.shopify_events,
        NOW()
+FROM (
+    SELECT COUNT(*) AS events,
+           COUNT(*) FILTER (WHERE type = 'pageview') AS pageviews,
+           -- The Thravic Shopify app's pixel (integrations/shopify) prefixes its event ids.
+           COUNT(*) FILTER (WHERE event_id LIKE 'shopify-%') AS shopify_events
+    FROM events
+    WHERE domain_id = $1 AND created_at >= $3 AND created_at < $4
+) e
 ON CONFLICT (day, domain_id) DO UPDATE
 SET events = EXCLUDED.events, pageviews = EXCLUDED.pageviews,
-    sessions = EXCLUDED.sessions, updated_at = NOW()
+    sessions = EXCLUDED.sessions, shopify_events = EXCLUDED.shopify_events, updated_at = NOW()
 """
 
 
