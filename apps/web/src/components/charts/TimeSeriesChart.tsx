@@ -29,6 +29,8 @@ interface Props {
     bestLabel?: string;
     /** Line under the chart, after the legend. */
     hint?: string;
+    /** A shaded range (a forecast's likely range): `row[key]` is `[low, high]`. */
+    band?: { key: string; label: string };
 }
 
 /**
@@ -37,11 +39,12 @@ interface Props {
  * slots, comparison series grey and dashed. Monotone curves pass through every
  * point, so they never invent a peak. Hovering shows a dashed crosshair and a
  * tooltip that says the day's value in words, against the comparison when there
- * is one. The legend sits under the plot.
+ * is one. The legend sits under the plot. An optional band shades a range
+ * (a forecast's likely range) behind the lines.
  */
 export function TimeSeriesChart({
     data, xKey, series, height = 240, formatValue = compactNumber, formatX = shortDay,
-    unit, annotateBest = true, bestLabel = 'Best day', hint = 'Hover the chart for any day',
+    unit, annotateBest = true, bestLabel = 'Best day', hint = 'Hover the chart for any day', band,
 }: Props) {
     const colors = useChartColors();
     const gradientId = useId().replace(/:/g, '');
@@ -83,6 +86,18 @@ export function TimeSeriesChart({
                             </linearGradient>
                         </defs>
                         <CartesianGrid vertical={false} stroke={colors.grid} />
+                        {band && (
+                            <Area
+                                type="monotone"
+                                dataKey={band.key}
+                                name={band.label}
+                                stroke="none"
+                                fill={colors.muted}
+                                fillOpacity={0.16}
+                                activeDot={false}
+                                isAnimationActive={false}
+                            />
+                        )}
                         <XAxis
                             dataKey={xKey}
                             tickFormatter={v => formatX(String(v))}
@@ -108,19 +123,26 @@ export function TimeSeriesChart({
                                 const now = Number(row?.[lead.key]);
                                 const before = compare ? Number(row?.[compare.key]) : NaN;
                                 const others = rest.filter(s => !s.muted && row?.[s.key] !== undefined && row?.[s.key] !== null);
+                                const range = band ? row?.[band.key] : undefined;
+                                const upcoming = rest.filter(s => s.muted && row?.[lead.key] == null && row?.[s.key] != null);
                                 return (
                                     <div className="chart-tip">
                                         <div className="chart-tip-date">{formatX(String(label))}</div>
                                         {Number.isFinite(now) && !lead.muted && (
                                             <div className="chart-tip-main">{unit ? unitText(now) : <>{lead.label}: {formatValue(now)}</>}</div>
                                         )}
-                                        {others.map(s => (
+                                        {[...others, ...upcoming].map(s => (
                                             <div key={s.key} className="chart-tip-row">
                                                 <span aria-hidden="true" style={{ width: 10, height: 2, background: s.color }} />
                                                 {s.label}
                                                 <b>{formatValue(Number(row?.[s.key]))}</b>
                                             </div>
                                         ))}
+                                        {band && Array.isArray(range) && (
+                                            <div className="chart-tip-note">
+                                                {band.label}: {formatValue(Number(range[0]))} to {formatValue(Number(range[1]))}
+                                            </div>
+                                        )}
                                         {compare && Number.isFinite(before) && Number.isFinite(now) && (
                                             <div className="chart-tip-note">
                                                 {before > 0
@@ -209,6 +231,14 @@ export function TimeSeriesChart({
                                 {s.label}
                             </li>
                         ))}
+                        {band && (
+                            <li>
+                                <svg width="16" height="8" aria-hidden="true">
+                                    <rect width="16" height="8" rx="2" fill={colors.muted} fillOpacity={0.3} />
+                                </svg>
+                                {band.label}
+                            </li>
+                        )}
                     </ul>
                 ) : <span />}
                 {!empty && hint && <span>{hint}</span>}

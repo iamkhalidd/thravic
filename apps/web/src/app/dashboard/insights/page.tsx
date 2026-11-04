@@ -91,12 +91,18 @@ interface TrendData {
     forecast: Array<{
         date: string;
         predicted: number;
-        confidence: number;
+        // The likely range; only from the seasonal model
+        low?: number;
+        high?: number;
     }>;
     trend: {
         direction: 'up' | 'down' | 'stable';
         strength: number;
     };
+    // 'seasonal' once the site has three whole weeks of data, else 'simple'
+    method?: 'seasonal' | 'simple';
+    // Share of days expected inside the range
+    rangePct?: number;
 }
 
 const insightIcons: Record<string, React.ElementType> = {
@@ -183,18 +189,25 @@ export default function InsightsPage() {
     };
 
     // Actual pageviews (headline), the moving-average trend and the forecast on one
-    // axis. The forecast starts at today's actual value so the line continues.
+    // axis. The forecast starts at today's actual value so the line continues;
+    // its likely range is shaded behind it.
     const historical = trends?.historical ?? [];
     const forecast = trends?.forecast ?? [];
-    const lastActual = historical[historical.length - 1];
+    const hasRange = forecast.some(f => f.low !== undefined && f.high !== undefined);
     const chartData: Record<string, unknown>[] = [
         ...historical.map((h, i) => ({
             date: h.date,
             actual: Number(h.pageviews),
             trend: Number(h.pageviewsMA),
-            ...(i === historical.length - 1 && forecast.length > 0 ? { forecast: Number(h.pageviews) } : {}),
+            ...(i === historical.length - 1 && forecast.length > 0
+                ? { forecast: Number(h.pageviews), ...(hasRange ? { range: [Number(h.pageviews), Number(h.pageviews)] } : {}) }
+                : {}),
         })),
-        ...forecast.map(f => ({ date: f.date, forecast: Number(f.predicted) })),
+        ...forecast.map(f => ({
+            date: f.date,
+            forecast: Number(f.predicted),
+            ...(hasRange ? { range: [Number(f.low), Number(f.high)] } : {}),
+        })),
     ];
 
     const counts = {
@@ -287,7 +300,9 @@ export default function InsightsPage() {
             <div className="split-grid">
                 <ChartCard
                     title="Traffic forecast"
-                    subtitle="Pageviews per day, with the trend and a 7-day forecast"
+                    subtitle={hasRange
+                        ? 'Pageviews per day, with the trend and a 7-day forecast learned from your weekly pattern'
+                        : 'Pageviews per day, with the trend and a 7-day forecast'}
                     action={direction ? (
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.8125rem', color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
                             <TrendIcon size={16} aria-hidden="true" style={{
@@ -306,6 +321,8 @@ export default function InsightsPage() {
                             { key: 'trend', label: '7-day average', muted: true },
                             { key: 'forecast', label: 'Forecast', muted: true },
                         ]}
+                        band={hasRange ? { key: 'range', label: 'Likely range' } : undefined}
+                        hint={hasRange && trends?.rangePct ? `About ${trends.rangePct}% of days land in the likely range` : undefined}
                     />
                 </ChartCard>
 
@@ -322,7 +339,7 @@ export default function InsightsPage() {
                     </ChartCard>
 
                     {forecast.length > 0 && (
-                        <ChartCard title="Forecast" subtitle="Predicted pageviews, next 5 days" flush>
+                        <ChartCard title="Forecast" subtitle={hasRange ? 'Predicted pageviews and their likely range, next 5 days' : 'Predicted pageviews, next 5 days'} flush>
                             <table className="data-table">
                                 <tbody>
                                     {forecast.slice(0, 5).map(f => (
@@ -330,7 +347,12 @@ export default function InsightsPage() {
                                             <td className="muted" style={{ paddingLeft: 20 }}>
                                                 {new Date(`${f.date}T00:00:00Z`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })}
                                             </td>
-                                            <td className="num" style={{ paddingRight: 20 }}>{Number(f.predicted).toLocaleString()}</td>
+                                            <td className="num" style={{ paddingRight: hasRange ? 12 : 20 }}>{Number(f.predicted).toLocaleString()}</td>
+                                            {hasRange && (
+                                                <td className="num muted" style={{ paddingRight: 20 }}>
+                                                    {Number(f.low).toLocaleString()} to {Number(f.high).toLocaleString()}
+                                                </td>
+                                            )}
                                         </tr>
                                     ))}
                                 </tbody>

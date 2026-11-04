@@ -11,6 +11,10 @@ facts.
 
 `POST /:domainId/explain` is the AI analyst: why one metric changed, see
 `analyst_service`.
+
+`GET /:domainId/trends` is the last two weeks of pageviews and the week ahead:
+a Holt-Winters forecast with a likely range (`ml.forecast`) once the site has
+three whole weeks of data, else the moving average carried on (`method`).
 """
 
 from __future__ import annotations
@@ -27,6 +31,8 @@ from ..json_response import jsjson
 from ..logging import create_logger
 from ..middleware.auth import AuthUser, require_auth
 from ..middleware.feature_gate import require_feature
+from ..ml import forecast as ml_forecast
+from ..ml import series
 from ..services import (
     analyst_service,
     assistant_service,
@@ -48,6 +54,14 @@ CURRENT_WINDOW_DAYS = 7
 
 EMA_WEIGHT_PREVIOUS = 0.7
 EMA_WEIGHT_CURRENT = 0.3
+
+# The forecast model learns from up to 8 weeks; with under `ml_forecast.MIN_DAYS`
+# of them it falls back to carrying the moving average on.
+FIT_DAYS = 56
+# The week ahead must differ from the last week by this much to count as a trend
+TREND_CHANGE = 0.05
+# Share of days expected inside the forecast's range (`ml_forecast.RANGE_Z`)
+RANGE_PCT = 80
 
 FAILED_TRENDS = "Failed to generate trends"
 FAILED_INSIGHTS = "Failed to generate insights"
@@ -93,6 +107,34 @@ def _bucket_key(value: object) -> str:
     return str(value)
 
 
+def _simple_forecast(historical: list[dict], now: datetime) -> dict:
+    """The moving average's line carried on, for sites with under three weeks of data."""
+    last_pv = historical[-1]["pageviewsMA"]
+    trend_factor = (historical[-1]["pageviewsMA"] - historical[0]["pageviewsMA"]) / (
+        TREND_WINDOW_DAYS
+    )
+
+    forecast: list[dict] = []
+    for i in range(1, FORECAST_POINTS + 1):
+        date = now + timedelta(days=i)
+        forecast.append(
+            {"date": _utc_day(date), "predicted": max(0, js_round(last_pv + (trend_factor * i)))}
+        )
+
+    if trend_factor > 1:
+        direction = "up"
+    elif trend_factor < -1:
+        direction = "down"
+    else:
+        direction = "stable"
+
+    return {
+        "forecast": forecast,
+        "trend": {"direction": direction, "strength": abs(trend_factor)},
+        "method": "simple",
+    }
+
+
 @router.get("/{domainId}/trends")
 async def trends(
     domainId: str,
@@ -103,7 +145,8 @@ async def trends(
         domain = await _require_domain(domainId, user.user_id)
 
         now = datetime.now(UTC)
-        start = now - timedelta(days=TREND_WINDOW_DAYS)
+        # From midnight, so the first day the model sees is a whole one
+        start = now.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=FIT_DAYS)
 
         timeseries = await event_service.get_timeseries(domain["id"], start, now, "day")
         buckets = {_bucket_key(row["bucket"]): row for row in timeseries}
@@ -140,26 +183,34 @@ async def trends(
                 }
             )
 
-        last_pv = historical[-1]["pageviewsMA"]
-        trend_factor = (historical[-1]["pageviewsMA"] - historical[0]["pageviewsMA"]) / (
-            TREND_WINDOW_DAYS
-        )
-
-        forecast: list[dict] = []
-        for i in range(1, FORECAST_POINTS + 1):
-            date = now + timedelta(days=i)
-            predicted = max(0, js_round(last_pv + (trend_factor * i)))
-            forecast.append(
-                {
-                    "date": _utc_day(date),
-                    "predicted": predicted,
-                    "confidence": max(0, 100 - (i * 10)),
-                }
+        # Whole days only: today is still filling up, so it would read as a drop.
+        today = now.date()
+        values = series.trim_leading_zeros(
+            series.daily_values(
+                timeseries, "pageviews", today - timedelta(days=FIT_DAYS), today - timedelta(days=1)
             )
+        )
+        # Fitted through yesterday, so the first day ahead is today.
+        model = ml_forecast.forecast(values, FORECAST_POINTS + 1)
 
-        if trend_factor > 1:
+        if model is None:
+            return jsjson({"historical": historical, **_simple_forecast(historical, now)})
+
+        forecast = [
+            {
+                "date": _utc_day(now + timedelta(days=i)),
+                "predicted": js_round(point.predicted),
+                "low": js_round(point.low),
+                "high": js_round(point.high),
+            }
+            for i, point in enumerate(model.points[1:], start=1)
+        ]
+        # The week ahead against the last whole week
+        recent = sum(values[-ml_forecast.SEASON :]) / ml_forecast.SEASON
+        ahead = sum(p["predicted"] for p in forecast) / len(forecast)
+        if recent and ahead >= recent * (1 + TREND_CHANGE):
             direction = "up"
-        elif trend_factor < -1:
+        elif recent and ahead <= recent * (1 - TREND_CHANGE):
             direction = "down"
         else:
             direction = "stable"
@@ -168,7 +219,12 @@ async def trends(
             {
                 "historical": historical,
                 "forecast": forecast,
-                "trend": {"direction": direction, "strength": abs(trend_factor)},
+                "trend": {
+                    "direction": direction,
+                    "strength": abs(ahead - recent) / FORECAST_POINTS,
+                },
+                "method": "seasonal",
+                "rangePct": RANGE_PCT,
             }
         )
     except SimpleError:

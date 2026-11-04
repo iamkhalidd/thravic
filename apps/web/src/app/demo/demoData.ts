@@ -215,13 +215,13 @@ export const insights = [
     { id: 'i5', type: 'traffic', priority: 'low' as const, title: 'Mobile is now most of your traffic', description: 'Mobile visitors are 65% of sessions this period, up from 52%.', recommendation: 'Review your conversion steps on a phone first.' },
 ];
 
-/** Predicted pageviews; offset is days after today. */
+/** Predicted pageviews and their likely range; offset is days after today. */
 export const forecast = [
-    { offset: 1, predicted: 2960 },
-    { offset: 2, predicted: 3010 },
-    { offset: 3, predicted: 2880 },
-    { offset: 4, predicted: 3120 },
-    { offset: 5, predicted: 3190 },
+    { offset: 1, predicted: 2960, low: 2740, high: 3180 },
+    { offset: 2, predicted: 3010, low: 2750, high: 3270 },
+    { offset: 3, predicted: 2880, low: 2590, high: 3170 },
+    { offset: 4, predicted: 3120, low: 2790, high: 3450 },
+    { offset: 5, predicted: 3190, low: 2830, high: 3550 },
 ];
 
 export const errors = [
@@ -378,10 +378,10 @@ export const app = {
         { id: 'a4', type: 'traffic', priority: 'low' as const, title: 'Android is growing faster than iOS', description: 'Android sessions rose 24% this period; iOS rose 11%.', recommendation: 'Check your Android release notes and store listing are up to date.' },
     ],
     forecast: [
-        { offset: 1, predicted: 6200 },
-        { offset: 2, predicted: 6450 },
-        { offset: 3, predicted: 7600 },
-        { offset: 4, predicted: 8100 },
-        { offset: 5, predicted: 6300 },
+        { offset: 1, predicted: 6200, low: 5750, high: 6650 },
+        { offset: 2, predicted: 6450, low: 5900, high: 7000 },
+        { offset: 3, predicted: 7600, low: 6950, high: 8250 },
+        { offset: 4, predicted: 8100, low: 7350, high: 8850 },
+        { offset: 5, predicted: 6300, low: 5550, high: 7050 },
     ],
 };

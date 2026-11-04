@@ -706,12 +706,16 @@ export function InsightsView() {
     const chartData = [
         ...d.trafficData.map((r, i, all) => {
             const window = all.slice(Math.max(0, i - 6), i + 1);
-            return { date: r.date, actual: r.pageviews, trend: Math.round(window.reduce((s, w) => s + w.pageviews, 0) / window.length) };
+            const trend = Math.round(window.reduce((s, w) => s + w.pageviews, 0) / window.length);
+            // The forecast and its range start at the last actual day so the line continues.
+            return i === all.length - 1
+                ? { date: r.date, actual: r.pageviews, trend, forecast: r.pageviews, range: [r.pageviews, r.pageviews] }
+                : { date: r.date, actual: r.pageviews, trend };
         }),
         ...d.forecast.map(f => {
             const d = new Date(`${last.date}T00:00:00Z`);
             d.setUTCDate(d.getUTCDate() + f.offset);
-            return { date: d.toISOString().slice(0, 10), forecast: f.predicted };
+            return { date: d.toISOString().slice(0, 10), forecast: f.predicted, range: [f.low, f.high] };
         }),
     ];
     const counts = { high: 0, medium: 0, low: 0 };
@@ -721,7 +725,7 @@ export function InsightsView() {
         <div className="page-stack">
             <PageHeader title="AI insights" subtitle={`A daily report on what changed in your ${app ? 'app' : 'site'} and what to do about it`} />
             <div className="split-grid">
-                <ChartCard title={app ? 'Usage forecast' : 'Traffic forecast'} subtitle={`${views} per day, with the trend and a 5-day forecast`}>
+                <ChartCard title={app ? 'Usage forecast' : 'Traffic forecast'} subtitle={`${views} per day, with the trend and a 5-day forecast learned from the weekly pattern`}>
                     <TimeSeriesChart
                         data={chartData}
                         xKey="date"
@@ -731,6 +735,8 @@ export function InsightsView() {
                             { key: 'trend', label: '7-day average', muted: true },
                             { key: 'forecast', label: 'Forecast', muted: true },
                         ]}
+                        band={{ key: 'range', label: 'Likely range' }}
+                        hint="About 80% of days land in the likely range"
                     />
                 </ChartCard>
                 <ChartCard title="Insight summary" subtitle="Today's report by priority">
