@@ -10,7 +10,7 @@ import {
     LayoutDashboard, Globe, Target, MousePointer2, Video, Sparkles, FileBarChart,
     Settings, ChevronDown, ArrowRight, Megaphone, FileText, Route, MonitorSmartphone,
     MousePointerClick, FileInput, AlertTriangle, TrendingUp, Calendar, PanelLeftClose,
-    Gauge, UsersRound, Menu, RefreshCw, Download, Smartphone, Check,
+    Gauge, UsersRound, Menu, RefreshCw, Download, Smartphone, Check, FlaskConical,
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import {
@@ -18,12 +18,12 @@ import {
     BehaviorPagesView, FunnelsView, HeatmapsView, SessionsView,
     InsightsView, ReportsView, BehaviorPathsView, BehaviorDevicesView,
     ErrorsView, PerformanceView, FormsView, RageClicksView, TeamView, SettingsView,
-    VersionsView, DemoAppContext,
+    VersionsView, ExperimentsView, DemoAppContext,
 } from './DemoViews';
 import { app as sampleApp } from './demoData';
 
 type DemoView = 'overview' | 'traffic-sources' | 'traffic-campaigns' | 'traffic-trends'
-    | 'behavior-pages' | 'behavior-paths' | 'behavior-devices' | 'behavior-versions' | 'funnels' | 'heatmaps' | 'sessions' | 'insights' | 'reports'
+    | 'behavior-pages' | 'behavior-paths' | 'behavior-devices' | 'behavior-versions' | 'funnels' | 'experiments' | 'heatmaps' | 'sessions' | 'insights' | 'reports'
     | 'monitoring-errors' | 'monitoring-performance' | 'monitoring-forms' | 'monitoring-rage-clicks' | 'team' | 'settings';
 
 interface NavLeaf { id: DemoView; label: string; icon: React.ElementType; appLabel?: string }
@@ -50,6 +50,7 @@ const navStructure: NavEntry[] = [
             { id: 'behavior-pages', icon: FileText, label: 'Pages', appLabel: 'Screens' },
             { id: 'behavior-paths', icon: Route, label: 'Page flow', appLabel: 'Screen flow' },
             { id: 'funnels', icon: Target, label: 'Funnels' },
+            { id: 'experiments', icon: FlaskConical, label: 'Experiments' },
             { id: 'behavior-devices', icon: MonitorSmartphone, label: 'Devices' },
             { id: 'behavior-versions', icon: Smartphone, label: 'App versions' },
         ],
@@ -108,6 +109,7 @@ const viewComponents: Record<DemoView, React.ComponentType> = {
     'monitoring-forms': FormsView,
     'monitoring-rage-clicks': RageClicksView,
     'funnels': FunnelsView,
+    'experiments': ExperimentsView,
     'heatmaps': HeatmapsView,
     'sessions': SessionsView,
     'insights': InsightsView,

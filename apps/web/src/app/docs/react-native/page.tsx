@@ -6,7 +6,7 @@ import { pageMetadata } from '@/lib/site';
 export const metadata: Metadata = pageMetadata(
     '/docs/react-native',
     'React Native and Expo analytics',
-    'Track screens, sessions, app versions and devices in a React Native or Expo app with the @thravic/react-native SDK, in the same dashboard as your website.',
+    'Track screens, sessions, app versions and devices, and run A/B tests, in a React Native or Expo app with the @thravic/react-native SDK, in the same dashboard as your website.',
 );
 
 // Mirrors packages/sdk-react-native/README.md; keep the two in step.
@@ -131,6 +131,31 @@ export default function Layout() {
 Thravic.identify('user-42');`}</Code>
                 <p style={s.p}>Use your events as funnel steps, or send them to your own systems with webhooks.</p>
 
+                <h2 style={s.h2}>A/B tests</h2>
+                <p style={s.p}>
+                    Needs version 0.2.0 or later. Create a test under <strong>Experiments</strong> in the dashboard (Pro plan), start it,
+                    then ask for the user&apos;s version where the screen changes:
+                </p>
+                <Code>{`import { Thravic, useVariant } from '@thravic/react-native';
+
+function Paywall() {
+  const version = useVariant('new-paywall'); // undefined while loading
+  if (version === undefined) return null;
+  return version === 'b' ? <NewPaywall /> : <OldPaywall />;
+}
+
+// when the user reaches the test's goal
+Thravic.track('signup');`}</Code>
+                <p style={s.p}>
+                    Outside a component, <code>await Thravic.variant(&apos;new-paywall&apos;)</code> gives the same answer. You get a version id
+                    from the dashboard, or <code>null</code> for the original: the user isn&apos;t in the test, the test isn&apos;t running, the user
+                    opted out, or the tests couldn&apos;t load within 3 seconds.
+                </p>
+                <p style={s.p}>
+                    A user always gets the same version, in the app and on your website. The dashboard counts the goals each version reaches
+                    and calls a winner once one version has a 95% chance of being the best.
+                </p>
+
                 <h2 style={s.h2}>Privacy</h2>
                 <Code>{`Thravic.optOut(); // stops tracking and drops unsent events; remembered across launches
 Thravic.optIn();
@@ -146,6 +171,7 @@ Thravic.isOptedOut();`}</Code>
                     <li style={s.li}><strong>Screens:</strong> views, time on screen, entries and exits for each screen.</li>
                     <li style={s.li}><strong>Paths and funnels:</strong> how people move between screens, and where they drop off.</li>
                     <li style={s.li}><strong>Versions and devices:</strong> app versions, OS versions and device models.</li>
+                    <li style={s.li}><strong>Experiments:</strong> each version&apos;s users, goals and chance of being the best.</li>
                 </ul>
 
                 <h2 style={s.h2}>How it works</h2>

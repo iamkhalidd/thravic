@@ -210,9 +210,31 @@ export const recordings = [
 export const insights = [
     { id: 'i1', type: 'funnel', priority: 'high' as const, title: 'Most trial users stop at "Complete setup"', description: '30% of visitors who start a trial do not finish setup, the largest drop in your signup funnel.', recommendation: 'Watch the replays of visitors who left on the setup step and cut the fields they hesitate on.' },
     { id: 'i2', type: 'page', priority: 'high' as const, title: 'Bounce rate up on /pricing', description: 'Bounce rate on /pricing rose to 45% from 28% last week.', recommendation: 'Open the /pricing heatmap: check whether visitors reach the plan buttons on mobile.' },
+    { id: 'i0', type: 'experiment', priority: 'medium' as const, title: '"Shorter pricing page" has a winner', description: 'Three plans only turns 5.4% of visitors into signups, against 4.0% for the original. It has a 99% chance of being the best version.', recommendation: 'End the test and make the three-plan page the default.' },
     { id: 'i3', type: 'opportunity', priority: 'medium' as const, title: 'Product Hunt visitors convert well', description: 'Visitors from producthunt.com reach the trial step twice as often as the site average.', recommendation: 'Link your launch page from your docs and changelog to keep that traffic coming.' },
     { id: 'i4', type: 'technical', priority: 'medium' as const, title: 'Blog pages load slowly on mobile', description: 'Largest contentful paint on /blog pages is 4.2s on mobile, against 2.5s for a good score.', recommendation: 'Compress the hero images and lazy-load anything below the fold.' },
     { id: 'i5', type: 'traffic', priority: 'low' as const, title: 'Mobile is now most of your traffic', description: 'Mobile visitors are 65% of sessions this period, up from 52%.', recommendation: 'Review your conversion steps on a phone first.' },
+];
+
+/**
+ * A/B tests. change, low and high are the lift against the original and its
+ * likely range, in percent; best is the chance of being the best version.
+ */
+export const experiments = [
+    {
+        id: 'e1', name: 'Shorter pricing page', key: 'new-pricing', goal: 'signup', status: 'running', days: 18, winner: 'b',
+        variants: [
+            { id: 'a', name: 'Original', visitors: 4210, conversions: 168, change: null, low: null, high: null, best: 1 },
+            { id: 'b', name: 'Three plans only', visitors: 4185, conversions: 226, change: 35, low: 11, high: 62, best: 99 },
+        ],
+    },
+    {
+        id: 'e2', name: 'Homepage headline', key: 'hero-headline', goal: 'trial_start', status: 'running', days: 5, winner: null,
+        variants: [
+            { id: 'a', name: 'Original', visitors: 1320, conversions: 41, change: null, low: null, high: null, best: 39 },
+            { id: 'b', name: 'Lead with replays', visitors: 1290, conversions: 44, change: 10, low: -28, high: 55, best: 61 },
+        ],
+    },
 ];
 
 /** Predicted pageviews and their likely range; offset is days after today. */
@@ -373,9 +395,19 @@ export const app = {
     ],
     insights: [
         { id: 'a1', type: 'funnel', priority: 'high' as const, title: 'Most people leave at the paywall', description: '77% of users who reach /Paywall close it without subscribing, the largest drop in your subscription funnel.', recommendation: 'Try showing the paywall after a second workout, when users have seen more value.' },
+        { id: 'a0', type: 'experiment', priority: 'medium' as const, title: '"Later paywall" has a winner', description: 'Showing the paywall after the second workout turns 4.4% of users into subscribers, against 2.8% for the original. It has a 99% chance of being the best version.', recommendation: 'End the test and ship the later paywall to everyone.' },
         { id: 'a2', type: 'page', priority: 'medium' as const, title: 'Version 2.4.0 sessions are longer', description: 'Sessions on 2.4.0 average 7m 10s, against 5m 40s on 2.3.1.', recommendation: 'Remind users still on 2.3.x to update.' },
         { id: 'a3', type: 'opportunity', priority: 'medium' as const, title: 'Library leads to workouts', description: '68% of users who open /Library start a workout in the same session.', recommendation: 'Surface the library on the home screen.' },
         { id: 'a4', type: 'traffic', priority: 'low' as const, title: 'Android is growing faster than iOS', description: 'Android sessions rose 24% this period; iOS rose 11%.', recommendation: 'Check your Android release notes and store listing are up to date.' },
+    ],
+    experiments: [
+        {
+            id: 'ae1', name: 'Later paywall', key: 'later-paywall', goal: 'subscribe', status: 'running', days: 21, winner: 'b',
+            variants: [
+                { id: 'a', name: 'Original', visitors: 1840, conversions: 52, change: null, low: null, high: null, best: 1 },
+                { id: 'b', name: 'After second workout', visitors: 1810, conversions: 79, change: 54, low: 9, high: 118, best: 99 },
+            ],
+        },
     ],
     forecast: [
         { offset: 1, predicted: 6200, low: 5750, high: 6650 },

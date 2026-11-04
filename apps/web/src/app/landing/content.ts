@@ -32,7 +32,7 @@ export const faqs: { q: string; a: string }[] = [
     },
     {
         q: 'Does it work for mobile apps?',
-        a: 'Yes. The @thravic/react-native SDK works with React Native and Expo, including Expo Go. App screens, sessions, versions and devices appear in the same dashboard as your website.',
+        a: 'Yes. The @thravic/react-native SDK works with React Native and Expo, including Expo Go. App screens, sessions, versions and devices appear in the same dashboard as your website, and you can run A/B tests in the app too.',
     },
     {
         q: 'Can I look around before signing up?',

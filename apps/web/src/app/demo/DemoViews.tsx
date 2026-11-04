@@ -9,7 +9,7 @@ import {
     TrendingUp, TrendingDown, CheckCircle, Target, Percent, Monitor, Smartphone,
     Tablet, ArrowDown, Play, Pause, ChevronRight, Sparkles, FileText, Zap, Filter,
     AlertTriangle, Hash, Send, Timer, Download, MousePointerClick, Gauge, LayoutDashboard,
-    Paintbrush, Server, Layers,
+    Paintbrush, Server, Layers, FlaskConical,
 } from 'lucide-react';
 import { PageHeader } from '@/components/PageHeader';
 import { StatCard } from '@/components/StatCard';
@@ -693,7 +693,7 @@ export function SessionsView() {
 
 // ── AI insights ──
 const INSIGHT_ICONS: Record<string, React.ElementType> = {
-    traffic: TrendingUp, page: FileText, technical: Zap, funnel: Filter, opportunity: Target,
+    traffic: TrendingUp, page: FileText, technical: Zap, funnel: Filter, opportunity: Target, experiment: FlaskConical,
 };
 const PRIORITY_BADGE = { high: 'badge badge-error', medium: 'badge badge-warning', low: 'badge badge-success' } as const;
 const PRIORITY_LABEL = { high: 'High', medium: 'Medium', low: 'Low' } as const;
@@ -788,6 +788,76 @@ export function InsightsView() {
                     })}
                 </ul>
             </ChartCard>
+        </div>
+    );
+}
+
+// ── Experiments ──
+const signed = (n: number) => `${n > 0 ? '+' : ''}${n}%`;
+
+export function ExperimentsView() {
+    const { app, d } = useProperty();
+    return (
+        <div className="page-stack">
+            <PageHeader title="Experiments" subtitle={`A/B test changes to your ${app ? 'app' : 'site'} and see which version wins.`} />
+            {d.experiments.map(test => {
+                const total = test.variants.reduce((s, v) => s + v.visitors, 0);
+                const goals = test.variants.reduce((s, v) => s + v.conversions, 0);
+                const winner = test.variants.find(v => v.id === test.winner);
+                return (
+                    <ChartCard key={test.id} flush title={test.name}
+                        subtitle={`${test.key} · goal: ${test.goal} · running for ${test.days} days`}
+                        action={<span className="badge badge-success">Running</span>}>
+                        <div style={{ padding: '4px 20px 12px', fontSize: '0.875rem', lineHeight: 1.55 }}>
+                            <strong style={{ color: winner ? 'var(--color-success)' : 'var(--color-text-primary)' }}>
+                                {winner ? `${winner.name} wins.` : 'Too early to tell. Keep the test running.'}
+                            </strong>
+                            {' '}
+                            <span className="muted">{total.toLocaleString()} visitors, {goals.toLocaleString()} conversions.</span>
+                        </div>
+                        <div style={{ overflowX: 'auto' }}>
+                            <table className="data-table">
+                                <thead>
+                                    <tr>
+                                        <th style={{ paddingLeft: 20 }}>Version</th>
+                                        <th className="num">Visitors</th>
+                                        <th className="num">Conversions</th>
+                                        <th className="num">Rate</th>
+                                        <th className="num">Change vs original</th>
+                                        <th className="num" style={{ paddingRight: 20 }}>Chance to be best</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {test.variants.map((v, index) => (
+                                        <tr key={v.id}>
+                                            <td style={{ paddingLeft: 20, whiteSpace: 'nowrap' }}>
+                                                <span style={{ fontWeight: 500 }}>{v.name}</span>
+                                                {index === 0 && <span className="muted"> (original)</span>}
+                                                {v.id === test.winner && <span className="badge badge-success" style={{ marginLeft: 6 }}>Winner</span>}
+                                            </td>
+                                            <td className="num">{v.visitors.toLocaleString()}</td>
+                                            <td className="num">{v.conversions.toLocaleString()}</td>
+                                            <td className="num">{(v.conversions / v.visitors * 100).toFixed(2)}%</td>
+                                            <td className="num">
+                                                {v.change === null || v.low === null || v.high === null ? <span className="muted">—</span> : (
+                                                    <>
+                                                        <span style={{ color: v.change > 0 ? 'var(--color-success)' : 'var(--color-error)' }}>{signed(v.change)}</span>
+                                                        <div className="muted" style={{ fontSize: '0.75rem' }}>likely {signed(v.low)} to {signed(v.high)}</div>
+                                                    </>
+                                                )}
+                                            </td>
+                                            <td className="num" style={{ paddingRight: 20 }}>{v.best}%</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                        <p className="muted" style={{ fontSize: '0.75rem', padding: '10px 20px 16px', margin: 0 }}>
+                            Each {app ? 'user' : 'visitor'} always sees the same version. A winner is called when one version has at least a 95% chance to be best.
+                        </p>
+                    </ChartCard>
+                );
+            })}
         </div>
     );
 }

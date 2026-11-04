@@ -76,7 +76,7 @@ const stories = [
     {
         label: 'AI insights', View: InsightsView, view: 'insights',
         title: 'A daily read on what changed.',
-        body: 'Each day Thravic reports what moved on your site, ranks it by priority and suggests what to do about it, with a short forecast of where traffic is heading.',
+        body: 'Each day Thravic reports what moved on your site, ranks it by priority and suggests what to do about it. It flags drops and spikes that are out of the ordinary, forecasts traffic with a likely range, and tells you when an A/B test has a winner.',
     },
     {
         label: 'the sample app', View: AppOverviewView, view: 'overview', href: '/demo?property=app',
@@ -86,7 +86,10 @@ const stories = [
 ];
 
 const alsoIncluded: { name: string; detail: string; href?: string }[] = [
-    { name: 'Mobile apps', detail: 'Screens, sessions and versions from React Native and Expo apps.', href: '/docs/react-native' },
+    { name: 'A/B tests', detail: 'Try two versions of a page or screen and see which one wins. Pro plan.', href: '/docs#ab-tests' },
+    { name: 'Mobile apps', detail: 'Screens, sessions, versions and A/B tests from React Native and Expo apps.', href: '/docs/react-native' },
+    { name: 'Visitor scores', detail: 'Who is likely to convert, and who may not come back.' },
+    { name: 'Bot filtering', detail: 'Known bots and bot-like visits are kept out of your numbers.' },
     { name: 'Traffic sources', detail: 'Channels, referrers, search engines and social networks.' },
     { name: 'UTM campaigns', detail: 'Sessions, visitors and pageviews for every UTM-tagged link.' },
     { name: 'Pages and paths', detail: 'Entry and exit pages, and how people move between them.' },
