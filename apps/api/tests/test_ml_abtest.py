@@ -220,6 +220,11 @@ async def test_the_tracker_gets_running_tests_only_on_plans_that_have_them(monke
             "variants": [{"id": "a", "weight": 50}, {"id": "b", "weight": 50}],
         }
     ]
+    # Apps get the same list, for the SDK's Thravic.variant()
+    app = {"id": "d1", "platform": "ios"}
+    assert await experiment_service.tracker_experiments(app) == (
+        await experiment_service.tracker_experiments(site)
+    )
     plan.features = []
     assert await experiment_service.tracker_experiments(site) == []
 

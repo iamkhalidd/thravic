@@ -83,6 +83,25 @@ Thravic.track('purchase', { amount: 49, currency: 'USD' });
 Thravic.identify('user-42');
 ```
 
+## A/B tests
+
+Create a test under Experiments in the dashboard (Pro plan), start it, then ask for the user's version where the screen changes:
+
+```tsx
+import { Thravic, useVariant } from '@thravic/react-native';
+
+function Paywall() {
+  const version = useVariant('new-paywall'); // undefined while loading
+  if (version === undefined) return null;
+  return version === 'b' ? <NewPaywall /> : <OldPaywall />;
+}
+
+// when the user reaches the test's goal
+Thravic.track('signup');
+```
+
+Outside a component, `await Thravic.variant('new-paywall')` gives the same answer. You get a version id from the dashboard, or `null` for the original: the user isn't in the test, the test isn't running, the user opted out, or the tests couldn't load within 3 seconds. A user always gets the same version, on the app and on your website. The first answer in each session records that the user saw the test, and the dashboard counts the goals they reach after it.
+
 ## Privacy
 
 ```ts

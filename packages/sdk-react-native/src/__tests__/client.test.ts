@@ -1,10 +1,20 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { MAX_BATCH, OPT_OUT_KEY, QUEUE_KEY, ThravicClient, VISITOR_KEY } from '../client';
+import {
+  MAX_BATCH,
+  OPT_OUT_KEY,
+  QUEUE_KEY,
+  ThravicClient,
+  VISITOR_KEY,
+  assignVariant,
+  unitHash,
+} from '../client';
 import type { CollectEvent, Environment, NavigationRefLike } from '../types';
 
 /** An Environment with in-memory storage, a hand-driven clock and timers, and a fetch spy. */
-function fakeEnv(options: { status?: number; store?: Map<string, string> } = {}) {
+function fakeEnv(
+  options: { status?: number; store?: Map<string, string>; tests?: unknown } = {},
+) {
   const store = options.store ?? new Map<string, string>();
   const timers: Array<() => void> = [];
   const sent: CollectEvent[][] = [];
@@ -12,7 +22,12 @@ function fakeEnv(options: { status?: number; store?: Map<string, string> } = {})
   let clock = 1_000_000;
   let appState: ((active: boolean) => void) | null = null;
 
-  const fetchSpy = vi.fn(async (_url: unknown, init?: { body?: unknown }) => {
+  const fetchSpy = vi.fn(async (url: unknown, init?: { body?: unknown }) => {
+    if (String(url).endsWith('/config')) {
+      if (options.tests instanceof Error) throw options.tests;
+      if (options.tests === 'hang') return new Promise<Response>(() => undefined);
+      return { ok: true, status: 200, json: async () => ({ experiments: options.tests }) } as Response;
+    }
     sent.push(JSON.parse(String(init?.body)).events);
     return { ok: status >= 200 && status < 300, status } as Response;
   });
@@ -279,5 +294,100 @@ describe('ThravicClient', () => {
       'app://com.acme.shop/Home',
       'app://com.acme.shop/Cart',
     ]);
+  });
+});
+
+describe('A/B tests', () => {
+  const TEST = {
+    id: 'e1',
+    key: 'new-paywall',
+    traffic: 100,
+    variants: [
+      { id: 'a', weight: 50 },
+      { id: 'b', weight: 50 },
+    ],
+  };
+  const visitor = (id: string) => new Map([[VISITOR_KEY, id]]);
+  const views = (sent: CollectEvent[][]) =>
+    all(sent).filter((e) => e.data?.event === 'experiment_view');
+
+  it('hashes exactly as the web tracker does', () => {
+    // Values from the web tracker's FNV-1a hash
+    expect(unitHash('visitor-1:e1:traffic')).toBe(0.5652977614663541);
+    expect(unitHash('visitor-1:e1:variant')).toBe(0.7874152301810682);
+    expect(unitHash('')).toBe(0.5043428998906165);
+    expect(assignVariant('visitor-1', TEST)).toBe('b');
+  });
+
+  it('splits users by the weights and keeps each one on a version', () => {
+    const counts = { a: 0, b: 0, none: 0 };
+    const half = { ...TEST, traffic: 50, variants: [{ id: 'a', weight: 75 }, { id: 'b', weight: 25 }] };
+    for (let i = 0; i < 20000; i++) {
+      const id = assignVariant(`user-${i}`, half);
+      counts[(id ?? 'none') as keyof typeof counts] += 1;
+      expect(assignVariant(`user-${i}`, half)).toBe(id);
+    }
+    expect(counts.none / 20000).toBeCloseTo(0.5, 1);
+    expect(counts.a / (counts.a + counts.b)).toBeCloseTo(0.75, 1);
+  });
+
+  it('answers with the version and records the view once a session', async () => {
+    const { client, sent, fetchSpy, advance, appState } = await started({
+      store: visitor('visitor-1'),
+      tests: [TEST],
+    });
+    expect(await client.variant('new-paywall')).toBe('b');
+    expect(await client.variant('new-paywall')).toBe('b');
+    expect(fetchSpy).toHaveBeenCalledWith('https://api.example.com/api/collect/TF-TEST1234/config');
+    await sendAll(client);
+    expect(views(sent).map((e) => e.data)).toEqual([
+      { event: 'experiment_view', experiment: 'e1', variant: 'b' },
+    ]);
+
+    // A new session loads the tests again and records the view again
+    appState(false);
+    advance(31 * 60_000);
+    appState(true);
+    expect(await client.variant('new-paywall')).toBe('b');
+    await sendAll(client);
+    expect(views(sent)).toHaveLength(2);
+    expect(fetchSpy.mock.calls.filter(([url]) => String(url).endsWith('/config'))).toHaveLength(2);
+  });
+
+  it('gives null for a test that is not running, and records nothing', async () => {
+    const { client, sent } = await started({ tests: [TEST] });
+    expect(await client.variant('something-else')).toBeNull();
+    await sendAll(client);
+    expect(views(sent)).toEqual([]);
+  });
+
+  it('gives null when the tests fail to load or take too long', async () => {
+    const failing = await started({ tests: new Error('offline') });
+    expect(await failing.client.variant('new-paywall')).toBeNull();
+
+    const slow = await started({ tests: 'hang' });
+    const answer = slow.client.variant('new-paywall');
+    await settle();
+    slow.runTimers();
+    expect(await answer).toBeNull();
+  });
+
+  it('asks nothing of the API for an opted-out user', async () => {
+    const { client, fetchSpy } = await started({ tests: [TEST] });
+    client.optOut();
+    expect(await client.variant('new-paywall')).toBeNull();
+    expect(fetchSpy.mock.calls.some(([url]) => String(url).endsWith('/config'))).toBe(false);
+  });
+
+  it('waits for init, and gives null without it', async () => {
+    const fake = fakeEnv({ store: visitor('visitor-1'), tests: [TEST] });
+    const client = new ThravicClient(fake.env);
+    expect(await client.variant('new-paywall')).toBeNull();
+
+    const early = new ThravicClient(fakeEnv({ store: visitor('visitor-1'), tests: [TEST] }).env);
+    const starting = early.init('TF-TEST1234');
+    const answer = early.variant('new-paywall');
+    await starting;
+    expect(await answer).toBe('b');
   });
 });

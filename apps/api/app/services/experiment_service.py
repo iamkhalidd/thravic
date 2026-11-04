@@ -1,8 +1,9 @@
 """A/B test results: who saw each version, who then converted, and who is winning.
 
-The tracker puts each visitor in a version (`TF('variant', key)`) and sends one
-`experiment_view` custom event per page that asked, with the experiment's id and
-the version. A visitor counts for the version of their first view between the
+The web tracker (`TF('variant', key)`) and the app SDK (`Thravic.variant(key)`)
+put each visitor in a version with the same hash, and send an `experiment_view`
+custom event with the experiment's id and the version (once per page on the web,
+once per session in an app). A visitor counts for the version of their first view between the
 test's start and end, and converts if they sent the goal event at or after that
 first view and before the end. `ml.abtest` turns the counts into a verdict.
 
@@ -20,7 +21,6 @@ from typing import Any
 from ..db import query
 from ..ml import abtest
 from . import plan_service
-from .domain_service import is_app
 
 EXPOSURE_EVENT = "experiment_view"
 FEATURE = "experiments"
@@ -104,9 +104,7 @@ async def check_domain(domain_id: Any, now: datetime | None = None) -> dict[str,
 
 
 async def tracker_experiments(domain: dict[str, Any]) -> list[dict[str, Any]]:
-    """Running tests as the tracker needs them, for a site whose plan has tests."""
-    if is_app(domain):
-        return []
+    """Running tests as the web tracker and the app SDK need them, for a plan with tests."""
     plan = await plan_service.owner_plan(domain["id"])
     if FEATURE not in plan.features:
         return []

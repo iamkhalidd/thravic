@@ -1,6 +1,7 @@
 import type {
   CollectEvent,
   Environment,
+  Experiment,
   NavigationRefLike,
   ThravicOptions,
 } from './types';
@@ -18,6 +19,8 @@ export const MAX_QUEUE = 1000;
 const FLUSH_AT = 10;
 const MAX_RETRY_DELAY_MS = 30_000;
 const PERSIST_DELAY_MS = 1_000;
+/** How long `variant` waits for the running tests before answering null. */
+export const TESTS_WAIT_MS = 3_000;
 
 const DEFAULTS = {
   apiUrl: DEFAULT_API_URL,
@@ -34,6 +37,35 @@ export function generateId(): string {
     const r = (Math.random() * 16) | 0;
     return (c === 'x' ? r : (r & 3) | 8).toString(16);
   });
+}
+
+/** FNV-1a, 32-bit, as a number in [0, 1). The web tracker's hash, so both split alike. */
+export function unitHash(text: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0) / 4294967296;
+}
+
+/**
+ * The version of `test` for `visitorId`, or null when they are outside its traffic
+ * share. Worked out from a hash, so the same user always gets the same version,
+ * exactly as the web tracker would give it.
+ */
+export function assignVariant(visitorId: string, test: Experiment): string | null {
+  if (!test.variants.length) return null;
+  if (unitHash(`${visitorId}:${test.id}:traffic`) >= test.traffic / 100) return null;
+  const weights = test.variants.map((v) => Math.max(v.weight, 0));
+  const total = weights.reduce((sum, w) => sum + w, 0);
+  const pick = unitHash(`${visitorId}:${test.id}:variant`);
+  let edge = 0;
+  for (let i = 0; i < test.variants.length; i++) {
+    edge += total > 0 ? weights[i] / total : 1 / test.variants.length;
+    if (pick < edge) return test.variants[i].id;
+  }
+  return test.variants[test.variants.length - 1].id;
 }
 
 /**
@@ -65,6 +97,11 @@ export class ThravicClient {
   private persistScheduled = false;
   private timer: unknown = null;
   private unsubscribeAppState: (() => void) | null = null;
+
+  /** This session's running tests, loaded the first time `variant` is asked. */
+  private tests: Promise<Experiment[]> | null = null;
+  /** Tests whose `experiment_view` this session has already sent. */
+  private exposed = new Set<string>();
 
   constructor(env: Environment) {
     this.env = env;
@@ -136,6 +173,37 @@ export class ThravicClient {
     this.whenReady(() => {
       if (!userId) return;
       this.enqueue('custom', { ...traits, event: 'identify', userId: String(userId) });
+    });
+  }
+
+  /**
+   * The version of A/B test `key` to show this user: a version id from the
+   * dashboard, or null for the original (not in the test, the test is not
+   * running, tracking is off, or the tests could not be loaded in time).
+   * The first answer in a session records that the user saw the test.
+   */
+  variant(key: string): Promise<string | null> {
+    return new Promise((resolve) => {
+      if (!this.initialized) {
+        this.env.log('[Thravic] Call Thravic.init before asking for a variant.');
+        resolve(null);
+        return;
+      }
+      this.whenReady(() => {
+        if (this.optedOut) {
+          resolve(null);
+          return;
+        }
+        void this.loadTests().then((tests) => {
+          const test = tests.find((t) => t.key === key);
+          const id = test ? assignVariant(this.visitorId, test) : null;
+          if (test && id && !this.exposed.has(test.id)) {
+            this.exposed.add(test.id);
+            this.enqueue('custom', { event: 'experiment_view', experiment: test.id, variant: id });
+          }
+          resolve(id);
+        });
+      });
     });
   }
 
@@ -226,6 +294,9 @@ export class ThravicClient {
     this.sessionId = generateId();
     this.sessionStart = this.env.now();
     this.backgroundAt = null;
+    // A new session picks up tests started or ended since the last one.
+    this.tests = null;
+    this.exposed.clear();
     this.enqueue('custom', { event: 'app_open' });
   }
 
@@ -248,6 +319,32 @@ export class ThravicClient {
     // Long enough away that this is a new visit; it starts on the screen in view.
     this.startSession();
     if (this.currentScreen) this.enqueue('pageview');
+  }
+
+  // ── A/B tests ────────────────────────────────────────────────────────────
+
+  /** The running tests, or none when they fail to load or take too long. */
+  private loadTests(): Promise<Experiment[]> {
+    if (!this.tests) {
+      this.tests = new Promise((resolve) => {
+        let done = false;
+        const settle = (list: unknown) => {
+          if (done) return;
+          done = true;
+          resolve(parseTests(list));
+        };
+        this.env.setTimeout(() => settle([]), TESTS_WAIT_MS);
+        this.env
+          .fetch(`${this.options.apiUrl}/api/collect/${encodeURIComponent(this.trackingId)}/config`)
+          .then((response) => (response.ok ? response.json() : null))
+          .then((config) => settle(config?.experiments))
+          .catch((err) => {
+            this.debug('tests could not be loaded', err);
+            settle([]);
+          });
+      });
+    }
+    return this.tests;
   }
 
   // ── Queue ────────────────────────────────────────────────────────────────
@@ -331,6 +428,18 @@ function parseQueue(raw: string | null): CollectEvent[] {
   } catch {
     return [];
   }
+}
+
+function parseTests(list: unknown): Experiment[] {
+  if (!Array.isArray(list)) return [];
+  return list.filter(
+    (t): t is Experiment =>
+      !!t &&
+      typeof t.id === 'string' &&
+      typeof t.key === 'string' &&
+      typeof t.traffic === 'number' &&
+      Array.isArray(t.variants),
+  );
 }
 
 function stripUndefined<T extends object>(value: T): Partial<T> {

@@ -35,6 +35,16 @@ export interface CollectEvent {
   data?: Record<string, unknown>;
 }
 
+/** A running A/B test, as `GET /api/collect/{trackingId}/config` lists it. */
+export interface Experiment {
+  id: string;
+  /** What the app asks for: `Thravic.variant(key)`. */
+  key: string;
+  /** Share of users in the test, 0–100. */
+  traffic: number;
+  variants: Array<{ id: string; weight: number }>;
+}
+
 /** What the device reports about itself. */
 export interface DeviceInfo {
   os: string;

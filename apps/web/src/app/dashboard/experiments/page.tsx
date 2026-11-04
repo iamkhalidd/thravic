@@ -7,6 +7,7 @@ import { UpgradeGate } from '@/components/UpgradeGate';
 import { Plus, Trash2, Play, Square, BarChart3, Pencil, X } from 'lucide-react';
 import { PageHeader } from '@/components/PageHeader';
 import { ChartCard } from '@/components/ChartCard';
+import { isApp } from '@/lib/platform';
 import {
     experiments as experimentsApi,
     type Experiment,
@@ -212,6 +213,7 @@ export default function ExperimentsPage() {
         );
     }
 
+    const app = isApp(selectedDomain);
     const opened = list.find(e => e.id === openId) || null;
     const sample = list[0];
     const sampleKey = sample?.key || 'new-headline';
@@ -407,11 +409,29 @@ export default function ExperimentsPage() {
                 </ChartCard>
             )}
 
-            <ChartCard title="Add a test to your site">
-                <p style={{ ...helpStyle, marginTop: 0 }}>
-                    Ask for the visitor&apos;s version where the page shows the change. It returns the version id, or <code>null</code> when the visitor is not in the test or it is not running. Then send the goal when a visitor converts.
-                </p>
-                <pre style={codeStyle}>{`TF('variant', '${sampleKey}', function (version) {
+            {app ? (
+                <ChartCard title="Add a test to your app">
+                    <p style={{ ...helpStyle, marginTop: 0 }}>
+                        Needs <code>@thravic/react-native</code> 0.2 or later. Ask for the user&apos;s version on the screen that changes. It gives the version id, or <code>null</code> when the user is not in the test or it is not running. Then send the goal when a user converts.
+                    </p>
+                    <pre style={codeStyle}>{`import { Thravic, useVariant } from '@thravic/react-native';
+
+function Paywall() {
+  const version = useVariant('${sampleKey}');  // undefined while loading
+  if (version === undefined) return null;
+  return version === '${sampleVariant}' ? <NewPaywall /> : <OldPaywall />;
+}
+
+// when the user reaches the goal
+Thravic.track('${sampleGoal}');`}</pre>
+                    <p style={helpStyle}>Outside React, <code>await Thravic.variant(&apos;{sampleKey}&apos;)</code> gives the same answer. If the test cannot load in 3 seconds, the answer is <code>null</code>.</p>
+                </ChartCard>
+            ) : (
+                <ChartCard title="Add a test to your site">
+                    <p style={{ ...helpStyle, marginTop: 0 }}>
+                        Ask for the visitor&apos;s version where the page shows the change. It returns the version id, or <code>null</code> when the visitor is not in the test or it is not running. Then send the goal when a visitor converts.
+                    </p>
+                    <pre style={codeStyle}>{`TF('variant', '${sampleKey}', function (version) {
   if (version === '${sampleVariant}') {
     // show the new version
   }
@@ -419,8 +439,9 @@ export default function ExperimentsPage() {
 
 // when the visitor reaches the goal
 TF('track', '${sampleGoal}');`}</pre>
-                <p style={helpStyle}>Hide the changing part until the callback runs so visitors do not see it flicker. If the test cannot load in 3 seconds, the callback gets <code>null</code>.</p>
-            </ChartCard>
+                    <p style={helpStyle}>Hide the changing part until the callback runs so visitors do not see it flicker. If the test cannot load in 3 seconds, the callback gets <code>null</code>.</p>
+                </ChartCard>
+            )}
         </div>
     );
 }
