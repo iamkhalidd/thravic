@@ -1199,7 +1199,7 @@ export const webhooks = {
     },
 };
 
-export type AlertKind = 'traffic_drop' | 'traffic_spike' | 'silent' | 'new_error' | 'rage_clicks' | 'slow_page';
+export type AlertKind = 'traffic_drop' | 'traffic_spike' | 'silent' | 'new_error' | 'rage_clicks' | 'slow_page' | 'unusual_segment';
 
 export interface SiteAlert {
     id: string;

@@ -63,8 +63,11 @@ class _State:
     n: int
 
 
-def _run(values: list[float], p: Params) -> _State:
-    """Run the model over `values`; next-day squared misses after the first two weeks."""
+def _run(values: list[float], p: Params, misses: list[float] | None = None) -> _State:
+    """Run the model over `values`; next-day squared misses after the first two weeks.
+
+    With `misses`, each of those next-day misses (actual minus predicted) is added to it.
+    """
     start = weekly_profile(values)
     level, trend, offsets = start.level, start.trend, list(start.offsets)
     # The profile describes the middle of the first fortnight (day 6.5); move it
@@ -77,6 +80,8 @@ def _run(values: list[float], p: Params) -> _State:
         if t >= 2 * SEASON:
             sse += (y - predicted) ** 2
             n += 1
+            if misses is not None:
+                misses.append(y - predicted)
         new_level = p.alpha * (y - offsets[i]) + (1 - p.alpha) * (level + p.phi * trend)
         trend = p.beta * (new_level - level) + (1 - p.beta) * p.phi * trend
         offsets[i] = p.gamma * (y - new_level) + (1 - p.gamma) * offsets[i]
@@ -108,6 +113,25 @@ def fit(values: list[float]) -> tuple[Params, _State] | None:
         if best is None or state.sse < best[1].sse:
             best = (p, state)
     return best
+
+
+def next_day(values: list[float]) -> tuple[float, list[float]] | None:
+    """The day after `values` as the model expects it, and every past next-day miss.
+
+    None with under `MIN_DAYS` days. Unlike `forecast`, the misses are returned
+    as they are, so a caller can judge how big a normal miss is without letting
+    one past spike decide it.
+    """
+    if not any(values):
+        return None
+    fitted = fit(values)
+    if fitted is None:
+        return None
+    p, state = fitted
+    misses: list[float] = []
+    _run(values, p, misses)
+    expected = state.level + p.phi * state.trend + state.offsets[len(values) % SEASON]
+    return max(0.0, expected), misses
 
 
 def forecast(values: list[float], horizon: int) -> Forecast | None:

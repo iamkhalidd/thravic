@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, Bell, Gauge, MousePointerClick, TrendingDown, TrendingUp, WifiOff, type LucideIcon } from 'lucide-react';
+import { Activity, AlertTriangle, Bell, Gauge, MousePointerClick, TrendingDown, TrendingUp, WifiOff, type LucideIcon } from 'lucide-react';
 import { alerts as alertsApi, type AlertKind, type SiteAlert } from '@/lib/api';
 import { useDomain } from '@/contexts/DomainContext';
 import { PageHeader } from '@/components/PageHeader';
@@ -16,6 +16,7 @@ const KIND_ICON: Record<AlertKind, { icon: LucideIcon; color: string }> = {
     new_error: { icon: AlertTriangle, color: 'var(--color-error)' },
     rage_clicks: { icon: MousePointerClick, color: 'var(--color-warning)' },
     slow_page: { icon: Gauge, color: 'var(--color-warning)' },
+    unusual_segment: { icon: Activity, color: 'var(--color-warning)' },
 };
 
 // What the AI analyst explains for each alert, over the day before it was raised.
@@ -26,6 +27,7 @@ const EXPLAIN_METRIC: Record<AlertKind, string> = {
     new_error: 'errors',
     rage_clicks: 'rage_clicks',
     slow_page: 'bounce_rate',
+    unusual_segment: 'sessions',
 };
 
 function explainAlert(alert: SiteAlert): string | null {

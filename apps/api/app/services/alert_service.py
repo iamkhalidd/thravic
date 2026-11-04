@@ -5,8 +5,12 @@ check compares the recent past with what is normal for that site, so a quiet
 Sunday night or the usual morning rise raises nothing:
 
 * traffic: sessions in the last `WINDOW` against the median of the same hours
-  on the same weekday over the previous `BASELINE_WEEKS` weeks (`traffic_drop`,
-  `traffic_spike`, and `silent` when nothing arrived at all);
+  on the same weekday over the previous `BASELINE_WEEKS` weeks, and how much
+  those weeks usually vary (`traffic_drop`, `traffic_spike`, and `silent` when
+  nothing arrived at all);
+* sources and pages: the strongest unusual day the daily anomaly scan found
+  yesterday in one channel, referrer, campaign, device, country or landing
+  page (`unusual_segment`);
 * errors: a JavaScript error first seen in the last `WINDOW` that several
   visitors hit (`new_error`);
 * rage clicks: a page where far more visitors rage-clicked in the last day than
@@ -29,6 +33,7 @@ from typing import Any
 
 from ..config import get_settings
 from ..db import query, query_one
+from ..ml import anomaly
 from .event_service import URL_PATH_SQL
 
 WINDOW = timedelta(hours=3)
@@ -37,6 +42,8 @@ MIN_NORMAL_SESSIONS = 10  # per WINDOW; below this the numbers are noise
 DROP_RATIO = 0.5  # at most half of normal
 SPIKE_RATIO = 2.0
 MIN_SPIKE_EXTRA = 20
+# And this many normal week-to-week swings away (see `ml.anomaly.score`)
+TRAFFIC_SCORE = 3.0
 
 ERROR_LOOKBACK = timedelta(days=7)
 NEW_ERROR_MIN_VISITORS = 3
@@ -66,6 +73,7 @@ PREFERENCE_FOR_KIND = {
     "new_error": "errorAlerts",
     "rage_clicks": "rageClickAlerts",
     "slow_page": "speedAlerts",
+    "unusual_segment": "trafficAlerts",
 }
 
 # One error whatever the query string in a URL it quotes; as on the Errors page
@@ -97,6 +105,9 @@ def judge_traffic(
     normal = round(median(past)) if past else 0
     if normal < MIN_NORMAL_SESSIONS:
         return None
+    # How unusual, given how much these hours vary from week to week here: a
+    # site whose normal swings widely needs a bigger move before it is news
+    z = anomaly.score(current, median(past), anomaly.robust_spread(list(past)))
     day = now.strftime("%A")
     if current == 0:
         return Alert(
@@ -106,7 +117,7 @@ def judge_traffic(
             f"about {normal} at this time. The tracking code may have been removed or broken.",
             "/dashboard/tracking",
         )
-    if current <= normal * DROP_RATIO:
+    if current <= normal * DROP_RATIO and z <= -TRAFFIC_SCORE:
         return Alert(
             "traffic_drop",
             f"Traffic is down {round((1 - current / normal) * 100)}% on {domain}",
@@ -114,7 +125,11 @@ def judge_traffic(
             f"time on a normal {day}.",
             "/dashboard/traffic/trends",
         )
-    if current >= normal * SPIKE_RATIO and current - normal >= MIN_SPIKE_EXTRA:
+    if (
+        current >= normal * SPIKE_RATIO
+        and current - normal >= MIN_SPIKE_EXTRA
+        and z >= TRAFFIC_SCORE
+    ):
         source = f" Most of them came from {top_source}." if top_source else ""
         return Alert(
             "traffic_spike",
@@ -139,7 +154,7 @@ def judge_new_errors(domain: str, rows: Sequence[dict[str, Any]]) -> Alert | Non
     return Alert(
         "new_error",
         f"A new error is hitting visitors on {domain}",
-        f"\"{short}\" started in the last {_hours()} hours on {top['page'] or '/'} and hit "
+        f'"{short}" started in the last {_hours()} hours on {top["page"] or "/"} and hit '
         f"{top['visitors']} visitors. It didn't happen in the week before.{more}",
         "/dashboard/errors",
         sessions=list(top.get("session_ids") or []),
@@ -156,7 +171,7 @@ def judge_rage_clicks(domain: str, rows: Sequence[dict[str, Any]]) -> Alert | No
                 worst = r
     if worst is None:
         return None
-    element = f" on \"{worst['element']}\"" if worst.get("element") else ""
+    element = f' on "{worst["element"]}"' if worst.get("element") else ""
     return Alert(
         "rage_clicks",
         f"Visitors are rage-clicking on {worst['page']}",
@@ -192,6 +207,42 @@ def judge_slow_pages(domain: str, rows: Sequence[dict[str, Any]]) -> Alert | Non
         f"Half of visitors now wait {now_s:.1f}s or more for {worst['page']} to load, up from "
         f"{before_s:.1f}s the week before.",
         "/dashboard/performance",
+    )
+
+
+def judge_unusual_segment(domain: str, row: dict[str, Any] | None) -> Alert | None:
+    """`row`: the strongest unusual day the daily scan found in one source or page."""
+    if not row:
+        return None
+    what = anomaly.describe(row["metric"], row["dimension"], row["key"])
+    up = row["direction"] == "up"
+    actual, expected = round(row["actual"]), round(row["expected"])
+    change = row.get("change_pct")
+    by = f" ({'+' if up else '-'}{abs(change)}%)" if change is not None else ""
+    return Alert(
+        "unusual_segment",
+        f"Unusual {'jump' if up else 'drop'}: {what[0].lower()}{what[1:]}",
+        f"{what} on {domain}: {actual} on {row['day']:%A}, when about {expected} was "
+        f"expected{by}. A normal {row['day']:%A} has {round(row['low'])} to "
+        f"{round(row['high'])}.",
+        row.get("link") or "/dashboard/traffic/sources",
+    )
+
+
+async def _unusual_segment(domain_id: str, end: datetime) -> dict[str, Any] | None:
+    """Yesterday's strongest unusual day in a source or landing page (see `anomaly_service`)."""
+    return await query_one(
+        """
+        SELECT day, metric, dimension, key, direction, actual, expected, low, high,
+               change_pct, link
+          FROM anomalies
+         WHERE domain_id = $1 AND day >= $2 AND kind = 'day'
+           AND metric = 'sessions' AND dimension <> 'site'
+         ORDER BY ABS(score) DESC
+         LIMIT 1
+        """,
+        domain_id,
+        (end - DAY).date(),
     )
 
 
@@ -354,6 +405,7 @@ async def check_domain(domain: dict[str, Any], paid: bool, end: datetime) -> lis
             judge_new_errors(name, await _new_errors(domain_id, end)),
             judge_rage_clicks(name, await _rage_clicks(domain_id, end)),
             judge_slow_pages(name, await _slow_pages(domain_id, end)),
+            judge_unusual_segment(name, await _unusual_segment(domain_id, end)),
         ]
     raised = []
     for alert in found:

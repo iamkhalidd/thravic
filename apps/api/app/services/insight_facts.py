@@ -4,10 +4,13 @@ Every number an insight can mention is computed here, never by the model. Each
 fact gets an id (F1, F2, ...) that insights must cite; `insight_service` checks
 that the numbers an insight uses appear in the facts it cites.
 
-Five kinds, matching the five insight types:
+Five insight types, from these kinds of fact:
 
 * `overview` / `driver` — what changed in traffic, and which channel, referrer,
   campaign, device, country or landing page it came from;
+* `anomaly` — what the daily scan (`anomaly_service`) found unusual for this
+  site in the period: a day far outside what its weekly pattern predicted, or a
+  steady slide over weeks, with the usual range to compare;
 * `page` — landing pages losing people (bounce rate well above the site's);
 * `technical` — JavaScript errors, rage clicks and slow pages (LCP);
 * `funnel` — each funnel's biggest drop-off, and how it moved;
@@ -26,6 +29,7 @@ from typing import Any
 
 from ..db import query, query_one
 from ..js_compat import js_round
+from ..ml import anomaly
 from ..routers.funnels import _funnel_progress
 from . import event_service, funnel_service, session_service
 from .alert_service import ERROR_MESSAGE_SQL
@@ -50,6 +54,7 @@ OPPORTUNITY_ENGAGEMENT_RATIO = 1.5
 OPPORTUNITY_MAX_SHARE = 15
 MIN_OPPORTUNITY_SESSIONS = 5
 MAX_FUNNELS = 5
+MAX_ANOMALIES = 4
 
 # The legacy source types, folded like the Sources page does.
 _LEGACY = " ".join(
@@ -129,6 +134,7 @@ async def build(domain: dict[str, Any], end: datetime, start: datetime | None = 
     await _overview(sheet, domain, w)
     if sheet.sessions < MIN_SESSIONS:
         return sheet
+    await _anomalies(sheet, domain, w)
     await _drivers(sheet, domain, w)
     await _pages(sheet, domain, w)
     await _technical(sheet, domain, w)
@@ -171,6 +177,45 @@ async def _overview(sheet: FactSheet, domain: dict, w: Windows) -> None:
         },
         "/dashboard",
     )
+
+
+async def _anomalies(sheet: FactSheet, domain: dict, w: Windows) -> None:
+    """What the daily scan found unusual in the period, strongest first."""
+    rows = await query(
+        """
+        SELECT day, metric, dimension, key, kind, direction, actual, expected, low, high,
+               change_pct, link
+        FROM anomalies WHERE domain_id = $1 AND day >= $2 AND day <= $3
+        ORDER BY ABS(score) DESC
+        LIMIT $4
+        """,
+        domain["id"],
+        w.mid.date(),
+        w.end.date(),
+        MAX_ANOMALIES,
+    )
+    for row in rows:
+        what = anomaly.describe(row["metric"], row["dimension"], row["key"])
+        day = f"{row['day']:%b} {row['day'].day}"
+        if row["kind"] == "slide":
+            subject = (
+                f"Unusual trend: {what}, {'falling' if row['direction'] == 'down' else 'rising'} "
+                f"week after week, in the week to {day}"
+            )
+        else:
+            subject = f"Unusual day: {what} on {day}"
+        sheet.add(
+            "anomaly",
+            subject,
+            {
+                "actual": js_round(row["actual"]),
+                "expected": js_round(row["expected"]),
+                "usualLow": js_round(row["low"]),
+                "usualHigh": js_round(row["high"]),
+                "changePct": row["change_pct"],
+            },
+            row["link"] or "/dashboard/traffic/trends",
+        )
 
 
 async def _drivers(sheet: FactSheet, domain: dict, w: Windows) -> None:
@@ -522,8 +567,10 @@ def _base_sql(metric: str) -> str:
             FROM sessions s LEFT JOIN firsts f ON f.session_id = s.id
             WHERE s.domain_id = $1 AND s.started_at >= $2 AND s.started_at <= $4
         )"""
-    kind = "e.type = 'pageview'" if metric == "pageviews" else (
-        "e.type = 'custom' AND e.data->>'event' = $5"
+    kind = (
+        "e.type = 'pageview'"
+        if metric == "pageviews"
+        else ("e.type = 'custom' AND e.data->>'event' = $5")
     )
     return f"""
         base AS (
@@ -576,7 +623,10 @@ def rank_segments(
     from any one breakdown); with no overall change, the biggest movers either way.
     """
     total = next((r for r in rows if r["dimension"] == "total"), None) or {
-        "now": 0, "before": 0, "now_bounced": 0, "before_bounced": 0
+        "now": 0,
+        "before": 0,
+        "now_bounced": 0,
+        "before_bounced": 0,
     }
     n_now, n_before = total["now"], total["before"]
     if is_rate:
@@ -584,13 +634,19 @@ def rank_segments(
         rate_before = _segment_rate(total["before_bounced"], n_before) or 0.0
         overall = round(rate_now - rate_before, 1)
         headline = {
-            "now": rate_now, "before": rate_before, "delta": overall, "changePct": None,
-            "visits": n_now, "visitsBefore": n_before,
+            "now": rate_now,
+            "before": rate_before,
+            "delta": overall,
+            "changePct": None,
+            "visits": n_now,
+            "visitsBefore": n_before,
         }
     else:
         overall = n_now - n_before
         headline = {
-            "now": n_now, "before": n_before, "delta": overall,
+            "now": n_now,
+            "before": n_before,
+            "delta": overall,
             "changePct": pct_change(n_now, n_before),
         }
 
@@ -614,21 +670,28 @@ def rank_segments(
             seg_now = _segment_rate(row["now_bounced"], row["now"])
             seg_before = _segment_rate(row["before_bounced"], row["before"])
             segment = {
-                "now": seg_now, "before": seg_before,
+                "now": seg_now,
+                "before": seg_before,
                 "delta": round(seg_now - seg_before, 1)
-                if seg_now is not None and seg_before is not None else None,
-                "changePct": None, "visits": row["now"], "visitsBefore": row["before"],
+                if seg_now is not None and seg_before is not None
+                else None,
+                "changePct": None,
+                "visits": row["now"],
+                "visitsBefore": row["before"],
             }
         else:
             effect = row["now"] - row["before"]
             if abs(effect) < MIN_DRIVER_DELTA:
                 continue
             segment = {
-                "now": row["now"], "before": row["before"], "delta": effect,
+                "now": row["now"],
+                "before": row["before"],
+                "delta": effect,
                 "changePct": pct_change(row["now"], row["before"]),
             }
-        candidates.append({"dimension": row["dimension"], "key": row["key"], **segment,
-                           "effect": effect})
+        candidates.append(
+            {"dimension": row["dimension"], "key": row["key"], **segment, "effect": effect}
+        )
 
     direction = 1 if overall > 0 else -1 if overall < 0 else 0
     if direction:
@@ -725,38 +788,44 @@ def pick_evidence(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
     out = []
     for r in errors[:3]:
-        out.append({
-            "kind": "error",
-            "subject": f"JavaScript error on {r['page']}: {r['label'] or 'unknown error'}",
-            "numbers": {"visitsAffected": r["now"], "visitsAffectedBefore": r["before"]},
-            "link": "/dashboard/errors",
-            "sessions": list(r["session_ids"] or []),
-        })
+        out.append(
+            {
+                "kind": "error",
+                "subject": f"JavaScript error on {r['page']}: {r['label'] or 'unknown error'}",
+                "numbers": {"visitsAffected": r["now"], "visitsAffectedBefore": r["before"]},
+                "link": "/dashboard/errors",
+                "sessions": list(r["session_ids"] or []),
+            }
+        )
     for r in rage[:2]:
-        out.append({
-            "kind": "rage_click",
-            "subject": f"Rage clicks on “{r['label']}” at {r['page']}",
-            "numbers": {"visitsAffected": r["now"], "visitsAffectedBefore": r["before"]},
-            "link": "/dashboard/rage-clicks",
-            "sessions": list(r["session_ids"] or []),
-        })
+        out.append(
+            {
+                "kind": "rage_click",
+                "subject": f"Rage clicks on “{r['label']}” at {r['page']}",
+                "numbers": {"visitsAffected": r["now"], "visitsAffectedBefore": r["before"]},
+                "link": "/dashboard/rage-clicks",
+                "sessions": list(r["session_ids"] or []),
+            }
+        )
     for r in slow[:2]:
-        out.append({
-            "kind": "slow_page",
-            "subject": f"Slow page {r['page']} (largest contentful paint)",
-            "numbers": {
-                "lcpMs": r["lcp_now"], "lcpBeforeMs": r["lcp_before"],
-                "samples": r["samples"], "goodLcpMs": SLOW_LCP_MS,
-            },
-            "link": "/dashboard/performance",
-            "sessions": list(r["session_ids"] or []),
-        })
+        out.append(
+            {
+                "kind": "slow_page",
+                "subject": f"Slow page {r['page']} (largest contentful paint)",
+                "numbers": {
+                    "lcpMs": r["lcp_now"],
+                    "lcpBeforeMs": r["lcp_before"],
+                    "samples": r["samples"],
+                    "goodLcpMs": SLOW_LCP_MS,
+                },
+                "link": "/dashboard/performance",
+                "sessions": list(r["session_ids"] or []),
+            }
+        )
     return out
 
 
-async def segment_sessions(
-    domain_id: str, w: Windows, segment: dict[str, Any] | None
-) -> list[str]:
+async def segment_sessions(domain_id: str, w: Windows, segment: dict[str, Any] | None) -> list[str]:
     """Recent visits in the segment during the period, for recordings to watch."""
     rows = await query(
         f"WITH {_base_sql('pageviews')} "
@@ -793,9 +862,7 @@ async def explain(
     sheet = FactSheet()
     await _overview(sheet, domain, w)
 
-    headline, segments = rank_segments(
-        await breakdown_rows(domain_id, metric, w, event), is_rate
-    )
+    headline, segments = rank_segments(await breakdown_rows(domain_id, metric, w, event), is_rate)
     label = metric_label(metric, event)
     link = EXPLAIN_METRICS[metric][1]
     if is_rate:
@@ -853,8 +920,7 @@ async def explain(
         evidence, scope = pick_evidence(await evidence_rows(domain_id, w, None)), None
     for item in evidence:
         item["scope"] = scope or "whole site"
-        sheet.add("evidence", f"{item['subject']} ({item['scope']})", item["numbers"],
-                  item["link"])
+        sheet.add("evidence", f"{item['subject']} ({item['scope']})", item["numbers"], item["link"])
         item["fact"] = sheet.facts[-1]["id"]
 
     sessions = [s for item in evidence for s in item["sessions"]]

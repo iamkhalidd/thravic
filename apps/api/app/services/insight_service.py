@@ -54,7 +54,11 @@ FREE_NUMBER_MAX = 10
 SYSTEM_PROMPT = """You are a web analytics analyst writing for a website owner.
 You receive FACTS computed from their analytics for a period compared with the period of the same length just before it (the overview fact's subject gives the dates). Each fact has an id (F1, F2, ...), a subject, numbers and a kind.
 
-Write up to 8 insights that matter for this site, most important first, covering every fact that says something useful. The site may be small: explain what its numbers mean in plain terms rather than skipping them. Kinds of insight:
+Write up to 8 insights that matter for this site, most important first, covering every fact that says something useful. The site may be small: explain what its numbers mean in plain terms rather than skipping them.
+
+Lead with "anomaly" facts: they are what was genuinely unusual for this site, judged against its own weekly pattern (actual against expected, with the usual range usualLow to usualHigh). Say what happened, how it compares with the usual range, and what likely caused it when another fact shows it (a driver, an error, a funnel). An anomaly in sessions is a "traffic" insight, in JavaScript errors a "technical" one, in a custom event a "funnel" one.
+
+Kinds of insight:
 - "traffic": what changed in traffic and where it came from (use overview + driver facts together)
 - "page": landing pages losing visitors
 - "technical": JavaScript errors, rage clicks, slow pages
@@ -215,6 +219,53 @@ def _fmt_change(pct: int | None) -> str:
     return f"{'up' if pct >= 0 else 'down'} {abs(pct)}%"
 
 
+def _anomaly_insight(fact: dict[str, Any]) -> dict[str, Any]:
+    n = fact["numbers"]
+    subject = fact["subject"]
+    # "Unusual day: Sessions from channel “social” on Nov 3" -> its series and day
+    what = subject.split(": ", 1)[-1]
+    up = n["actual"] > n["expected"]
+    if subject.startswith("Unusual trend"):
+        title = f"A steady {'rise' if up else 'fall'} over several weeks"
+        description = (
+            f"{what}. Last week had {n['actual']}, against about {n['expected']} a week a month "
+            f"before (usually {n['usualLow']} to {n['usualHigh']})."
+        )
+    else:
+        change = n.get("changePct")
+        title = (
+            f"{'Up' if up else 'Down'} {abs(change)}% on what was expected"
+            if change is not None
+            else "An unusual day"
+        )
+        description = (
+            f"{what}: {n['actual']}, when about {n['expected']} was expected "
+            f"(usually {n['usualLow']} to {n['usualHigh']} on that weekday)."
+        )
+    priority = "high"
+    if "JavaScript errors" in subject:
+        kind, advice = "technical", "Open the Errors page for that day and fix the error that grew."
+        if not up:  # fewer errors than usual is good news
+            priority, advice = "low", "If no fix shipped, check that error tracking still works."
+    elif "Custom event" in subject:
+        kind, advice = "funnel", "Check what changed on the pages that send this event."
+    else:
+        kind = "traffic"
+        advice = (
+            "Find what brought the extra visitors and do more of it."
+            if up
+            else "Check that tracking, links and campaigns for this source still work."
+        )
+    return {
+        "type": kind,
+        "priority": priority,
+        "title": title,
+        "description": description,
+        "recommendation": advice,
+        "facts": [fact["id"]],
+    }
+
+
 def rule_insights(facts: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Plain templated insights, used when the model is off or gives nothing usable."""
     out: list[dict[str, Any]] = []
@@ -260,7 +311,9 @@ def rule_insights(facts: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
     for fact in facts:
         n = fact["numbers"]
-        if fact["kind"] == "page":
+        if fact["kind"] == "anomaly":
+            out.append(_anomaly_insight(fact))
+        elif fact["kind"] == "page":
             out.append(
                 {
                     "type": "page",
