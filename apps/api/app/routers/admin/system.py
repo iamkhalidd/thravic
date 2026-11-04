@@ -216,6 +216,7 @@ JOBS: dict[str, tuple[str, timedelta]] = {
     "bot_check": ("Bot check", timedelta(minutes=50)),
     "anomaly_scan": ("Anomaly scan", timedelta(days=1)),
     "visitor_models": ("Visitor scores", timedelta(days=1)),
+    "experiment_check": ("A/B test results", timedelta(days=1)),
     "weekly_report": ("Weekly report emails", timedelta(minutes=55)),
     "usage_alerts": ("Usage limit emails", timedelta(minutes=55)),
     "subscription_reminders": ("Renewal reminders", timedelta(minutes=55)),

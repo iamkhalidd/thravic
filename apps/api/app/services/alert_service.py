@@ -16,7 +16,9 @@ Sunday night or the usual morning rise raises nothing:
 * rage clicks: a page where far more visitors rage-clicked in the last day than
   on a normal day of the week before (`rage_clicks`);
 * speed: a page whose median load in the last day is at least twice the week
-  before's (`slow_page`).
+  before's (`slow_page`);
+* A/B tests: a running test the daily check has found a winner for, once per
+  test (`experiment_winner`).
 
 Plans without AI insights get `FREE_KINDS` only. A kind is raised at most once
 per site per `REPEAT_AFTER`, and every alert is kept in `alerts` for the
@@ -74,6 +76,7 @@ PREFERENCE_FOR_KIND = {
     "rage_clicks": "rageClickAlerts",
     "slow_page": "speedAlerts",
     "unusual_segment": "trafficAlerts",
+    "experiment_winner": "trafficAlerts",
 }
 
 # One error whatever the query string in a URL it quotes; as on the Errors page
@@ -226,6 +229,41 @@ def judge_unusual_segment(domain: str, row: dict[str, Any] | None) -> Alert | No
         f"expected{by}. A normal {row['day']:%A} has {round(row['low'])} to "
         f"{round(row['high'])}.",
         row.get("link") or "/dashboard/traffic/sources",
+    )
+
+
+def judge_experiment_winner(domain: str, row: dict[str, Any] | None) -> Alert | None:
+    """`row`: a test with a winner that the owner has not been told about."""
+    result = (row or {}).get("result") or {}
+    versions = result.get("variants") or []
+    winner = next((v for v in versions if v["id"] == result.get("winner")), None)
+    if not winner:
+        return None
+    chance = round((winner.get("chanceBest") or 0) * 100)
+    if winner is versions[0]:
+        verdict = f"The original, {winner['name']}, beats every other version"
+    else:
+        lift = winner.get("lift")
+        by = f" ({lift * 100:+.0f}% conversions)" if lift is not None else ""
+        verdict = f"{winner['name']} beats the original{by}"
+    return Alert(
+        "experiment_winner",
+        f"A/B test result: {winner['name']} wins {row['name']}",
+        f"{verdict} in the test \"{row['name']}\" on {domain}, with a {chance}% chance of "
+        f"being the best, from {result.get('totalVisitors', 0)} visitors.",
+        "/dashboard/experiments",
+    )
+
+
+async def _experiment_winner(domain_id: str) -> dict[str, Any] | None:
+    return await query_one(
+        """
+        SELECT id, name, result FROM experiments
+         WHERE domain_id = $1 AND decided_at IS NOT NULL AND alerted_at IS NULL
+         ORDER BY decided_at
+         LIMIT 1
+        """,
+        domain_id,
     )
 
 
@@ -400,17 +438,26 @@ async def check_domain(domain: dict[str, Any], paid: bool, end: datetime) -> lis
     domain_id, name = str(domain["id"]), str(domain["domain"])
     current, past, top_source = await _traffic(domain_id, end)
     found = [judge_traffic(name, current, past, end, top_source)]
+    tested = None
     if paid:
+        tested = await _experiment_winner(domain_id)
         found += [
             judge_new_errors(name, await _new_errors(domain_id, end)),
             judge_rage_clicks(name, await _rage_clicks(domain_id, end)),
             judge_slow_pages(name, await _slow_pages(domain_id, end)),
             judge_unusual_segment(name, await _unusual_segment(domain_id, end)),
+            judge_experiment_winner(name, tested),
         ]
     raised = []
     for alert in found:
         if alert and (paid or alert.kind in FREE_KINDS) and await _raise(domain_id, alert, end):
             raised.append(alert)
+            if alert.kind == "experiment_winner" and tested:
+                await query(
+                    "UPDATE experiments SET alerted_at = $2 WHERE id = $1 RETURNING 1",
+                    tested["id"],
+                    end,
+                )
     return raised
 
 

@@ -31,7 +31,9 @@ from .session_service import LEGACY_SOURCE_TYPES
 log = create_logger("ClientReports")
 
 TOP_N = 5
-SYSTEM_EVENTS = ("error", "rage_click", "performance", "feedback", "identify")
+SYSTEM_EVENTS = (
+    "error", "rage_click", "performance", "feedback", "identify", "experiment_view"
+)
 SLOW_LCP_MS = 2500
 MAX_INSIGHTS = 3
 

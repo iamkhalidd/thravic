@@ -34,7 +34,9 @@ DEFAULT_DAYS = 7
 EVENT_LOOKBACK = timedelta(days=90)
 MAX_EVENTS = 30
 # Custom events with their own metric, or that are Thravic's own plumbing.
-INTERNAL_EVENTS = frozenset({"error", "performance", "rage_click", "identify"})
+INTERNAL_EVENTS = frozenset(
+    {"error", "performance", "rage_click", "identify", "experiment_view"}
+)
 
 NO_DATA = "No {label} were recorded in this period or the one before, so there is no change to explain."
 

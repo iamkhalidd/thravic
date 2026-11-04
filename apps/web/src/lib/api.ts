@@ -1227,7 +1227,7 @@ export const webhooks = {
     },
 };
 
-export type AlertKind = 'traffic_drop' | 'traffic_spike' | 'silent' | 'new_error' | 'rage_clicks' | 'slow_page' | 'unusual_segment';
+export type AlertKind = 'traffic_drop' | 'traffic_spike' | 'silent' | 'new_error' | 'rage_clicks' | 'slow_page' | 'unusual_segment' | 'experiment_winner';
 
 export interface SiteAlert {
     id: string;
@@ -1244,6 +1244,103 @@ export interface SiteAlert {
 export const alerts = {
     async list(domainId: string) {
         return apiRequest<{ alerts: SiteAlert[] }>(`/api/alerts/${domainId}`);
+    },
+};
+
+// Experiments API — /api/experiments/{domainId}: A/B tests. Pro and Agency; the
+// owner and admin members. Rows come back as stored (snake_case).
+
+export type ExperimentStatus = 'draft' | 'active' | 'ended';
+export type ExperimentVerdict = 'winner' | 'no_difference' | 'too_early' | 'no_data';
+
+export interface ExperimentVariant {
+    id: string;
+    name: string;
+    /** Share of the test's visitors, 0–100. */
+    weight: number;
+}
+
+export interface ExperimentVariantResult {
+    id: string;
+    name: string;
+    visitors: number;
+    conversions: number;
+    /** Conversions per visitor, 0–1. */
+    rate: number;
+    /** 0–1; null with no visitors yet. */
+    chanceBest: number | null;
+    /** Against the original (the first version), with a 95% likely range; null for the original. */
+    lift: number | null;
+    liftLow: number | null;
+    liftHigh: number | null;
+}
+
+export interface ExperimentResult {
+    status: ExperimentVerdict;
+    winner: string | null;
+    variants: ExperimentVariantResult[];
+    totalVisitors: number;
+    totalConversions: number;
+    /** Rough visitors still to come before a real difference could show. */
+    visitorsNeeded: number | null;
+    /** False when visitors were not split as the weights ask. */
+    splitOk: boolean;
+    splitP: number | null;
+    goalEvent: string | null;
+    computedAt: string;
+}
+
+export interface Experiment {
+    id: string;
+    domain_id: string;
+    name: string;
+    /** What the site's code asks for: TF('variant', key, …). */
+    key: string;
+    status: ExperimentStatus;
+    variants: ExperimentVariant[];
+    traffic_allocation: number;
+    goal_event: string | null;
+    started_at: string | null;
+    ended_at: string | null;
+    /** The daily check's latest results. */
+    result: ExperimentResult | null;
+    decided_at: string | null;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface ExperimentInput {
+    name: string;
+    key?: string;
+    status: ExperimentStatus;
+    variants: ExperimentVariant[];
+    trafficAllocation: number;
+    goalEvent: string | null;
+}
+
+export const experiments = {
+    async list(domainId: string) {
+        return apiRequest<Experiment[]>(`/api/experiments/${domainId}`);
+    },
+    async create(domainId: string, input: ExperimentInput) {
+        return apiRequest<Experiment>(`/api/experiments/${domainId}`, {
+            method: 'POST',
+            body: JSON.stringify(input),
+        });
+    },
+    async update(domainId: string, id: string, input: ExperimentInput) {
+        return apiRequest<Experiment>(`/api/experiments/${domainId}/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(input),
+        });
+    },
+    async remove(domainId: string, id: string) {
+        return apiRequest<{ success: boolean }>(`/api/experiments/${domainId}/${id}`, {
+            method: 'DELETE',
+        });
+    },
+    async results(domainId: string, id: string) {
+        return apiRequest<ExperimentResult>(`/api/experiments/${domainId}/${id}/results`);
     },
 };
 

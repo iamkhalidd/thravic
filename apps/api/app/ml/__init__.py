@@ -15,4 +15,6 @@ rules explain them, as with every other fact.
   model fitted ahead of time (nightly, on a few thousand visitors) and stored.
 * `churn`    — whether a returning visitor has stopped coming back, against
   their own usual gap between visits.
+* `abtest`   — an A/B test's chance that each version is best, its lift over
+  the original, and whether the visitors were split as asked.
 """

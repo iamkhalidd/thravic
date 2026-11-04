@@ -32,6 +32,7 @@ from ..services import (
     bot_service,
     domain_service,
     event_service,
+    experiment_service,
     feedback_service,
     live_service,
     plan_service,
@@ -668,6 +669,15 @@ async def _records(domain: dict[str, Any]) -> bool:
     return "recordings" in plan.features
 
 
+async def _experiments(domain: dict[str, Any]) -> list[dict[str, Any]]:
+    """Without its tests the page shows its original versions; the rest still applies."""
+    try:
+        return await experiment_service.tracker_experiments(domain)
+    except Exception as exc:  # noqa: BLE001
+        log.error(f"Tracker config experiments error: {exc}")
+        return []
+
+
 @router.get("/{trackingId}/config")
 async def tracker_config(trackingId: str):
     """What the tracker should collect, from the domain's dashboard settings.
@@ -691,6 +701,8 @@ async def tracker_config(trackingId: str):
                 # Never in an app: the widget is drawn on a web page
                 "feedbackWidget": settings["feedbackWidget"] and not domain_service.is_app(domain),
                 "feedbackQuestion": settings["feedbackQuestion"],
+                # Running A/B tests, for `TF('variant', key)`
+                "experiments": await _experiments(domain),
             },
             # Short, so a dashboard change reaches visitors within a minute.
             headers={"Cache-Control": "public, max-age=60"},

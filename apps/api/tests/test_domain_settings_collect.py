@@ -19,7 +19,13 @@ from app.middleware.settings_gate import tracking_gate
 from app.plans import PLAN_FEATURES
 from app.routers import collect as collect_routes
 from app.routers import domains as domains_routes
-from app.services import domain_service, event_service, plan_service, session_service
+from app.services import (
+    domain_service,
+    event_service,
+    experiment_service,
+    plan_service,
+    session_service,
+)
 from app.services.plan_service import Plan
 
 TRACKING_ID = "trk_settings"
@@ -138,8 +144,30 @@ def test_config_reports_the_dashboard_settings(client, site, stored):
         "recordingSampleRate": 100,
         "feedbackWidget": False,
         "feedbackQuestion": "Did you find what you were looking for?",
+        "experiments": [],
     }
     assert "max-age=60" in response.headers["cache-control"]
+
+
+def test_config_lists_running_experiments(client, site, stored, monkeypatch):
+    exp_id = uuid.uuid4()
+
+    async def _query(sql, *args):
+        assert "status = 'active'" in sql and args == (site["id"],)
+        return [{
+            "id": exp_id, "key": "cta", "traffic_allocation": 50,
+            "variants": [{"id": "a", "name": "A", "weight": 50}, {"id": "b", "name": "B"}],
+        }]
+
+    monkeypatch.setattr(experiment_service, "query", _query)
+    config = client.get(f"/api/collect/{TRACKING_ID}/config").json()
+    assert config["experiments"] == [{
+        "id": str(exp_id), "key": "cta", "traffic": 50,
+        "variants": [{"id": "a", "weight": 50}, {"id": "b", "weight": 0}],
+    }]
+
+    site["features"] = ["analytics"]  # a plan without experiments
+    assert client.get(f"/api/collect/{TRACKING_ID}/config").json()["experiments"] == []
 
 
 def test_config_reports_the_feedback_widget(client, site, stored):

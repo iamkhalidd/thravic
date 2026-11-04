@@ -63,7 +63,7 @@ Kinds of insight:
 - "page": landing pages losing visitors
 - "technical": JavaScript errors, rage clicks, slow pages
 - "funnel": where people drop out of a funnel and how that moved
-- "opportunity": sources or pages that perform well but get little traffic
+- "opportunity": sources or pages that perform well but get little traffic, and "experiment" facts: an A/B test with a clear winner (say which version won, by how much, and recommend keeping it for everyone and ending the test)
 
 Rules:
 - Use ONLY numbers that appear in the facts you cite. Do not calculate new numbers, estimate, or round differently.
@@ -366,6 +366,22 @@ def rule_insights(facts: list[dict[str, Any]]) -> list[dict[str, Any]]:
                         f"site-wide, but bring only {n['shareOfSessionsPct']}% of sessions."
                     ),
                     "recommendation": "Put more effort into this source: more posts, links or campaigns there.",
+                    "facts": [fact["id"]],
+                }
+            )
+        elif fact["kind"] == "experiment":
+            lift = n.get("liftPct")
+            by = f" ({lift:+d}% conversions)" if lift is not None else ""
+            out.append(
+                {
+                    "type": "opportunity",
+                    "priority": "high",
+                    "title": "An A/B test has a clear winner",
+                    "description": (
+                        f"{fact['subject']}{by}: {n['winnerConversionPct']}% of its visitors "
+                        f"converted, with a {n['chanceBestPct']}% chance of being the best."
+                    ),
+                    "recommendation": "Show the winning version to everyone and end the test.",
                     "facts": [fact["id"]],
                 }
             )

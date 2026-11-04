@@ -15,7 +15,10 @@ Five insight types, from these kinds of fact:
 * `technical` — JavaScript errors, rage clicks and slow pages (LCP);
 * `funnel` — each funnel's biggest drop-off, and how it moved;
 * `opportunity` — channels and referrers whose visitors engage well above the
-  site's average but bring a small share of sessions.
+  site's average but bring a small share of sessions;
+* `experiment` — an A/B test the daily check (`experiment_service`) called a
+  winner for, still running or decided in the period: an opportunity to keep
+  the winning version.
 
 Only aggregates leave this module: counts, rates, page paths (no query string),
 channel and referrer names. No visitor ids, IPs, recordings or typed values.
@@ -56,6 +59,7 @@ OPPORTUNITY_MAX_SHARE = 15
 MIN_OPPORTUNITY_SESSIONS = 5
 MAX_FUNNELS = 5
 MAX_ANOMALIES = 4
+MAX_EXPERIMENTS = 3
 
 # The legacy source types, folded like the Sources page does.
 _LEGACY = " ".join(
@@ -141,6 +145,7 @@ async def build(domain: dict[str, Any], end: datetime, start: datetime | None = 
     await _technical(sheet, domain, w)
     await _funnels(sheet, domain, w)
     await _opportunities(sheet, domain, w)
+    await _experiments(sheet, domain, w)
     return sheet
 
 
@@ -439,6 +444,50 @@ async def _funnels(sheet: FactSheet, domain: dict, w: Windows) -> None:
                 "lostAtStep": now[i - 1] - now[i],
             },
             "/dashboard/funnels",
+        )
+
+
+async def _experiments(sheet: FactSheet, domain: dict, w: Windows) -> None:
+    rows = await query(
+        """
+        SELECT name, result FROM experiments
+        WHERE domain_id = $1 AND decided_at IS NOT NULL AND decided_at <= $3
+          AND result->>'status' = 'winner'
+          AND (status = 'active' OR decided_at >= $2)
+        ORDER BY decided_at DESC
+        LIMIT $4
+        """,
+        domain["id"],
+        w.mid,
+        w.end,
+        MAX_EXPERIMENTS,
+    )
+    for row in rows:
+        result = row["result"] or {}
+        versions = result.get("variants") or []
+        winner = next((v for v in versions if v["id"] == result.get("winner")), None)
+        if not winner or not versions:
+            continue
+        original = versions[0]
+        is_original = winner is original
+        sheet.add(
+            "experiment",
+            f"A/B test “{row['name']}”: "
+            + (
+                f"the original “{original['name']}” beats every other version"
+                if is_original
+                else f"“{winner['name']}” beats the original “{original['name']}”"
+            ),
+            {
+                "visitors": result.get("totalVisitors"),
+                "winnerConversionPct": round(winner["rate"] * 100, 1),
+                "originalConversionPct": None
+                if is_original
+                else round(original["rate"] * 100, 1),
+                "liftPct": None if winner.get("lift") is None else js_round(winner["lift"] * 100),
+                "chanceBestPct": js_round((winner.get("chanceBest") or 0) * 100),
+            },
+            "/dashboard/experiments",
         )
 
 

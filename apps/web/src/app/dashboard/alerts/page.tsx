@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Activity, AlertTriangle, Bell, Gauge, MousePointerClick, TrendingDown, TrendingUp, WifiOff, type LucideIcon } from 'lucide-react';
+import { Activity, AlertTriangle, Bell, FlaskConical, Gauge, MousePointerClick, TrendingDown, TrendingUp, WifiOff, type LucideIcon } from 'lucide-react';
 import { alerts as alertsApi, type AlertKind, type SiteAlert } from '@/lib/api';
 import { useDomain } from '@/contexts/DomainContext';
 import { PageHeader } from '@/components/PageHeader';
@@ -17,10 +17,11 @@ const KIND_ICON: Record<AlertKind, { icon: LucideIcon; color: string }> = {
     rage_clicks: { icon: MousePointerClick, color: 'var(--color-warning)' },
     slow_page: { icon: Gauge, color: 'var(--color-warning)' },
     unusual_segment: { icon: Activity, color: 'var(--color-warning)' },
+    experiment_winner: { icon: FlaskConical, color: 'var(--color-success)' },
 };
 
 // What the AI analyst explains for each alert, over the day before it was raised.
-const EXPLAIN_METRIC: Record<AlertKind, string> = {
+const EXPLAIN_METRIC: Partial<Record<AlertKind, string>> = {
     traffic_drop: 'sessions',
     traffic_spike: 'sessions',
     silent: 'sessions',

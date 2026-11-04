@@ -111,6 +111,15 @@ interface StoredRecording {
     startedAt: number;
 }
 
+// ── A/B tests ── a running test as the config endpoint lists it
+interface RemoteExperiment {
+    id: string;
+    key: string;
+    /** Percent of visitors in the test; the rest see the page's original. */
+    traffic: number;
+    variants: { id: string; weight: number }[];
+}
+
 // Storage keys
 const VISITOR_KEY = '_tf_vid';
 const SESSION_KEY = '_tf_sid';
@@ -131,6 +140,9 @@ const MAX_QUEUE_EVENTS = 200;
 // Stop retrying in-page after this many consecutive failures; the persisted
 // queue is picked up again on the next page load.
 const MAX_SEND_ATTEMPTS = 5;
+
+// TF('variant', …) answers null (the original) if the tests have not loaded by then
+const VARIANT_WAIT_MS = 3000;
 
 // Default configuration
 const defaultConfig: TFConfig = {
@@ -240,6 +252,11 @@ class ThravicAnalytics {
 
     // ── Feedback widget state ──
     private feedbackScheduled: boolean = false;
+
+    // ── A/B test state ── null until the config has loaded (or the wait ran out)
+    private experiments: RemoteExperiment[] | null = null;
+    private variantWaiters: (() => void)[] = [];
+    private exposed: Set<string> = new Set();
 
     // ────────────────────────────────────
     //  Utility helpers
@@ -1306,6 +1323,7 @@ class ThravicAnalytics {
             this.startRecording();
         }
 
+        window.setTimeout(() => this.setExperiments([]), VARIANT_WAIT_MS);
         this.loadRemoteConfig();
     }
 
@@ -1315,8 +1333,12 @@ class ThravicAnalytics {
     private async loadRemoteConfig(): Promise<void> {
         try {
             const res = await fetch(`${this.config.endpoint}/${this.trackingId}/config`);
-            if (!res.ok) return;
-            const remote = await res.json() as Partial<TFConfig>;
+            if (!res.ok) {
+                this.setExperiments([]);
+                return;
+            }
+            const remote = await res.json() as Partial<TFConfig> & { experiments?: unknown };
+            this.setExperiments(remote.experiments);
             for (const key of REMOTE_CONFIG_KEYS) {
                 if (typeof remote[key] === 'boolean' && !(key in this.pageConfig)) {
                     this.config[key] = remote[key] as boolean;
@@ -1334,7 +1356,83 @@ class ThravicAnalytics {
             if (this.config.trackRecordings && !this.recordingId && this.shouldTrack()) {
                 this.startRecording();
             }
-        } catch { /* offline or blocked: keep the defaults */ }
+        } catch {
+            // offline or blocked: keep the defaults, and show the originals
+            this.setExperiments([]);
+        }
+    }
+
+    // ────────────────────────────────────
+    //  A/B tests
+    // ────────────────────────────────────
+
+    // A visitor sees the same version of a test on every page: it comes from a
+    // hash of their visitor id and the test's id, so nothing extra is stored.
+    // Visitors outside the test's traffic share get null and see the original.
+    // The first time a page asks, an `experiment_view` event records which
+    // version this visitor saw; the dashboard counts goals reached after it.
+
+    private static unitHash(text: string): number {
+        // FNV-1a, 32-bit, as a number in [0, 1)
+        let h = 0x811c9dc5;
+        for (let i = 0; i < text.length; i++) {
+            h ^= text.charCodeAt(i);
+            h = Math.imul(h, 0x01000193);
+        }
+        return (h >>> 0) / 4294967296;
+    }
+
+    private assignVariant(exp: RemoteExperiment): string | null {
+        const visitor = this.getVisitorId();
+        if (!exp.variants.length) return null;
+        if (ThravicAnalytics.unitHash(`${visitor}:${exp.id}:traffic`) >= exp.traffic / 100) {
+            return null;
+        }
+        const weights = exp.variants.map((v) => Math.max(v.weight, 0));
+        const total = weights.reduce((sum, w) => sum + w, 0);
+        const pick = ThravicAnalytics.unitHash(`${visitor}:${exp.id}:variant`);
+        let edge = 0;
+        for (let i = 0; i < exp.variants.length; i++) {
+            edge += total > 0 ? weights[i] / total : 1 / exp.variants.length;
+            if (pick < edge) return exp.variants[i].id;
+        }
+        return exp.variants[exp.variants.length - 1].id;
+    }
+
+    // Settled once per page: by the config, or empty when it failed or was slow.
+    private setExperiments(list: unknown): void {
+        if (this.experiments) return;
+        this.experiments = Array.isArray(list)
+            ? list.filter((e: any): e is RemoteExperiment =>
+                !!e && typeof e.id === 'string' && typeof e.key === 'string'
+                && typeof e.traffic === 'number' && Array.isArray(e.variants))
+            : [];
+        const waiting = this.variantWaiters;
+        this.variantWaiters = [];
+        waiting.forEach((answer) => answer());
+    }
+
+    // The version of test `key` to show this visitor: a variant id, or null for
+    // the page's original (not in the test, the test is not running, or the
+    // tests could not be loaded in time).
+    public variant(key: string): Promise<string | null> {
+        return new Promise((resolve) => {
+            const answer = () => {
+                const exp = (this.experiments || []).find((e) => e.key === key);
+                const id = exp ? this.assignVariant(exp) : null;
+                if (exp && id && !this.exposed.has(exp.id)) {
+                    this.exposed.add(exp.id);
+                    this.queueEvent(this.createEvent('custom', {
+                        event: 'experiment_view',
+                        experiment: exp.id,
+                        variant: id,
+                    }));
+                }
+                resolve(id);
+            };
+            if (this.experiments) answer();
+            else this.variantWaiters.push(answer);
+        });
     }
 
     // ────────────────────────────────────
@@ -1530,10 +1628,21 @@ if (!navigator.webdriver && !(window as any).__TF_LOADED__) {
     }
 
     // Expose global API function
-    function dispatchTF(...args: unknown[]): void {
+    function dispatchTF(...args: unknown[]): unknown {
         const method = args[0] as string;
         if (method === 'init') {
             tf.init(args[1] as Partial<TFConfig>, resolveTrackingId());
+        } else if (method === 'variant') {
+            // TF('variant', 'test-key', (id) => …), or `await TF('variant', 'test-key')`
+            // where TF is already loaded. id is null for the original.
+            const callback = args[2];
+            const answer = tf.variant(String(args[1]));
+            if (typeof callback === 'function') {
+                answer.then((id) => {
+                    try { callback(id); } catch (err) { console.error(err); }
+                });
+            }
+            return answer;
         } else if (method === 'track') {
             tf.track(args[1] as string, args[2] as Record<string, unknown>);
         } else if (method === 'identify') {
@@ -1551,6 +1660,7 @@ if (!navigator.webdriver && !(window as any).__TF_LOADED__) {
             // For a "stop recording me" link on the site's privacy page.
             tf.revokeRecordingConsent();
         }
+        return undefined;
     }
 
     (window as any).TF = dispatchTF;
