@@ -1284,7 +1284,34 @@ export interface VisitorSummary {
     os: string | null;
     deviceModel: string | null;
     source: string | null;
+    /** Null when scoring was unavailable. */
+    score?: VisitorScore | null;
 }
+
+export type ScoreBand = 'high' | 'medium' | 'low';
+export interface VisitorScore {
+    /** Null when the site has no conversion model good enough to show. */
+    conversion: { converted: boolean; probability: number | null; band: ScoreBand | null } | null;
+    /** Null for one-time visitors. */
+    churn: { risk: number; band: ScoreBand; typicalGapDays: number; daysAway: number } | null;
+}
+
+/** What the conversion model is, and whether it is good enough to show. */
+export interface VisitorModel {
+    event: string | null;
+    available: boolean;
+    reason: 'no_event' | 'too_little_data' | 'not_learnable' | 'not_fitted' | null;
+    /** Accuracy on held-out visitors: 0.5 is a coin toss, 1 is perfect. */
+    auc: number | null;
+    baseRate: number | null;
+    trainedOn: number | null;
+    converted: number | null;
+    drivers: string[];
+    fittedAt: string | null;
+    siteGapDays: number;
+}
+
+export type VisitorSegment = 'likely' | 'at_risk';
 
 export interface VisitorSession {
     id: string;
@@ -1314,6 +1341,7 @@ export interface VisitorProfile {
     sessions: VisitorSession[];
     /** Newest first. */
     timeline: TimelineItem[];
+    model?: VisitorModel | null;
 }
 
 export const visitors = {
@@ -1321,9 +1349,12 @@ export const visitors = {
         return apiRequest<Retention>(`/api/visitors/${domainId}/retention?weeks=${weeks}`);
     },
 
-    async list(domainId: string, search?: string) {
-        const query = search ? `?search=${encodeURIComponent(search)}` : '';
-        return apiRequest<{ visitors: VisitorSummary[] }>(`/api/visitors/${domainId}${query}`);
+    async list(domainId: string, search?: string, segment?: VisitorSegment) {
+        const params = new URLSearchParams();
+        if (search) params.set('search', search);
+        if (segment) params.set('segment', segment);
+        const query = params.toString() ? `?${params}` : '';
+        return apiRequest<{ visitors: VisitorSummary[]; model?: VisitorModel | null }>(`/api/visitors/${domainId}${query}`);
     },
 
     async get(domainId: string, visitorId: string) {

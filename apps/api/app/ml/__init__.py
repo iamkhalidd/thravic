@@ -9,4 +9,10 @@ rules explain them, as with every other fact.
 * `seasonal` — a site's normal week: its level and how each weekday differs.
 * `forecast` — Holt-Winters: level, damped trend and weekly pattern, with a
   likely range for each day ahead.
+* `anomaly`  — whether a day, or a slow slide over weeks, is unusual.
+* `bots`     — rules and a per-visit score for bot traffic.
+* `convert`  — logistic regression: how likely a visitor is to convert. The one
+  model fitted ahead of time (nightly, on a few thousand visitors) and stored.
+* `churn`    — whether a returning visitor has stopped coming back, against
+  their own usual gap between visits.
 """

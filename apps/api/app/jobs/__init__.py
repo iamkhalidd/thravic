@@ -5,8 +5,8 @@ hourly usage-limit and renewal-reminder emails, the daily retention job, the
 cleanup of under-18 accounts, the Monday weekly report, the daily AI insight
 alerts, the hourly daily-totals refresh and the hourly check of pending
 payments, the daily trim of the admin's email and AI logs, the hourly bot
-check and the daily anomaly scan (see `jobs/runner.py` for how they are
-scheduled).
+check, the daily anomaly scan and the daily refit of the visitor models (see
+`jobs/runner.py` for how they are scheduled).
 Collection is written to Postgres in the request, so there is no background
 event drainer and nothing here touches Redis.
 """
@@ -30,6 +30,7 @@ from .retention import start_retention_job
 from .smart_alerts import start_smart_alert_job
 from .subscription_reminders import start_subscription_reminder_job
 from .usage_alerts import start_usage_alert_job
+from .visitor_models import start_visitor_models_job
 from .weekly_report import start_weekly_report_job
 
 log = create_logger("Jobs")
@@ -58,6 +59,7 @@ def init_jobs() -> AsyncIOScheduler:
     start_log_cleanup_job(scheduler)
     start_bot_check_job(scheduler)
     start_anomaly_scan_job(scheduler)
+    start_visitor_models_job(scheduler)
     scheduler.start()
 
     log.info("[Jobs] All jobs scheduled.")

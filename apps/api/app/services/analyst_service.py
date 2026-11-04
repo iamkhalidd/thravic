@@ -79,6 +79,8 @@ _CONVERSIONS: tuple[tuple[str, tuple[str, ...]], ...] = (
     (r"\b(downloads?)\b", ("download",)),
 )
 _GENERIC_CONVERSION = r"\b(conver\w*|goals?)\b"
+# What a conversion event's name contains (also how `visitor_score_service` picks one)
+CONVERSION_ROOTS = tuple(root for _, roots in _CONVERSIONS for root in roots)
 
 
 def _compact(text: str) -> str:
