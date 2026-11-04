@@ -4,8 +4,9 @@
 hourly usage-limit and renewal-reminder emails, the daily retention job, the
 cleanup of under-18 accounts, the Monday weekly report, the daily AI insight
 alerts, the hourly daily-totals refresh and the hourly check of pending
-payments, the daily trim of the admin's email and AI logs and the daily
-anomaly scan (see `jobs/runner.py` for how they are scheduled).
+payments, the daily trim of the admin's email and AI logs, the hourly bot
+check and the daily anomaly scan (see `jobs/runner.py` for how they are
+scheduled).
 Collection is written to Postgres in the request, so there is no background
 event drainer and nothing here touches Redis.
 """
@@ -18,6 +19,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from ..logging import create_logger
 from .anomaly_scan import start_anomaly_scan_job
+from .bot_check import start_bot_check_job
 from .client_reports import start_client_report_job
 from .daily_stats import start_daily_stats_job
 from .insight_alerts import start_insight_alert_job
@@ -54,6 +56,7 @@ def init_jobs() -> AsyncIOScheduler:
     start_payment_reconcile_job(scheduler)
     start_client_report_job(scheduler)
     start_log_cleanup_job(scheduler)
+    start_bot_check_job(scheduler)
     start_anomaly_scan_job(scheduler)
     scheduler.start()
 

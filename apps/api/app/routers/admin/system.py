@@ -213,6 +213,7 @@ async def db_stats():
 JOBS: dict[str, tuple[str, timedelta]] = {
     "smart_alerts": ("Smart alerts", timedelta(minutes=50)),
     "insight_alerts": ("AI insight emails", timedelta(days=1)),
+    "bot_check": ("Bot check", timedelta(minutes=50)),
     "anomaly_scan": ("Anomaly scan", timedelta(days=1)),
     "weekly_report": ("Weekly report emails", timedelta(minutes=55)),
     "usage_alerts": ("Usage limit emails", timedelta(minutes=55)),

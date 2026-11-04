@@ -6,7 +6,16 @@ import { useDomain } from '@/contexts/DomainContext';
 import { useSubscription, type PlanFeature } from '@/hooks/useSubscription';
 import { PageHeader } from '@/components/PageHeader';
 import { ChartCard } from '@/components/ChartCard';
-import { domains, type DomainSettings, type DomainSwitch } from '@/lib/api';
+import { domains, type BotReason, type BotTraffic, type DomainSettings, type DomainSwitch } from '@/lib/api';
+
+const BOT_REASONS: Record<BotReason, string> = {
+    bot_user_agent: 'Crawler or automated browser',
+    spam_referrer: 'Spam referrer',
+    too_fast: 'Pages changed faster than anyone reads',
+    no_interaction: 'Many pages, no clicks or scrolling',
+    repeated_visits: 'Same visitor, visit after visit',
+    no_screen: 'No screen size',
+};
 
 const SWITCHES: Array<{ key: DomainSwitch; label: string; description: string; feature?: PlanFeature }> = [
     {
@@ -34,14 +43,22 @@ export default function TrackingPage() {
     const [saving, setSaving] = useState<DomainSwitch | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [keeping, setKeeping] = useState(false);
+    const [bots, setBots] = useState<BotTraffic | null>(null);
+    const [botsFailed, setBotsFailed] = useState(false);
 
     useEffect(() => {
         if (!selectedDomainId) return;
         setSettings(null);
         setError(null);
+        setBots(null);
+        setBotsFailed(false);
         domains.get(selectedDomainId).then(({ data, error }) => {
             if (data) setSettings(data.settings);
             if (error) setError(error);
+        });
+        domains.botTraffic(selectedDomainId).then(({ data }) => {
+            if (data) setBots(data);
+            else setBotsFailed(true);
         });
     }, [selectedDomainId]);
 
@@ -174,6 +191,82 @@ export default function TrackingPage() {
                         </div>
                         <Link href="/dashboard/sessions" className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '0.8125rem' }}>Manage on Sessions</Link>
                     </div>
+                </div>
+            </ChartCard>
+
+            <ChartCard
+                flush
+                title="Bot traffic"
+                subtitle="Kept out of every page, report, alert and insight. Last 30 days."
+            >
+                <div style={{ marginTop: 10, borderTop: '1px solid var(--color-border)' }}>
+                    {botsFailed ? (
+                        <div style={{ ...rowStyle, borderBottom: 'none', ...descriptionStyle }}>
+                            Could not load bot traffic. Try again in a moment.
+                        </div>
+                    ) : !bots ? (
+                        <div className="skeleton" style={{ height: 80, margin: 20 }} />
+                    ) : bots.turnedAway === 0 && bots.flaggedVisits === 0 ? (
+                        <div style={{ ...rowStyle, borderBottom: 'none', ...descriptionStyle }}>
+                            No bot traffic found on this site.
+                        </div>
+                    ) : (
+                        <>
+                            <div style={rowStyle}>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontWeight: 500, fontSize: '0.875rem' }}>
+                                        {bots.turnedAway.toLocaleString()} events turned away
+                                    </div>
+                                    <div style={descriptionStyle}>
+                                        {bots.turnedAwayByReason.length
+                                            ? bots.turnedAwayByReason.map(r => `${BOT_REASONS[r.reason] ?? r.reason}: ${r.events.toLocaleString()}`).join(' · ')
+                                            : 'Nothing was turned away as it arrived.'}
+                                    </div>
+                                </div>
+                            </div>
+                            <div style={{ ...rowStyle, borderBottom: bots.recent.length ? rowStyle.borderBottom : 'none' }}>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontWeight: 500, fontSize: '0.875rem' }}>
+                                        {bots.flaggedVisits.toLocaleString()} visits moved out after they ended
+                                    </div>
+                                    <div style={descriptionStyle}>
+                                        {bots.flaggedByReason.length
+                                            ? bots.flaggedByReason.map(r => `${BOT_REASONS[r.reason] ?? r.reason}: ${r.visits.toLocaleString()}`).join(' · ')
+                                            : 'No visit behaved like a bot.'}
+                                    </div>
+                                </div>
+                            </div>
+                            {bots.recent.length > 0 && (
+                                <div style={{ overflowX: 'auto' }}>
+                                    <table className="data-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Visit</th>
+                                                <th>Why</th>
+                                                <th className="num">Pages</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {bots.recent.map(v => (
+                                                <tr key={v.id}>
+                                                    <td style={{ maxWidth: 320 }}>
+                                                        <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                            {v.landingUrl || 'No page view'}
+                                                        </div>
+                                                        <div title={v.userAgent || ''} style={{ ...descriptionStyle, fontSize: '0.75rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                            {new Date(v.startedAt).toLocaleString()}{v.country ? ` · ${v.country}` : ''} · {v.userAgent || 'no browser name'}
+                                                        </div>
+                                                    </td>
+                                                    <td style={{ fontSize: '0.8125rem' }}>{v.reasons.map(r => BOT_REASONS[r] ?? r).join(', ')}</td>
+                                                    <td className="num">{v.pageviews}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </>
+                    )}
                 </div>
             </ChartCard>
 

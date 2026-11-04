@@ -15,7 +15,7 @@ from ..errors import PayloadError, SimpleError
 from ..json_response import jsjson
 from ..logging import create_logger
 from ..middleware.auth import AuthUser, require_auth
-from ..services import domain_service, plan_catalog, plan_service
+from ..services import bot_service, domain_service, plan_catalog, plan_service
 from ..services.email_service import send_owner_domain_alert
 from ..zod_lite import (
     first_message,
@@ -467,6 +467,19 @@ async def keep_active(domainId: str, user: AuthUser = Depends(require_auth)):
     except Exception as exc:
         log.error(f"Keep site active error: {exc}")
         raise SimpleError("Failed to update the site", 500) from None
+
+
+@router.get("/{domainId}/bot-traffic")
+async def bot_traffic(domainId: str, user: AuthUser = Depends(require_auth)):
+    """What bot filtering kept out of this site's numbers in the last 30 days."""
+    try:
+        domain = await _load_owned_domain(domainId, user.user_id)
+        return jsjson(await bot_service.summary(str(domain["id"])))
+    except SimpleError:
+        raise
+    except Exception as exc:
+        log.error(f"Bot traffic error: {exc}")
+        raise SimpleError("Failed to load bot traffic", 500) from None
 
 
 @router.delete("/{domainId}")

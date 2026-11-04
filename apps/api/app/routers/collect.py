@@ -27,7 +27,9 @@ from ..json_response import jsjson
 from ..logging import create_logger
 from ..middleware.blocklist_gate import blocklist_gate
 from ..middleware.settings_gate import tracking_gate
+from ..ml import bots
 from ..services import (
+    bot_service,
     domain_service,
     event_service,
     feedback_service,
@@ -297,6 +299,16 @@ async def _body(request: Request) -> dict:
 EVENT_LIMIT_REACHED = "monthly_event_limit"
 # ...and when the site is over the owner's website limit (a lapsed paid plan).
 SITE_PAUSED = "site_paused"
+# ...and when the request is a bot by rule (`ml.bots.rule_reason`).
+BOT_TRAFFIC = "bot"
+
+
+def _bot_reason(domain: dict[str, Any], user_agent: str, referrer: Any) -> str | None:
+    """Why a web site's event is bot traffic by rule, or None. Apps are never
+    judged by rule: their requests come from HTTP libraries."""
+    if domain_service.is_app(domain):
+        return None
+    return bots.rule_reason(user_agent, referrer if isinstance(referrer, str) else None)
 
 
 @router.post("/{trackingId}")
@@ -313,6 +325,13 @@ async def collect_event(trackingId: str, request: Request):
         if not domain_service.collects(domain, body["type"]):
             return jsjson({"success": True}, status_code=202)
 
+        # A bot by rule: counted, not stored, and not charged to the plan.
+        user_agent = request.headers.get("user-agent") or ""
+        reason = _bot_reason(domain, user_agent, body.get("referrer"))
+        if reason:
+            await bot_service.record_hit(domain["id"], reason, user_agent)
+            return jsjson({"success": True, "dropped": BOT_TRAFFIC}, status_code=202)
+
         # Over the plan's monthly events: acknowledged and dropped the same way,
         # since a rejection would make the tracker retry the event forever.
         if await plan_service.over_event_limit(str(domain["user_id"])):
@@ -320,7 +339,6 @@ async def collect_event(trackingId: str, request: Request):
         if await plan_service.site_paused(str(domain["user_id"]), str(domain["id"])):
             return jsjson({"success": True, "dropped": SITE_PAUSED}, status_code=202)
 
-        user_agent = request.headers.get("user-agent") or ""
         location = check_ip(_client_ip(request))
 
         source_type = classify_source(
@@ -401,6 +419,24 @@ async def collect_batch(trackingId: str, request: Request):
         if issues:
             raise PayloadError({"error": "Invalid batch data", "details": issues}, 400)
 
+        # Bots by rule: counted, not stored. One device sends a batch, so the
+        # browser name settles all of it; a spam referrer only its own events.
+        user_agent = request.headers.get("user-agent") or ""
+        kept_events = []
+        turned_away: dict[str, int] = {}
+        for event in body["events"]:
+            reason = _bot_reason(domain, user_agent, event.get("referrer"))
+            if reason:
+                turned_away[reason] = turned_away.get(reason, 0) + 1
+            else:
+                kept_events.append(event)
+        for reason, hits in turned_away.items():
+            await bot_service.record_hit(domain["id"], reason, user_agent, hits)
+        if not kept_events:
+            return jsjson(
+                {"success": True, "processed": 0, "dropped": BOT_TRAFFIC}, status_code=202
+            )
+
         if await plan_service.over_event_limit(str(domain["user_id"])):
             return jsjson(
                 {"success": True, "processed": 0, "dropped": EVENT_LIMIT_REACHED},
@@ -412,8 +448,7 @@ async def collect_batch(trackingId: str, request: Request):
             )
 
         # Event types switched off for this domain are acknowledged but not stored.
-        events = [e for e in body["events"] if domain_service.collects(domain, e["type"])]
-        user_agent = request.headers.get("user-agent") or ""
+        events = [e for e in kept_events if domain_service.collects(domain, e["type"])]
         # One lookup per request: every event in a batch comes from one device. The
         # mobile SDK sends only batches, so without it apps would have no geo.
         location = check_ip(_client_ip(request)) if events else {}

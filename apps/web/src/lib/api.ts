@@ -447,8 +447,35 @@ export const domains = {
             method: 'PATCH',
             body: JSON.stringify(changes)
         });
+    },
+
+    /** What bot filtering kept out of the site's numbers in the last 30 days. */
+    async botTraffic(id: string) {
+        return apiRequest<BotTraffic>(`/api/domains/${id}/bot-traffic`);
     }
 };
+
+export type BotReason =
+    | 'bot_user_agent' | 'spam_referrer' | 'too_fast'
+    | 'no_interaction' | 'repeated_visits' | 'no_screen';
+export interface BotTraffic {
+    days: number;
+    turnedAway: number; // events not stored
+    turnedAwayByReason: Array<{ reason: BotReason; events: number; sampleUserAgent: string | null }>;
+    flaggedVisits: number; // visits moved out after they ended
+    flaggedByReason: Array<{ reason: BotReason; visits: number }>;
+    recent: Array<{
+        id: string;
+        startedAt: string;
+        score: number;
+        reasons: BotReason[];
+        pageviews: number;
+        events: number;
+        userAgent: string | null;
+        country: string | null;
+        landingUrl: string | null;
+    }>;
+}
 
 /** "?start=…&end=…" for the date range, or "" without one. */
 function rangeQuery(start?: string, end?: string): string {
