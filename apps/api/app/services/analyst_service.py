@@ -22,6 +22,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from ..db import query
+from ..js_compat import js_round
 from ..logging import create_logger
 from . import ai_usage_service, alert_service, assistant_service, insight_facts, insight_service
 
@@ -38,7 +39,9 @@ INTERNAL_EVENTS = frozenset({"error", "performance", "rage_click", "identify"})
 NO_DATA = "No {label} were recorded in this period or the one before, so there is no change to explain."
 
 SYSTEM_PROMPT = """You are a web analytics analyst explaining one change to a website owner who is not technical.
-You receive the owner's QUESTION and FACTS: the change being asked about (kind "change"), the site's overall numbers ("overview"), the parts of the site behind the change ranked by their share of it ("segment"), and problems seen in the part that moved most, or across the site ("evidence"). Each fact has an id (F1, F2, ...), a subject and numbers.
+You receive the owner's QUESTION and FACTS: the change being asked about (kind "change"), the site's overall numbers ("overview"), the parts of the site behind the change ("segment"), and problems seen in the part that moved most, or across the site ("evidence"). Each fact has an id (F1, F2, ...), a subject and numbers.
+
+Segments come in order of interest. A segment whose subject says it "moved unlike the rest of the site" changed far more than the site as a whole: "countIfLikeSite" (or "bounceRateIfLikeSitePct") is where it would be had it moved like everything else, and "surprise" is how unusual the gap is (2 or more is clearly unusual). Those are the likely cause, even when a bigger part of the site moved more in total. A segment that only moved with the site is not a cause on its own. Never quote the "surprise" number to the owner.
 
 Write:
 - "cause": the most likely cause in one or two plain sentences. Name the page, source, device, country or browser. If the facts show where the change happened but not why, say where, say what the evidence suggests, and claim no more than the facts show.
@@ -243,7 +246,12 @@ def rule_answer(exp: insight_facts.Explanation) -> dict[str, Any]:
     if top:
         where = f"{insight_facts.dimension_label(top['dimension'], exp.metric)} “{top['key']}”"
         share = f", {top['shareOfChangePct']}% of the change" if top.get("shareOfChangePct") is not None else ""
-        cause = f"Most of the change came from {where}: {_shown(top['before'], is_rate)} before, {_shown(top['now'], is_rate)} now{share}."
+        if top.get("unusual") and top.get("expected") is not None:
+            likely = top["expected"] if is_rate else js_round(top["expected"])
+            cause = f"{where} moved unlike the rest of the site: {_shown(top['before'], is_rate)} before, {_shown(top['now'], is_rate)} now, where about {_shown(likely, is_rate)} would match the site{share}."
+            cause = cause[0].upper() + cause[1:]
+        else:
+            cause = f"Most of the change came from {where}: {_shown(top['before'], is_rate)} before, {_shown(top['now'], is_rate)} now{share}."
         if len(exp.segments) > 1:
             nxt = exp.segments[1]
             explanation += f" Next biggest: {insight_facts.dimension_label(nxt['dimension'], exp.metric)} “{nxt['key']}” ({_shown(nxt['before'], is_rate)} to {_shown(nxt['now'], is_rate)})."
@@ -294,6 +302,7 @@ def _segment_out(seg: dict[str, Any], metric: str) -> dict[str, Any]:
         "delta": seg["delta"],
         "changePct": seg["changePct"],
         "shareOfChangePct": seg["shareOfChangePct"],
+        "unusual": seg["unusual"],
         "link": seg["link"],
     }
 

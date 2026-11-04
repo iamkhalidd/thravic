@@ -885,6 +885,7 @@ export interface AnalystSegment {
     delta: number | null;
     changePct: number | null;
     shareOfChangePct: number | null;
+    unusual?: boolean; // moved unlike the rest of the site
     link: string;
 }
 export interface AnalystEvidence {

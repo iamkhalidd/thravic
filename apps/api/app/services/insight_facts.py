@@ -23,6 +23,7 @@ channel and referrer names. No visitor ids, IPs, recordings or typed values.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any
@@ -495,7 +496,8 @@ async def _opportunities(sheet: FactSheet, domain: dict, w: Windows) -> None:
 #
 # The AI analyst's facts: one metric in a period against the period before,
 # broken down by page, channel, referrer, campaign, device, country and
-# browser, and ranked by how much of the change each part accounts for. Then
+# browser, and ranked by how unlike the rest of the site each part moved and
+# how much of the change it accounts for (`rank_segments`). Then
 # the errors, rage clicks and slow pages in the part that moved most, and the
 # sessions to watch.
 
@@ -519,6 +521,9 @@ MAX_PER_DIMENSION = 3
 # the site's rate by this many points.
 MIN_RATE_SESSIONS = 10
 MIN_RATE_POINTS = 0.5
+# A segment is surprising when it is this many normal spreads away from where it
+# would be had it moved like the rest of the site.
+SURPRISE_SCORE = 2.0
 SLOW_GROWTH = 1.2  # a slow page counts as evidence when 20% slower than before
 MAX_EVIDENCE_SESSIONS = 20
 
@@ -607,10 +612,41 @@ def _segment_rate(bounced: int, total: int) -> float | None:
     return rate(bounced, total) if total else None
 
 
+def _count_surprise(row: dict[str, Any], n_now: int, n_before: int) -> tuple[float | None, float]:
+    """What the segment would be now had it moved like the site, and how many
+    normal spreads (count noise, about its square root) it is from that."""
+    if not n_before or not row["before"]:
+        return None, 0.0
+    expected = row["before"] * n_now / n_before
+    return expected, anomaly.score(row["now"], expected, 0.0)
+
+
+def _rate_surprise(
+    row: dict[str, Any], seg_before: float | None, site_before: float, site_change: float
+) -> tuple[float | None, float]:
+    """The segment's bounce rate had it changed by as many points as the site's,
+    and how many normal spreads (binomial noise) its bounces are from that."""
+    if not row["now"]:
+        return None, 0.0
+    start = seg_before if seg_before is not None else site_before
+    expected = min(100.0, max(0.0, start + site_change))
+    p = expected / 100
+    spread = max(math.sqrt(row["now"] * p * (1 - p)), 1.0)
+    return expected, (row["now_bounced"] - row["now"] * p) / spread
+
+
 def rank_segments(
     rows: list[dict[str, Any]], is_rate: bool = False
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    """The overall change and the segments behind it, biggest share first.
+    """The overall change and the segments behind it: the surprising ones first,
+    then by share.
+
+    A segment is surprising (`unusual`) when it moved unlike the rest of the
+    site: `expected` is where it would be had it changed as the whole did (a
+    count by the same ratio, a rate by the same points), and `surprise` is how
+    many normal spreads it is from that, toward the overall change. When the
+    whole site fell 40%, a page that fell 40% is just the site; one that fell
+    80% is where to look.
 
     For a count, a segment's part of the change is its own change. For the
     bounce rate it is how far the segment moved the site's rate, in points:
@@ -669,6 +705,7 @@ def rank_segments(
                 continue
             seg_now = _segment_rate(row["now_bounced"], row["now"])
             seg_before = _segment_rate(row["before_bounced"], row["before"])
+            expected, surprise = _rate_surprise(row, seg_before, rate_before, overall)
             segment = {
                 "now": seg_now,
                 "before": seg_before,
@@ -683,6 +720,7 @@ def rank_segments(
             effect = row["now"] - row["before"]
             if abs(effect) < MIN_DRIVER_DELTA:
                 continue
+            expected, surprise = _count_surprise(row, n_now, n_before)
             segment = {
                 "now": row["now"],
                 "before": row["before"],
@@ -690,15 +728,34 @@ def rank_segments(
                 "changePct": pct_change(row["now"], row["before"]),
             }
         candidates.append(
-            {"dimension": row["dimension"], "key": row["key"], **segment, "effect": effect}
+            {
+                "dimension": row["dimension"],
+                "key": row["key"],
+                **segment,
+                "effect": effect,
+                "expected": round(expected, 1) if expected is not None else None,
+                "surprise": round(surprise, 1),
+            }
         )
 
     direction = 1 if overall > 0 else -1 if overall < 0 else 0
     if direction:
         candidates = [c for c in candidates if c["effect"] * direction > 0]
-        candidates.sort(key=lambda c: c["effect"] * direction, reverse=True)
-    else:
-        candidates.sort(key=lambda c: abs(c["effect"]), reverse=True)
+
+    def surprise(c: dict[str, Any]) -> float:
+        return c["surprise"] * direction if direction else abs(c["surprise"])
+
+    # Surprising segments first, most surprising first; then the rest by share.
+    candidates.sort(
+        key=lambda c: (
+            surprise(c) >= SURPRISE_SCORE,
+            surprise(c) if surprise(c) >= SURPRISE_SCORE else 0.0,
+            c["effect"] * direction if direction else abs(c["effect"]),
+        ),
+        reverse=True,
+    )
+    for c in candidates:
+        c["unusual"] = surprise(c) >= SURPRISE_SCORE
 
     ranked: list[dict[str, Any]] = []
     per_dimension: dict[str, int] = {}
@@ -893,6 +950,8 @@ async def explain(
 
     for seg in segments:
         subject = f"{label} from {dimension_label(seg['dimension'], metric)} “{seg['key']}”"
+        if seg["unusual"]:
+            subject += ", moved unlike the rest of the site"
         if is_rate:
             numbers = {
                 "bounceRatePct": seg["now"],
@@ -901,6 +960,7 @@ async def explain(
                 "visitsBefore": seg["visitsBefore"],
                 "movedSiteRatePoints": seg["effect"],
                 "shareOfChangePct": seg["shareOfChangePct"],
+                "bounceRateIfLikeSitePct": seg["expected"],
             }
         else:
             numbers = {
@@ -909,7 +969,11 @@ async def explain(
                 "delta": seg["delta"],
                 "changePct": seg["changePct"],
                 "shareOfChangePct": seg["shareOfChangePct"],
+                "countIfLikeSite": js_round(seg["expected"])
+                if seg["expected"] is not None
+                else None,
             }
+        numbers["surprise"] = seg["surprise"]
         sheet.add("segment", subject, numbers, seg["link"])
         seg["fact"] = sheet.facts[-1]["id"]
 

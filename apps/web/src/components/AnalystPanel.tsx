@@ -244,6 +244,14 @@ export function AnalystPanel({ domainId }: { domainId: string }) {
                                                         <td>
                                                             <span style={{ color: 'var(--color-text-muted)' }}>{seg.dimension}: </span>
                                                             <Link href={seg.link}>{seg.key}</Link>
+                                                            {seg.unusual && (
+                                                                <span
+                                                                    title="Moved unlike the rest of the site"
+                                                                    style={{ marginLeft: 6, fontSize: 12, color: 'var(--color-warning, #d97706)' }}
+                                                                >
+                                                                    unusual
+                                                                </span>
+                                                            )}
                                                         </td>
                                                         <td className="num">{fmtValue(seg.before, isRate)}</td>
                                                         <td className="num">{fmtValue(seg.now, isRate)}</td>
