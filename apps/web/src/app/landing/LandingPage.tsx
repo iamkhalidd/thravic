@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { ArrowRight, Check, Menu, X } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { ThemeToggle } from '@/components/ThemeToggle';
-import ShaderBackdrop from '@/components/ShaderBackdrop';
+import FlowBackdrop from '@/components/glass/FlowBackdrop';
 import { ThemedLogo } from '@/components/ThemedLogo';
 import { payments } from '@/lib/api';
 import { toTiers, type Tier } from '@/lib/landingPlans';
@@ -140,15 +140,12 @@ function isDirectVideo(url: string) {
 
 /* ─── STYLES ─── */
 const s = {
-    page: { minHeight: '100vh', background: 'var(--color-bg-primary)', position: 'relative' as const, overflow: 'hidden' },
+    page: { minHeight: '100vh', position: 'relative' as const, overflowX: 'clip' as const },
     container: { maxWidth: '1080px', margin: '0 auto', padding: '0 24px', position: 'relative' as const, zIndex: 10 },
 
     // Nav
     nav: {
         position: 'fixed' as const, top: 0, left: 0, right: 0, zIndex: 50,
-        background: 'color-mix(in srgb, var(--color-bg-primary) 72%, transparent)',
-        backdropFilter: 'blur(12px)',
-        WebkitBackdropFilter: 'blur(12px)',
         borderBottom: '1px solid var(--color-border)',
     },
     navInner: {
@@ -238,10 +235,11 @@ export default function LandingPage({ initialTiers }: { initialTiers: Tier[] | n
     }, [initialTiers]);
 
     return (
-        <div style={s.page}>
+        <div className="glass-scope" style={s.page}>
+            <FlowBackdrop />
             <ScrollEffects />
             {/* ═══ NAV ═══ */}
-            <nav style={s.nav}>
+            <nav className="lp-nav" style={s.nav}>
                 <div style={s.navInner}>
                     <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: '10px', textDecoration: 'none', color: 'var(--color-text-primary)' }}>
                         <ThemedLogo height={24} />
@@ -311,7 +309,6 @@ export default function LandingPage({ initialTiers }: { initialTiers: Tier[] | n
 
             {/* ═══ HERO ═══ */}
             <section style={s.hero}>
-                <ShaderBackdrop fade />
                 <div className="lp-hero-glow" aria-hidden="true" />
                 <div className="lp-hero-content" style={s.container}>
                     <h1 style={s.h1}>
@@ -353,7 +350,7 @@ export default function LandingPage({ initialTiers }: { initialTiers: Tier[] | n
                     <div className="lp-section-head">
                         <h2 style={s.sectionTitle}>{journey.head}</h2>
                         <p style={s.sectionSub}>{journey.sub}</p>
-                        <div role="tablist" aria-label="Install for" style={{
+                        <div role="tablist" aria-label="Install for" className="lp-tabs" style={{
                             display: 'inline-flex', gap: 4, padding: 4, marginTop: 24,
                             background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border)', borderRadius: 999,
                         }}>
@@ -582,6 +579,7 @@ export default function LandingPage({ initialTiers }: { initialTiers: Tier[] | n
             {/* ═══ CTA ═══ */}
             <section className="lp-section lp-cta-final">
                 <div style={{ ...s.container, textAlign: 'center' as const }}>
+                    <div className="lp-cta-box">
                     <h2 style={s.sectionTitle}>Find out where your visitors <span className="lp-accent">drop off</span>.</h2>
                     <p style={{ ...s.sectionSub, marginBottom: '36px' }}>
                         Create a free account and paste the script. Data appears within a few minutes of your next visitor.
@@ -595,14 +593,14 @@ export default function LandingPage({ initialTiers }: { initialTiers: Tier[] | n
                             Explore the demo
                         </Link>
                     </div>
+                    </div>
                 </div>
             </section>
 
             {/* ═══ FOOTER ═══ */}
-            <footer style={{
+            <footer className="lp-footer" style={{
                 padding: '64px 0 40px',
                 borderTop: '1px solid var(--color-border)',
-                background: 'var(--color-bg-secondary)'
             }}>
                 <div style={s.container}>
                     <div className="lp-grid-footer" style={{ marginBottom: '64px' }}>

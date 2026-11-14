@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import '@/styles/globals.css';
+import '@/styles/glass.css';
 import { ToastProvider, RouteErrorBoundary } from '@/components';
 import { ThemeProvider } from '@/components/ThemeProvider';
 import SiteTracker from '@/components/SiteTracker';

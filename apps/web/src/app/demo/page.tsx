@@ -13,6 +13,7 @@ import {
     Gauge, UsersRound, Menu, RefreshCw, Download, Smartphone, Check, FlaskConical,
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import FlowBackdrop from '@/components/glass/FlowBackdrop';
 import {
     OverviewView, TrafficSourcesView, CampaignsView, TrendsView,
     BehaviorPagesView, FunnelsView, HeatmapsView, SessionsView,
@@ -202,7 +203,8 @@ export default function DemoPage() {
     });
 
     return (
-        <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--color-bg-primary)' }}>
+        <div className="glass-scope" style={{ display: 'flex', minHeight: '100vh' }}>
+            <FlowBackdrop intensity={0.65} />
 
             {/* ── Sidebar ── */}
             <aside className={`dash-sidebar${mobileSidebarOpen ? ' mobile-open' : ''}`} style={{ width: `${sidebarWidth}px` }}>
@@ -247,10 +249,10 @@ export default function DemoPage() {
 
                 {!collapsed && (
                     <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--color-sidebar-border)', flexShrink: 0, position: 'relative' }}>
-                        <button type="button" onClick={() => setSwitcherOpen(o => !o)} aria-expanded={switcherOpen} aria-haspopup="listbox"
+                        <button type="button" className="glass-chip" onClick={() => setSwitcherOpen(o => !o)} aria-expanded={switcherOpen} aria-haspopup="listbox"
                             style={{
                                 width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                                padding: '7px 10px', background: 'var(--color-bg-primary)', cursor: 'pointer',
+                                padding: '7px 10px', cursor: 'pointer',
                                 border: '1px solid var(--color-border)', borderRadius: '6px',
                                 fontSize: '0.8125rem', color: 'var(--color-text-primary)',
                             }}>
@@ -261,7 +263,7 @@ export default function DemoPage() {
                             <ChevronDown size={12} />
                         </button>
                         {switcherOpen && (
-                            <div role="listbox" aria-label="Property" style={{
+                            <div role="listbox" aria-label="Property" className="glass-solid" style={{
                                 position: 'absolute', left: 12, right: 12, top: 'calc(100% - 6px)', zIndex: 60,
                                 background: 'var(--color-bg-card)', border: '1px solid var(--color-border)',
                                 borderRadius: '6px', boxShadow: 'var(--shadow-md)', padding: '4px 0',
@@ -361,7 +363,7 @@ export default function DemoPage() {
                     </Link>
                 </div>
 
-                <header style={{
+                <header className="demo-header" style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                     padding: '0 16px', height: '52px', background: 'var(--color-bg-card)',
                     borderBottom: '1px solid var(--color-border)', position: 'sticky', top: 0, zIndex: 40, gap: '8px',
@@ -380,7 +382,7 @@ export default function DemoPage() {
                                 <ChevronDown size={12} />
                             </button>
                             {dateDropdownOpen && (
-                                <div style={{
+                                <div className="glass-solid" style={{
                                     position: 'absolute', top: '100%', left: 0, marginTop: '4px',
                                     background: 'var(--color-bg-card)', border: '1px solid var(--color-border)', borderRadius: '6px',
                                     boxShadow: 'var(--shadow-md)', zIndex: 100, minWidth: '150px',

@@ -1,0 +1,328 @@
+/* ==========================================================================
+   Glass: clear panels with a sheen and lit edges, over the visitor flow lines backdrop.
+   Only active inside .glass-scope (the landing page and the demo), so the real
+   dashboard, login and docs keep their solid surfaces.
+   Make it clearer or more frosted with --glass-tint and --glass-blur below.
+   ========================================================================== */
+
+.glass-scope {
+  --glass-rgb:    255, 255, 255;
+  --glass-tint:   .06;                 /* how much white is in the pane       */
+  --glass-hover:  .09;
+  --glass-sheen:  .1;                  /* extra light on the top left corner  */
+  --glass-line:   rgba(255, 255, 255, .1);
+  --glass-edge:   rgba(255, 255, 255, .28);   /* the lit top and left edges */
+  --glass-shine:  rgba(255, 255, 255, .22);
+  --glass-under:  rgba(0, 0, 0, .35);         /* the dark bottom edge       */
+  --glass-shadow: 0 30px 60px -20px rgba(0, 0, 0, .55);
+  --glass-solid-bg: rgba(18, 18, 20, .8);
+  --glass-blur:   blur(26px) saturate(190%);
+  --glass-ease:   cubic-bezier(.22, 1, .36, 1);
+
+  /* Surfaces that read the theme tokens become see-through inside the scope */
+  --color-bg-card:      rgba(var(--glass-rgb), var(--glass-tint));
+  --color-bg-secondary: rgba(var(--glass-rgb), .05);
+  --color-sidebar-bg:   rgba(10, 10, 12, .35);
+  --color-border:       var(--glass-line);
+  --color-sidebar-border: var(--glass-line);
+
+  position: relative;
+}
+
+[data-theme="light"] .glass-scope {
+  --glass-tint:   .3;
+  --glass-hover:  .42;
+  --glass-sheen:  .6;
+  --glass-line:   rgba(255, 255, 255, .7);
+  --glass-edge:   rgba(255, 255, 255, 1);
+  --glass-blur:   blur(26px) saturate(230%);
+  --glass-shine:  rgba(255, 255, 255, .95);
+  --glass-under:  rgba(160, 60, 20, .08);
+  --glass-shadow: 0 24px 48px -16px rgba(140, 50, 15, .18);
+  --glass-solid-bg: rgba(255, 255, 255, .88);
+  --color-bg-secondary: rgba(255, 255, 255, .35);
+  --color-sidebar-bg:   rgba(255, 255, 255, .4);
+}
+
+/* The backdrop sits fixed behind everything; content stacks above it */
+.glass-scope .page-bg { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+
+/* Visitor flow lines (FlowBackdrop.tsx) */
+.glass-scope .flow { background: #050506; }
+[data-theme="light"] .glass-scope .flow { background: #f1e2d6; }
+.glass-scope .flow canvas { width: 100%; height: 100%; display: block; }
+
+/* ── Shared glass surface ──
+   A clear pane: a faint tint with a sheen falling from the top left, a strong
+   blur and colour boost of the heat behind it, lit top and left edges and a
+   darker bottom edge so it reads as a slab of glass. */
+.glass-scope .glass,
+.glass-scope .card,
+.glass-scope .lp-step,
+.glass-scope .lp-hero-preview,
+.glass-scope .lp-shot,
+.glass-scope .lp-replay,
+.glass-scope .lp-also,
+.glass-scope .lp-checks,
+.glass-scope .lp-compare-scroll,
+.glass-scope .lp-plan,
+.glass-scope .lp-faq details,
+.glass-scope .lp-cta-box,
+.glass-scope .lp-video {
+  background:
+    linear-gradient(135deg,
+      rgba(var(--glass-rgb), var(--glass-sheen)) 0%,
+      rgba(var(--glass-rgb), 0) 38%,
+      rgba(var(--glass-rgb), 0) 62%,
+      rgba(var(--glass-rgb), calc(var(--glass-sheen) * .4)) 100%),
+    rgba(var(--glass-rgb), var(--glass-tint));
+  border: 1px solid var(--glass-line);
+  border-top-color: var(--glass-edge);
+  border-left-color: color-mix(in srgb, var(--glass-edge) 60%, transparent);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  box-shadow:
+    inset 0 1px 0 var(--glass-shine),
+    inset 1px 0 0 rgba(255, 255, 255, .05),
+    inset 0 -1px 0 var(--glass-under),
+    var(--glass-shadow);
+  transition: border-color 300ms var(--glass-ease);
+}
+
+.glass-scope .lp-step:hover,
+.glass-scope .lp-plan:hover,
+.glass-scope .lp-faq details:hover,
+.glass-scope .lp-faq details[open] { --glass-tint: var(--glass-hover); }
+
+/* Cards nested inside a glass preview don't blur again (costly, and it double-frosts) */
+.glass-scope :is(.lp-hero-preview, .lp-shot) .card {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none;
+  background: rgba(var(--glass-rgb), .04);
+}
+
+/* Small controls: see-through chips, not solid tiles */
+.glass-scope .btn-secondary,
+.glass-scope .glass-chip {
+  background: rgba(var(--glass-rgb), calc(var(--glass-tint) + .04));
+  border-color: var(--glass-line);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+}
+.glass-scope .btn-secondary:hover,
+.glass-scope .glass-chip:hover { background: rgba(var(--glass-rgb), calc(var(--glass-tint) + .1)); }
+.glass-scope .glass-chip[aria-selected="true"],
+.glass-scope .glass-chip[aria-pressed="true"] { background: rgba(var(--glass-rgb), calc(var(--glass-tint) + .12)) !important; }
+/* Header buttons in the demo carry inline fills */
+.glass-scope .demo-header button:not(.dash-hamburger) { background: rgba(var(--glass-rgb), calc(var(--glass-tint) + .04)) !important; }
+
+/* Menus and dropdowns: mostly solid so the options read cleanly */
+.glass-scope .glass-solid {
+  background: var(--glass-solid-bg) !important;
+  border: 1px solid var(--glass-line) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+  backdrop-filter: blur(24px) saturate(140%);
+  box-shadow: inset 0 1px 0 var(--glass-shine), var(--glass-shadow) !important;
+}
+.glass-scope .recharts-tooltip-wrapper > * {
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+  backdrop-filter: blur(24px) saturate(140%);
+}
+
+/* ── Bars: nav, sticky signup, sidebar, demo header and banner, footer ──
+   Text scrolls under these, so they carry a little more frost. */
+.glass-scope .lp-nav,
+.glass-scope .lp-nav-links,
+.glass-scope .lp-sticky-cta,
+.glass-scope .lp-footer,
+.glass-scope .dash-sidebar,
+.glass-scope .demo-header,
+.glass-scope .demo-banner {
+  border-color: var(--glass-line);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  backdrop-filter: blur(20px) saturate(160%);
+}
+.glass-scope .lp-nav,
+.glass-scope .demo-header { background: rgba(10, 10, 12, .4) !important; box-shadow: inset 0 -1px 0 var(--glass-line); }
+.glass-scope .lp-nav-links { z-index: 49; background: rgba(10, 10, 12, .75); }
+.glass-scope .lp-sticky-cta { background: rgba(10, 10, 12, .6); }
+.glass-scope .lp-footer { background: rgba(10, 10, 12, .5); border-top: 1px solid var(--glass-line); }
+.glass-scope .demo-banner { background: rgba(255, 90, 31, .1); }
+
+[data-theme="light"] .glass-scope .lp-nav,
+[data-theme="light"] .glass-scope .demo-header { background: rgba(255, 255, 255, .6) !important; }
+[data-theme="light"] .glass-scope .lp-nav-links { background: rgba(255, 255, 255, .85); }
+[data-theme="light"] .glass-scope .lp-sticky-cta { background: rgba(255, 255, 255, .75); }
+[data-theme="light"] .glass-scope .lp-footer { background: rgba(255, 255, 255, .6); }
+
+/* ── Landing layout touches ── */
+.glass-scope > section,
+.glass-scope > footer { position: relative; z-index: 1; }
+.glass-scope .lp-section { border-top-color: transparent; }
+
+.glass-scope .lp-steps { gap: 16px; }
+.glass-scope .lp-step { padding: 20px; border-radius: var(--radius-lg); }
+.glass-scope .lp-code { background: rgba(var(--glass-rgb), calc(var(--glass-tint) + .02)); }
+
+.glass-scope .lp-also,
+.glass-scope .lp-checks { padding: 4px 24px; border-radius: var(--radius-lg); }
+.glass-scope .lp-checks li:first-child { border-top: 0; }
+@media (min-width: 768px) { .glass-scope .lp-also > div:nth-child(-n + 2) { border-top: 0; } }
+@media (max-width: 767px) {
+  .glass-scope .lp-also > div:first-child { border-top: 0; }
+  .glass-scope .lp-also, .glass-scope .lp-checks { padding: 4px 16px; }
+}
+
+.glass-scope .lp-compare thead th:nth-child(2),
+.glass-scope .lp-compare td:nth-child(2) { background: rgba(var(--glass-rgb), calc(var(--glass-tint) + .04)); }
+.glass-scope .lp-plan-featured { border-color: rgba(255, 90, 31, .6); }
+
+.glass-scope .lp-faq { display: flex; flex-direction: column; gap: 8px; }
+.glass-scope .lp-faq details,
+.glass-scope .lp-faq details:last-child { padding: 0 20px; border-radius: var(--radius-md); }
+
+.glass-scope .lp-cta-box {
+  padding: clamp(40px, 6vw, 64px) clamp(20px, 4vw, 48px);
+  border-radius: var(--radius-lg);
+}
+
+/* ── Demo layout touches ── */
+.glass-scope .dash-main { position: relative; z-index: 1; }
+/* On phones the sidebar slides over content, so it needs more frost to read */
+@media (max-width: 1024px) {
+  .glass-scope .dash-sidebar { background: var(--glass-solid-bg); }
+}
+.glass-scope .lp-tabs {
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+}
+
+/* No backdrop-filter support: readable solid panels */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass-scope { --color-bg-card: var(--glass-solid-bg); }
+  .glass-scope .card, .glass-scope .lp-step, .glass-scope .lp-plan, .glass-scope .lp-faq details,
+  .glass-scope .lp-hero-preview, .glass-scope .lp-shot, .glass-scope .lp-replay { background: var(--glass-solid-bg); }
+}
+
+/* A soft halo behind the hero copy so the flow lines never fight the headline */
+.glass-scope .lp-hero-content::before {
+  content: ''; position: absolute; left: 50%; top: -40px; z-index: -1;
+  width: min(980px, 120vw); height: 560px; transform: translateX(-50%);
+  background: radial-gradient(closest-side, rgba(5, 5, 6, .9), rgba(5, 5, 6, .55) 55%, transparent);
+  pointer-events: none;
+}
+[data-theme="light"] .glass-scope .lp-hero-content::before {
+  background: radial-gradient(closest-side, rgba(241, 226, 214, .85), rgba(241, 226, 214, .45) 55%, transparent);
+}
+
+/* ── Light theme: glass needs a visible edge and colour to frost ──
+   White on near white disappears, so light panels get a faint warm hairline
+   outside the white edge and a deeper shadow, like a pane lifted off paper. */
+[data-theme="light"] .glass-scope :is(.glass, .card, .lp-step, .lp-hero-preview, .lp-shot, .lp-replay,
+  .lp-also, .lp-checks, .lp-compare-scroll, .lp-plan, .lp-faq details, .lp-cta-box, .lp-video) {
+  box-shadow:
+    inset 0 1px 0 #fff,
+    inset 0 0 0 1px rgba(255, 255, 255, .45),
+    inset 0 -1px 0 rgba(160, 60, 20, .08),
+    0 0 0 1px rgba(120, 50, 20, .08),
+    0 2px 6px rgba(140, 50, 15, .05),
+    0 28px 56px -18px rgba(140, 50, 15, .24);
+}
+[data-theme="light"] .glass-scope :is(.lp-hero-preview, .lp-shot) .card {
+  background: rgba(255, 255, 255, .4);
+  border-color: rgba(120, 50, 20, .1);
+  box-shadow: none;
+}
+[data-theme="light"] .glass-scope .btn-secondary,
+[data-theme="light"] .glass-scope .glass-chip { border-color: rgba(120, 50, 20, .14); }
+
+/* ── Buttons with life ──
+   Lift and glow on hover, a light sweep across the face, the arrow nudges
+   forward, and a quick squeeze on press. The main calls to action also catch
+   the light on their own every few seconds. */
+.glass-scope {
+  --btn-shine: rgba(255, 120, 60, .45);   /* sweep on the white primary in dark */
+  --btn-glow:  rgba(255, 90, 31, .5);
+}
+[data-theme="light"] .glass-scope { --btn-shine: rgba(255, 255, 255, .35); --btn-glow: rgba(255, 90, 31, .4); }
+
+.glass-scope .btn-primary,
+.glass-scope .btn-secondary {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  transition:
+    transform 320ms var(--glass-ease),
+    box-shadow 320ms var(--glass-ease),
+    background-color 320ms var(--glass-ease),
+    border-color 320ms var(--glass-ease);
+}
+.glass-scope .btn-primary::after,
+.glass-scope .btn-secondary::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(105deg, transparent 30%, var(--btn-shine) 50%, transparent 70%);
+  transform: translateX(-130%);
+  pointer-events: none;
+}
+.glass-scope .btn-secondary::after { background: linear-gradient(105deg, transparent 30%, rgba(255, 255, 255, .22) 50%, transparent 70%); }
+[data-theme="light"] .glass-scope .btn-secondary::after { background: linear-gradient(105deg, transparent 30%, rgba(255, 255, 255, .9) 50%, transparent 70%); }
+
+.glass-scope .btn-primary svg,
+.glass-scope .btn-secondary svg { transition: transform 320ms var(--glass-ease); }
+
+@media (hover: hover) {
+  .glass-scope .btn-primary:hover {
+    opacity: 1;
+    transform: translateY(-2px);
+    box-shadow: 0 0 0 1px rgba(255, 90, 31, .35), 0 12px 28px -8px var(--btn-glow);
+  }
+  .glass-scope .btn-secondary:hover {
+    transform: translateY(-2px);
+    border-color: rgba(255, 90, 31, .45);
+    box-shadow: 0 12px 28px -12px var(--btn-glow);
+  }
+  .glass-scope :is(.btn-primary, .btn-secondary):hover::after { animation: btn-sweep 750ms var(--glass-ease); }
+  .glass-scope :is(.btn-primary, .btn-secondary):hover svg { transform: translateX(3px); }
+}
+.glass-scope :is(.btn-primary, .btn-secondary):active {
+  transform: translateY(0) scale(.97);
+  transition-duration: 90ms;
+}
+
+/* The main calls to action catch the light now and then */
+.glass-scope :is(.lp-hero-content, .lp-cta-box, .lp-sticky-cta) .btn-primary::after { animation: btn-idle 6s var(--glass-ease) infinite; }
+.glass-scope .lp-cta-box .btn-primary::after { animation-delay: 2s; }
+.glass-scope .lp-sticky-cta .btn-primary::after { animation-delay: 4s; }
+/* and the hero one breathes a soft orange glow */
+.glass-scope .lp-hero-content .btn-primary { animation: btn-breathe 3.2s ease-in-out infinite; }
+.glass-scope .lp-hero-content .btn-primary:hover { animation: none; }
+
+@keyframes btn-sweep { from { transform: translateX(-130%); } to { transform: translateX(130%); } }
+@keyframes btn-idle {
+  0%, 72% { transform: translateX(-130%); }
+  88%, 100% { transform: translateX(130%); }
+}
+@keyframes btn-breathe {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(255, 90, 31, .15), 0 6px 18px -10px var(--btn-glow); }
+  50%      { box-shadow: 0 0 0 1px rgba(255, 90, 31, .4),  0 10px 30px -6px var(--btn-glow); }
+}
+
+/* Nav icon buttons: the sun turns, the menu tilts */
+.glass-scope .lp-nav button { transition: transform 320ms var(--glass-ease), border-color 320ms var(--glass-ease), background-color 320ms var(--glass-ease); }
+.glass-scope .lp-nav button svg { transition: transform 500ms var(--glass-ease); }
+@media (hover: hover) {
+  .glass-scope .lp-nav button:hover { border-color: rgba(255, 90, 31, .45) !important; transform: translateY(-1px); }
+  .glass-scope .lp-nav button[title^="Switch"]:hover svg { transform: rotate(90deg) scale(1.1); }
+  .glass-scope .lp-nav .lp-nav-mobile-btn:hover svg { transform: scale(1.12); }
+}
+.glass-scope .lp-nav button:active { transform: scale(.92); transition-duration: 90ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  .glass-scope :is(.btn-primary, .btn-secondary, .lp-nav button),
+  .glass-scope :is(.btn-primary, .btn-secondary, .lp-nav button) svg,
+  .glass-scope :is(.btn-primary, .btn-secondary)::after { animation: none !important; transform: none !important; }
+}
