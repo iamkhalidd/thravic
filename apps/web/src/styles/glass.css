@@ -132,8 +132,6 @@
 
 /* ── Bars: nav, sticky signup, sidebar, demo header and banner, footer ──
    Text scrolls under these, so they carry a little more frost. */
-.glass-scope .lp-nav,
-.glass-scope .lp-nav-links,
 .glass-scope .lp-sticky-cta,
 .glass-scope .lp-footer,
 .glass-scope .dash-sidebar,
@@ -143,16 +141,12 @@
   -webkit-backdrop-filter: blur(20px) saturate(160%);
   backdrop-filter: blur(20px) saturate(160%);
 }
-.glass-scope .lp-nav,
 .glass-scope .demo-header { background: rgba(10, 10, 12, .4) !important; box-shadow: inset 0 -1px 0 var(--glass-line); }
-.glass-scope .lp-nav-links { z-index: 49; background: rgba(10, 10, 12, .75); }
 .glass-scope .lp-sticky-cta { background: rgba(10, 10, 12, .6); }
 .glass-scope .lp-footer { background: rgba(10, 10, 12, .5); border-top: 1px solid var(--glass-line); }
 .glass-scope .demo-banner { background: rgba(255, 90, 31, .1); }
 
-[data-theme="light"] .glass-scope .lp-nav,
 [data-theme="light"] .glass-scope .demo-header { background: rgba(255, 255, 255, .6) !important; }
-[data-theme="light"] .glass-scope .lp-nav-links { background: rgba(255, 255, 255, .85); }
 [data-theme="light"] .glass-scope .lp-sticky-cta { background: rgba(255, 255, 255, .75); }
 [data-theme="light"] .glass-scope .lp-footer { background: rgba(255, 255, 255, .6); }
 
@@ -311,18 +305,150 @@
   50%      { box-shadow: 0 0 0 1px rgba(255, 90, 31, .4),  0 10px 30px -6px var(--btn-glow); }
 }
 
-/* Nav icon buttons: the sun turns, the menu tilts */
-.glass-scope .lp-nav button { transition: transform 320ms var(--glass-ease), border-color 320ms var(--glass-ease), background-color 320ms var(--glass-ease); }
-.glass-scope .lp-nav button svg { transition: transform 500ms var(--glass-ease); }
-@media (hover: hover) {
-  .glass-scope .lp-nav button:hover { border-color: rgba(255, 90, 31, .45) !important; transform: translateY(-1px); }
-  .glass-scope .lp-nav button[title^="Switch"]:hover svg { transform: rotate(90deg) scale(1.1); }
-  .glass-scope .lp-nav .lp-nav-mobile-btn:hover svg { transform: scale(1.12); }
+@media (prefers-reduced-motion: reduce) {
+  .glass-scope :is(.btn-primary, .btn-secondary, .lp-bar button),
+  .glass-scope :is(.btn-primary, .btn-secondary, .lp-bar button) svg,
+  .glass-scope :is(.btn-primary, .btn-secondary)::after { animation: none !important; transform: none !important; }
 }
-.glass-scope .lp-nav button:active { transform: scale(.92); transition-duration: 90ms; }
+
+/* ==========================================================================
+   Header (landing/LandingNav.tsx): a compact glass bar floating off the top
+   edge, centred and sized to its content. On phones it spans the width, the
+   menu button morphs into a close mark, and a full height panel opens with
+   its links arriving one after another.
+   ========================================================================== */
+.lp-bar-wrap {
+  position: fixed; top: 12px; left: 0; right: 0; z-index: 50;
+  display: flex; justify-content: center;
+  padding: 0 16px;
+  pointer-events: none;
+}
+.lp-bar {
+  pointer-events: auto;
+  display: flex; align-items: center; gap: 24px;
+  padding: 8px 8px 8px 16px;
+  border-radius: 16px;
+  background: rgba(14, 14, 16, .55);
+  border: 1px solid var(--glass-line);
+  border-top-color: var(--glass-edge);
+  -webkit-backdrop-filter: blur(20px) saturate(170%);
+  backdrop-filter: blur(20px) saturate(170%);
+  box-shadow: inset 0 1px 0 var(--glass-shine), 0 16px 40px -16px rgba(0, 0, 0, .7);
+}
+[data-theme="light"] .lp-bar {
+  background: rgba(255, 255, 255, .55);
+  box-shadow: inset 0 1px 0 #fff, 0 0 0 1px rgba(120, 50, 20, .08), 0 16px 40px -18px rgba(140, 50, 15, .35);
+}
+
+.lp-bar-logo { display: flex; align-items: center; border-radius: 8px; }
+
+.lp-bar-links { display: flex; gap: 4px; margin: 0; padding: 0; list-style: none; }
+/* Title 4 */
+.lp-bar-link {
+  display: inline-flex; align-items: center;
+  padding: 8px 12px;                       /* bar radius 16, 8 gap: inner radius 8 */
+  border-radius: 8px;
+  font-size: .875rem; line-height: 1.25rem; font-weight: 500;
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  transition: color 300ms var(--glass-ease), background-color 300ms var(--glass-ease);
+}
+.lp-bar-link:hover { color: var(--color-text-primary); background: rgba(255, 255, 255, .07); }
+.lp-bar-link[aria-current] { color: var(--color-text-primary); background: rgba(255, 255, 255, .1); }
+[data-theme="light"] .lp-bar-link:hover { background: rgba(255, 255, 255, .55); }
+[data-theme="light"] .lp-bar-link[aria-current] { background: rgba(255, 255, 255, .8); box-shadow: 0 0 0 1px rgba(120, 50, 20, .08); }
+
+.lp-bar-actions { display: flex; align-items: center; gap: 8px; }
+/* Button-sm */
+.lp-bar .lp-bar-cta {
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: .875rem; line-height: 1.25rem; font-weight: 600;
+  text-decoration: none;
+}
+[data-theme="light"] .lp-bar button[title^="Switch"] { border-color: rgba(120, 50, 20, .14) !important; }
+
+/* Icon buttons: the sun turns, both lift slightly */
+.lp-bar button { transition: transform 300ms var(--glass-ease), border-color 300ms var(--glass-ease), background-color 300ms var(--glass-ease); }
+.lp-bar button svg { transition: transform 500ms var(--glass-ease); }
+@media (hover: hover) {
+  .lp-bar button:hover { border-color: rgba(255, 90, 31, .45) !important; transform: translateY(-1px); }
+  .lp-bar button[title^="Switch"]:hover svg { transform: rotate(90deg) scale(1.1); }
+}
+.lp-bar button:active { transform: scale(.94); transition-duration: 90ms; }
+
+/* Menu button: two lines that cross into a close mark */
+.lp-bar-toggle {
+  display: none; position: relative;
+  width: 32px; height: 32px;
+  padding: 0;
+  border-radius: 8px;
+  border: 1px solid var(--glass-line);
+  background: rgba(255, 255, 255, .06);
+  color: var(--color-text-primary);
+  cursor: pointer;
+}
+[data-theme="light"] .lp-bar-toggle { background: rgba(255, 255, 255, .5); border-color: rgba(120, 50, 20, .14); }
+.lp-bar-toggle span {
+  position: absolute; left: 9px; right: 9px; top: 50%;
+  height: 2px; margin-top: -1px;
+  border-radius: 2px;
+  background: currentColor;
+  transition: transform 500ms var(--glass-ease);
+}
+.lp-bar-toggle span:first-child { transform: translateY(-4px); }
+.lp-bar-toggle span:last-child  { transform: translateY(4px); }
+.lp-bar.is-open .lp-bar-toggle span:first-child { transform: rotate(45deg); }
+.lp-bar.is-open .lp-bar-toggle span:last-child  { transform: rotate(-45deg); }
+
+/* Focus is always visible */
+.lp-bar :is(a, button):focus-visible,
+.lp-menu a:focus-visible {
+  outline: 2px solid #ff5a1f;
+  outline-offset: 2px;
+}
+
+/* Full height menu panel */
+.lp-menu {
+  position: fixed; inset: 0; z-index: 49;
+  padding: 96px 24px 32px;
+  background: rgba(5, 5, 6, .88);
+  -webkit-backdrop-filter: blur(32px) saturate(160%);
+  backdrop-filter: blur(32px) saturate(160%);
+  opacity: 0; visibility: hidden;
+  transition: opacity 300ms var(--glass-ease), visibility 0s linear 300ms;
+}
+[data-theme="light"] .lp-menu { background: rgba(241, 226, 214, .9); }
+.lp-menu.is-open { opacity: 1; visibility: visible; transition: opacity 300ms var(--glass-ease); }
+.lp-menu-list { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
+/* Heading 5 */
+.lp-menu-link {
+  display: block;
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-size: 1.5rem; line-height: 2rem; font-weight: 600;
+  color: var(--color-text-primary);
+  text-decoration: none;
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 500ms var(--glass-ease), transform 500ms var(--glass-ease), background-color 300ms var(--glass-ease);
+}
+.lp-menu.is-open .lp-menu-link {
+  opacity: 1; transform: none;
+  transition-delay: min(calc(var(--i) * 60ms), 400ms), min(calc(var(--i) * 60ms), 400ms), 0ms;
+}
+.lp-menu-link:hover { background: rgba(255, 255, 255, .06); }
+.lp-menu-link[aria-current] { color: #ff5a1f; }
+[data-theme="light"] .lp-menu-link:hover { background: rgba(255, 255, 255, .5); }
+
+@media (max-width: 767px) {
+  .lp-bar { width: 100%; justify-content: space-between; gap: 8px; }
+  .lp-bar-links, .lp-bar-login { display: none; }
+  .lp-bar-toggle { display: inline-flex; }
+}
+@media (min-width: 768px) { .lp-menu { display: none; } }
 
 @media (prefers-reduced-motion: reduce) {
-  .glass-scope :is(.btn-primary, .btn-secondary, .lp-nav button),
-  .glass-scope :is(.btn-primary, .btn-secondary, .lp-nav button) svg,
-  .glass-scope :is(.btn-primary, .btn-secondary)::after { animation: none !important; transform: none !important; }
+  .lp-bar-toggle span, .lp-menu-link { transition-property: opacity; }
+  .lp-menu-link { transform: none; }
 }

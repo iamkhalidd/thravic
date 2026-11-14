@@ -2,9 +2,8 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { ArrowRight, Check, Menu, X } from 'lucide-react';
+import { ArrowRight, Check } from 'lucide-react';
 import dynamic from 'next/dynamic';
-import { ThemeToggle } from '@/components/ThemeToggle';
 import FlowBackdrop from '@/components/glass/FlowBackdrop';
 import { ThemedLogo } from '@/components/ThemedLogo';
 import { payments } from '@/lib/api';
@@ -13,6 +12,7 @@ import { EVENTS_PER_VISIT, NGN_PER_USD, WALKTHROUGH_VIDEO_URL } from '@/lib/land
 import CompareTable from './CompareTable';
 import FaqList from './FaqList';
 import HeroReplay from './HeroReplay';
+import LandingNav from './LandingNav';
 import Reveal from './Reveal';
 import ScrollEffects from './ScrollEffects';
 
@@ -143,16 +143,6 @@ const s = {
     page: { minHeight: '100vh', position: 'relative' as const, overflowX: 'clip' as const },
     container: { maxWidth: '1080px', margin: '0 auto', padding: '0 24px', position: 'relative' as const, zIndex: 10 },
 
-    // Nav
-    nav: {
-        position: 'fixed' as const, top: 0, left: 0, right: 0, zIndex: 50,
-        borderBottom: '1px solid var(--color-border)',
-    },
-    navInner: {
-        maxWidth: '1080px', margin: '0 auto', padding: '0 24px',
-        height: '56px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-    },
-
     // Hero
     hero: {
         paddingTop: 'clamp(112px, 16vh, 160px)', paddingBottom: '120px',
@@ -204,7 +194,6 @@ const s = {
 
 /* ─── COMPONENT ─── */
 export default function LandingPage({ initialTiers }: { initialTiers: Tier[] | null }) {
-    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     // The server normally sends the plans with the page. If it couldn't reach
     // the API, try once more from the browser; never show made-up prices.
     const [tiers, setTiers] = useState<Tier[] | null>(initialTiers);
@@ -239,73 +228,7 @@ export default function LandingPage({ initialTiers }: { initialTiers: Tier[] | n
             <FlowBackdrop />
             <ScrollEffects />
             {/* ═══ NAV ═══ */}
-            <nav className="lp-nav" style={s.nav}>
-                <div style={s.navInner}>
-                    <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: '10px', textDecoration: 'none', color: 'var(--color-text-primary)' }}>
-                        <ThemedLogo height={24} />
-                    </Link>
-
-                        <div className="desktop-only" style={{ display: 'flex', gap: '24px' }}>
-                            {[
-                                { label: 'How it works', href: '#how-it-works' },
-                                { label: 'Features', href: '#features' },
-                                { label: 'Pricing', href: '#pricing' },
-                                { label: 'Demo', href: '/demo' },
-                            ].map(link => (
-                                <Link key={link.label} href={link.href} style={{
-                                    color: 'var(--color-text-secondary)', textDecoration: 'none',
-                                    fontSize: '0.8125rem', fontWeight: 500, transition: 'color 0.2s'
-                                }}>{link.label}</Link>
-                            ))}
-                        </div>
-
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                            <ThemeToggle />
-                            <Link href="/login" style={{
-                                color: 'var(--color-text-secondary)', textDecoration: 'none',
-                                fontSize: '0.8125rem', fontWeight: 500,
-                            }} className="desktop-only">Log in</Link>
-                            <Link href="/register" className="btn-primary" style={{
-                                padding: '6px 14px', borderRadius: '6px', fontSize: '0.8125rem',
-                                fontWeight: 500, textDecoration: 'none', display: 'inline-flex',
-                            }}>Sign up</Link>
-                            <button 
-                                className="lp-nav-mobile-btn desktop-hidden"
-                                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                                aria-label="Toggle menu"
-                                style={{
-                                    background: 'transparent', border: 'none', color: 'var(--color-text-primary)',
-                                    cursor: 'pointer', padding: '4px',
-                                }}
-                            >
-                                {isMobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
-                            </button>
-                        </div>
-                    </div>
-                </nav>
-
-                {/* Mobile Menu Dropdown */}
-                <div className={`lp-nav-links ${isMobileMenuOpen ? 'active' : ''}`}>
-                    {[
-                        { label: 'How it works', href: '#how-it-works' },
-                        { label: 'Features', href: '#features' },
-                        { label: 'Pricing', href: '#pricing' },
-                        { label: 'Demo', href: '/demo' },
-                    ].map(link => (
-                        <Link 
-                            key={link.label} 
-                            href={link.href} 
-                            onClick={() => setIsMobileMenuOpen(false)}
-                            style={{
-                                color: 'var(--color-text-primary)', textDecoration: 'none',
-                                fontSize: '1rem', fontWeight: 500, padding: '12px 0', width: '100%',
-                                borderBottom: '1px solid rgba(255,255,255,0.05)'
-                            }}
-                        >
-                            {link.label}
-                        </Link>
-                    ))}
-                </div>
+            <LandingNav />
 
             {/* ═══ HERO ═══ */}
             <section style={s.hero}>
