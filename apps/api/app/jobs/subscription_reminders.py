@@ -7,6 +7,11 @@ is in now, so an owner who is already a day from the end gets "tomorrow" and not
 also "in a week". Each stage is sent once per period: it is claimed in
 `subscription_notices` keyed by the period's end, so a renewal (a new end) starts
 over, and the claim is released if delivery fails so the next run tries again.
+
+Each run also resets `users.subscription` (the plan label the admin pages and
+the account menu show) to free once a paid period is past grace. Access never
+depends on that label (`plan_service.entitled` decides it from the dates), so
+this only keeps what people see in step with what the account can do.
 """
 
 from __future__ import annotations
@@ -21,7 +26,12 @@ from ..db import query, query_one
 from ..logging import create_logger
 from ..services import plan_catalog
 from ..services.email_service import send_subscription_notice_email
-from ..services.plan_service import FREE_PLAN, GRACE_DAYS, LAPSED_RETENTION_HOLD_DAYS
+from ..services.plan_service import (
+    FREE_PLAN,
+    GRACE_DAYS,
+    LAPSED_RETENTION_HOLD_DAYS,
+    entitled,
+)
 from .runner import run_if_due
 
 log = create_logger("Job")
@@ -106,7 +116,26 @@ async def send_subscription_notices() -> dict[str, Any]:
                 kind,
             )
 
-    return {"candidates": len(rows), "sent": sent, "failed": failed}
+    reset = await reset_lapsed_plan_labels()
+    return {"candidates": len(rows), "sent": sent, "failed": failed, "labels_reset": reset}
+
+
+async def reset_lapsed_plan_labels() -> int:
+    """Set `users.subscription` to free for accounts with no paid plan in force."""
+    rows = await query(
+        f"""
+        UPDATE users u SET subscription = 'free', updated_at = NOW()
+        WHERE COALESCE(u.subscription, 'free') <> 'free'
+          AND NOT EXISTS (
+              SELECT 1 FROM subscriptions s
+              WHERE s.user_id = u.id AND s.plan <> 'free' AND {entitled("s")}
+          )
+        RETURNING u.id
+        """
+    )
+    if rows:
+        log.info(f"[Jobs] Moved {len(rows)} lapsed accounts' plan label back to free")
+    return len(rows)
 
 
 async def _scheduled_notices() -> None:

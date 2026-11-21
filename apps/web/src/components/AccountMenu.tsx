@@ -82,7 +82,8 @@ export function AccountMenu({ user, collapsed, active, onLogout }: AccountMenuPr
 
     const tone = events ? meterTone(events.used, events.limit) : 'ok';
     const used = events ? percent(events.used, events.limit) : 0;
-    const plan = planName ?? (user.subscription ? user.subscription[0].toUpperCase() + user.subscription.slice(1) : '');
+    // Only the billing API knows whether a paid plan has lapsed; the stored label can lag.
+    const plan = planName ?? '';
 
     const meter = events && (
         <div style={{ height: '4px', background: 'var(--color-bg-tertiary)', borderRadius: '2px', overflow: 'hidden' }}>
@@ -188,7 +189,7 @@ export function AccountMenu({ user, collapsed, active, onLogout }: AccountMenuPr
                             style={{ ...itemStyle, display: 'block', fontSize: '0.75rem' }}
                         >
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                                <span style={{ color: 'var(--color-text-primary)', fontWeight: 500 }}>{plan} plan</span>
+                                <span style={{ color: 'var(--color-text-primary)', fontWeight: 500 }}>{plan ? `${plan} plan` : 'Plan'}</span>
                                 <span style={{ color: TONE_COLORS[tone] }}>{used}%</span>
                             </div>
                             {meter}

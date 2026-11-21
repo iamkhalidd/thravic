@@ -724,3 +724,62 @@ async def test_the_admin_list_shows_each_subscriptions_state(seeded_domain, db_p
     (row,) = response.json()["subscriptions"]
     assert row["state"] == "grace"
     assert row["grace_ends_at"]
+    assert row["plan_in_force"] == plan
+
+
+async def test_the_admin_list_shows_a_lapsed_plan_as_free(seeded_domain, db_pool, make_plan):
+    plan = await make_plan()
+    owner = await _owner(db_pool, seeded_domain)
+    await _subscribe(db_pool, owner, plan, NOW - 20 * DAY)
+
+    response = await _admin_post(f"/api/admin/subscriptions/?plan={plan}", None)
+
+    (row,) = response.json()["subscriptions"]
+    assert (row["state"], row["plan"], row["plan_in_force"]) == ("expired", plan, "free")
+
+
+async def _label(db_pool, owner):
+    async with db_pool.acquire() as conn:
+        return await conn.fetchval("SELECT subscription FROM users WHERE id = $1", owner)
+
+
+async def _set_label(db_pool, owner, plan):
+    async with db_pool.acquire() as conn:
+        await conn.execute("UPDATE users SET subscription = $2 WHERE id = $1", owner, plan)
+
+
+@pytest.mark.parametrize(
+    ("period_end", "expected"),
+    [
+        (NOW + 5 * DAY, "PLAN"),  # still paid
+        (NOW - DAY, "PLAN"),  # in grace
+        (None, "PLAN"),  # granted with no end date
+        (NOW - 20 * DAY, "free"),  # lapsed
+    ],
+)
+async def test_a_lapsed_plans_label_goes_back_to_free(
+    seeded_domain, db_pool, make_plan, period_end, expected
+):
+    plan = await make_plan()
+    owner = await _owner(db_pool, seeded_domain)
+    await _subscribe(db_pool, owner, plan, period_end)
+    await _set_label(db_pool, owner, plan)
+
+    await subscription_reminders.reset_lapsed_plan_labels()
+
+    assert await _label(db_pool, owner) == (plan if expected == "PLAN" else expected)
+
+
+async def test_extending_a_lapsed_period_restores_the_label(seeded_domain, db_pool, make_plan):
+    plan = await make_plan()
+    owner = await _owner(db_pool, seeded_domain)
+    await _subscribe(db_pool, owner, plan, NOW - 20 * DAY)
+    await _set_label(db_pool, owner, "free")
+
+    response = await _admin_post(
+        f"/api/admin/subscriptions/{await _sub_id(db_pool, owner)}/extend", {"days": 7}
+    )
+
+    assert response.status_code == 200, response.json()
+    assert response.json()["plan_in_force"] == plan
+    assert await _label(db_pool, owner) == plan

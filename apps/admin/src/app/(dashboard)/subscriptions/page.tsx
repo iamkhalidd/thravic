@@ -21,6 +21,8 @@ interface Subscription {
     /** free | active | grace | expired | canceled */
     state: string;
     grace_ends_at: string | null;
+    /** The plan the account is on now: free once the bought or granted plan has lapsed. */
+    plan_in_force?: string;
 }
 
 const fmtDate = (iso: string) => new Date(iso).toLocaleDateString();
@@ -40,6 +42,7 @@ export default function SubscriptionsPage() {
     const [plans, setPlans] = useState<{ id: string; name: string }[]>([]);
 
     const paidPlans = plans.filter(p => p.id !== 'free');
+    const planName = (id: string) => plans.find(p => p.id === id)?.name ?? id;
 
     useEffect(() => {
         api.get('/api/admin/plans').then(data => setPlans(data.plans || [])).catch(console.error);
@@ -168,7 +171,12 @@ export default function SubscriptionsPage() {
                         ) : subscriptions.map(sub => (
                             <tr key={sub.id}>
                                 <td><span style={{ color: 'var(--color-text-primary)', fontWeight: 500 }}>{sub.user_name}</span><br /><span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>{sub.user_email ? <MaskedEmail email={sub.user_email} /> : null}</span></td>
-                                <td><span className="badge">{sub.plan}</span></td>
+                                <td>
+                                    <span className="badge">{planName(sub.plan_in_force ?? sub.plan)}</span>
+                                    {sub.plan_in_force && sub.plan_in_force !== sub.plan && (
+                                        <><br /><span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>was {planName(sub.plan)}</span></>
+                                    )}
+                                </td>
                                 <td><span className={`badge badge-${sub.state}`}>{sub.state}</span></td>
                                 <td>
                                     {sub.current_period_end ? fmtDate(sub.current_period_end) : (sub.plan === 'free' ? '—' : 'No end date')}

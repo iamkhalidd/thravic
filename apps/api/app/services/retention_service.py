@@ -2,7 +2,8 @@
 
 Each domain's retention comes from its owner's *effective* plan — the latest active
 subscription, else free — the same rule that decides features and limits. The old
-cleanup read `users.subscription`, which can disagree with billing.
+cleanup read `users.subscription`, which can disagree with billing (and is reset
+to free once a period lapses).
 
 One difference: a paid period that lapsed keeps its plan's retention for
 `LAPSED_RETENTION_HOLD_DAYS` after grace, so an owner who renews late finds their
@@ -42,10 +43,11 @@ def _domain_policy(policy_column: str) -> str:
     the owner was on a paid plan whose subscription is no longer active."""
     return f"""
         SELECT d.id AS domain_id, ep.plan, p.{policy_column} AS days,
-               (ep.plan = 'free' AND COALESCE(u.subscription, 'free') <> 'free')
-                   AS inactive_paid
+               (ep.plan = 'free' AND EXISTS (
+                    SELECT 1 FROM subscriptions s
+                    WHERE s.user_id = d.user_id AND s.plan <> 'free'
+               )) AS inactive_paid
         FROM domains d
-        JOIN users u ON u.id = d.user_id
         CROSS JOIN LATERAL (
             SELECT LOWER(COALESCE(
                 (SELECT s.plan FROM subscriptions s

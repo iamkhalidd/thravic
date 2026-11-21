@@ -19,7 +19,7 @@ from ...logging import create_logger
 from ...middleware.admin_auth import AdminUser, admin_auth
 from ...services import plan_catalog
 from ...services.audit_service import log_action
-from ...services.plan_service import GRACE_DAYS, entitled
+from ...services.plan_service import FREE_PLAN, GRACE_DAYS, entitled
 from ...validators.admin import update_subscription_schema
 from ._util import client_ip
 
@@ -41,6 +41,19 @@ def _state(sub: dict[str, Any]) -> tuple[str, datetime | None]:
     if grace_ends > datetime.now(UTC):
         return "grace", grace_ends
     return "expired", grace_ends
+
+
+def _describe(sub: dict[str, Any]) -> None:
+    """Add `state`, `grace_ends_at` and `plan_in_force` to a subscription row.
+
+    The stored `plan` is what was bought or granted; once that lapses (after
+    grace) or is canceled the account is on the free plan, which is what
+    `plan_in_force` says.
+    """
+    sub["state"], sub["grace_ends_at"] = _state(sub)
+    sub["plan_in_force"] = (
+        (sub.get("plan") or FREE_PLAN) if sub["state"] in ("active", "grace") else FREE_PLAN
+    )
 
 
 def _count(row: dict | None) -> int:
@@ -87,7 +100,7 @@ async def list_subscriptions(request: Request):
         )
 
         for sub in subscriptions:
-            sub["state"], sub["grace_ends_at"] = _state(sub)
+            _describe(sub)
 
         count_row = await query_one(
             f"SELECT COUNT(*) as count FROM subscriptions s {where}", *args
@@ -222,6 +235,10 @@ async def extend_subscription(
                 raise SimpleError("Free subscriptions have no period to extend", 400)
             raise SimpleError("This plan has no end date, so there is nothing to extend", 400)
 
+        # The period may have lapsed and the account label been reset to free
+        # (see jobs/subscription_reminders); extending gives the plan back.
+        await query("UPDATE users SET subscription = $1 WHERE id = $2", sub["plan"], sub["user_id"])
+
         await log_action(
             admin_id=admin.user_id,
             action="subscription.extend",
@@ -230,7 +247,7 @@ async def extend_subscription(
             details={"days": days, "current_period_end": sub["current_period_end"].isoformat()},
             ip_address=client_ip(request),
         )
-        sub["state"], sub["grace_ends_at"] = _state(sub)
+        _describe(sub)
         return jsjson(sub)
     except SimpleError:
         raise
@@ -289,7 +306,7 @@ async def grant_subscription(
             },
             ip_address=client_ip(request),
         )
-        sub["state"], sub["grace_ends_at"] = _state(sub)
+        _describe(sub)
         return jsjson(sub)
     except SimpleError:
         raise
