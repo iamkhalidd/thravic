@@ -496,14 +496,17 @@
   backdrop-filter: blur(1.5px) saturate(140%);
   box-shadow: inset -1px 0 0 var(--glass-line), 12px 0 40px -24px rgba(0, 0, 0, .6);
 }
-/* Top bar: the bar text scrolls under */
+/* Top bar: lighter than before so the flow lines glow through, but cards
+   scroll under it, so it keeps enough blur (8px) that their numbers turn
+   into soft shapes instead of clashing with the controls */
 .dash-glass .dash-topbar {
   background: rgba(10, 10, 12, .5) !important;
   border-bottom-color: var(--glass-line) !important;
-  -webkit-backdrop-filter: blur(24px) saturate(140%);
-  backdrop-filter: blur(24px) saturate(140%);
+  -webkit-backdrop-filter: blur(8px) saturate(160%);
+  backdrop-filter: blur(8px) saturate(160%);
+  box-shadow: 0 12px 40px -24px rgba(0, 0, 0, .6);
 }
-[data-theme="light"] .dash-glass .dash-topbar { background: rgba(255, 255, 255, .6) !important; }
+[data-theme="light"] .dash-glass .dash-topbar { background: rgba(255, 255, 255, .5) !important; }
 
 /* Top bar controls and the site picker: see-through chips */
 .dash-glass .dash-control,
