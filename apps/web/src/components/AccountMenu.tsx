@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { createPortal } from 'react-dom';
 import { ChevronsUpDown, LogOut, Settings, CreditCard } from 'lucide-react';
 import { payments } from '@/lib/api';
 import { meterTone, percent, timeUntil, TONE_COLORS, type UsageMeter } from '@/lib/usage';
@@ -154,10 +155,12 @@ export function AccountMenu({ user, collapsed, active, onLogout }: AccountMenuPr
                 )}
             </button>
 
-            {open && (
+            {/* Portal: the frosted sidebar (backdrop-filter) would otherwise trap and clip this fixed menu */}
+            {open && createPortal(
                 <div
                     ref={menuRef}
                     role="menu"
+                    className="account-menu"
                     style={{
                         position: 'fixed', left: pos.left, bottom: pos.bottom, zIndex: 1000,
                         width: MENU_WIDTH, padding: '6px',
@@ -211,7 +214,7 @@ export function AccountMenu({ user, collapsed, active, onLogout }: AccountMenuPr
                         <LogOut size={15} /> Log out
                     </button>
                 </div>
-            )}
+            , document.body)}
         </div>
     );
 }

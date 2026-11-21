@@ -1,7 +1,7 @@
 /* ==========================================================================
    Glass: clear panels with a sheen and lit edges, over the visitor flow lines backdrop.
-   Only active inside .glass-scope (the landing page and the demo), so the real
-   dashboard, login and docs keep their solid surfaces.
+   Only active inside .glass-scope (the landing page, the demo and the
+   dashboard), so login, docs and the other pages keep their solid surfaces.
    Make it clearer or more frosted with --glass-tint and --glass-blur below.
    ========================================================================== */
 
@@ -465,4 +465,72 @@
   .glass-scope.lp-page .btn-primary:hover { transform: none; box-shadow: none; opacity: .9; }
   .glass-scope.lp-page .btn-secondary:hover { transform: none; box-shadow: none; border-color: var(--color-border-hover); }
   .glass-scope.lp-page :is(.btn-primary, .btn-secondary):hover svg { transform: translateX(2px); }
+}
+
+/* ==========================================================================
+   Dashboard (.dash-glass, app/dashboard/layout.tsx): frosted glass over the
+   flow lines. More frost than the landing page so charts, tables and long
+   lists stay easy to read for hours, and buttons stay calm.
+   ========================================================================== */
+.glass-scope.dash-glass {
+  --glass-tint:  .14;
+  --glass-hover: .18;
+  --glass-sheen: .06;
+  --glass-blur:  blur(24px) saturate(140%);
+  --glass-shadow: 0 16px 40px -20px rgba(0, 0, 0, .5);
+  --color-sidebar-bg: rgba(10, 10, 12, .55);
+}
+[data-theme="light"] .glass-scope.dash-glass {
+  --glass-tint:  .65;
+  --glass-hover: .75;
+  --glass-sheen: .4;
+  --glass-blur:  blur(24px) saturate(140%);
+  --color-sidebar-bg: rgba(255, 255, 255, .6);
+}
+
+/* Sidebar and top bar: the bars text scrolls under */
+.dash-glass .dash-sidebar {
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+  backdrop-filter: blur(24px) saturate(140%);
+}
+.dash-glass .dash-topbar {
+  background: rgba(10, 10, 12, .5) !important;
+  border-bottom-color: var(--glass-line) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+  backdrop-filter: blur(24px) saturate(140%);
+}
+[data-theme="light"] .dash-glass .dash-topbar { background: rgba(255, 255, 255, .6) !important; }
+
+/* Top bar controls and the site picker: see-through chips */
+.dash-glass .dash-control,
+.dash-glass .dash-site-picker {
+  background: rgba(var(--glass-rgb), calc(var(--glass-tint) * .5)) !important;
+  border-color: var(--glass-line) !important;
+}
+.dash-glass .dash-control[aria-pressed="true"] { background: rgba(var(--glass-rgb), var(--glass-hover)) !important; }
+[data-theme="light"] .dash-glass :is(.dash-control, .dash-site-picker) { border-color: rgba(120, 50, 20, .14) !important; }
+
+/* Panels that hold long text or forms: mostly solid (Ask Thravic panel, account menu) */
+.dash-glass #ask-thravic,
+body:has(.dash-glass) .account-menu {
+  background: var(--glass-solid-bg) !important;
+  border-color: var(--glass-line) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+  backdrop-filter: blur(24px) saturate(140%);
+}
+
+/* Cards inside cards don't blur twice */
+.dash-glass .card .card {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none;
+  background: rgba(var(--glass-rgb), .04);
+}
+
+/* Buttons: a quick surface change and a small press, no sweep or lift */
+.dash-glass :is(.btn-primary, .btn-secondary)::after { content: none; }
+@media (hover: hover) {
+  .glass-scope.dash-glass .btn-primary:hover { transform: none; box-shadow: none; opacity: .9; }
+  .glass-scope.dash-glass .btn-secondary:hover { transform: none; box-shadow: none; border-color: var(--color-border-hover); }
+  .glass-scope.dash-glass :is(.btn-primary, .btn-secondary):hover svg { transform: none; }
 }

@@ -55,6 +55,7 @@ import { ImpersonationBanner } from '@/components/ImpersonationBanner';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { RouteErrorBoundary } from '@/components/RouteErrorBoundary';
 import { AskThravic } from '@/components/AskThravic';
+import FlowBackdrop from '@/components/glass/FlowBackdrop';
 
 // Pages that read useApiRange().compare; elsewhere the Compare button would do nothing
 const COMPARE_PAGES = ['/dashboard', '/dashboard/traffic/trends', '/dashboard/traffic/sources', '/dashboard/behavior/pages'];
@@ -276,7 +277,9 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
 
     return (
         // tf-block: thravic.com's own tracker never records the dashboard.
-        <div className="tf-block" style={{ display: 'flex', minHeight: '100vh', background: 'var(--color-bg-primary)' }}>
+        // glass-scope + dash-glass: frosted panels over the visitor flow lines (glass.css).
+        <div className="tf-block glass-scope dash-glass" style={{ display: 'flex', minHeight: '100vh' }}>
+            <FlowBackdrop intensity={0.55} />
 
             {/* ── Sidebar ── */}
             <aside
@@ -337,6 +340,7 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                     <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--color-sidebar-border)', flexShrink: 0 }}>
                         <div style={{ position: 'relative' }}>
                             <button
+                                className="dash-site-picker"
                                 onClick={() => setDomainDropdownOpen(!domainDropdownOpen)}
                                 style={{
                                     width: '100%', display: 'flex', alignItems: 'center',
@@ -360,7 +364,7 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                                 <ChevronDown size={14} style={{ color: 'var(--color-text-muted)', flexShrink: 0 }} />
                             </button>
                             {domainDropdownOpen && (
-                                <div style={{
+                                <div className="glass-solid" style={{
                                     position: 'absolute', top: '100%', left: 0, right: 0,
                                     marginTop: '4px', background: 'var(--color-bg-card)',
                                     border: '1px solid var(--color-border)', borderRadius: '10px',
@@ -470,7 +474,7 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                 <BillingBanner />
 
                 {/* Top Header */}
-                <header style={{
+                <header className="dash-topbar" style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                     padding: '0 16px', height: '56px',
                     background: 'var(--color-bg-card)',
@@ -502,7 +506,7 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                                 <ChevronDown size={14} style={{ color: 'var(--color-text-muted)' }} />
                             </button>
                             {dateDropdownOpen && (
-                                <div style={{
+                                <div className="glass-solid" style={{
                                     position: 'absolute', top: '100%', left: 0,
                                     marginTop: '4px', background: 'var(--color-bg-card)',
                                     border: '1px solid var(--color-border)', borderRadius: '10px',

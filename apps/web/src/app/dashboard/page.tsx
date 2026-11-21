@@ -296,7 +296,7 @@ export default function DashboardPage() {
                     position: 'fixed', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.5)', backdropFilter: 'blur(4px)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 'var(--space-md)',
                 }}>
-                    <div className="card" style={{ width: '100%', maxWidth: '700px', maxHeight: '90vh', overflowY: 'auto', position: 'relative', padding: 'var(--space-xl)' }}>
+                    <div className="card glass-solid" style={{ width: '100%', maxWidth: '700px', maxHeight: '90vh', overflowY: 'auto', position: 'relative', padding: 'var(--space-xl)' }}>
                         <button onClick={() => setShowInstructions(false)} aria-label="Close" style={{
                             position: 'absolute', top: 'var(--space-md)', right: 'var(--space-md)',
                             background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--color-text-muted)',
