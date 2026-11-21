@@ -137,15 +137,23 @@ export default function FlowBackdrop({ intensity = 1 }: { intensity?: number }) 
             ctx.globalAlpha = 1;
         };
 
-        let raf = 0, last = 0, live = !document.hidden;
+        // onScreen: false when the backdrop is out of view (if a page lets it
+        // scroll away), so it stops drawing
+        let raf = 0, last = 0, live = !document.hidden, onScreen = true;
         const loop = (ms: number) => {
             raf = requestAnimationFrame(loop);
-            if (!live || ms - last < 33) return;
+            if (!live || !onScreen || ms - last < 33) return;
             last = ms;
             step();
         };
+        const io = new IntersectionObserver(([entry]) => { onScreen = entry.isIntersecting; });
+        io.observe(wrap);
 
-        const onMove = (e: PointerEvent) => { ptr.x = e.clientX; ptr.y = e.clientY; };
+        // Relative to the backdrop, so it lines up whether it is fixed or scrolls with the page
+        const onMove = (e: PointerEvent) => {
+            const r = wrap.getBoundingClientRect();
+            ptr.x = e.clientX - r.left; ptr.y = e.clientY - r.top;
+        };
         const onLeave = () => { ptr.x = -9999; ptr.y = -9999; };
         const ro = new ResizeObserver(() => {
             if (Math.abs(wrap.clientWidth - w) < 2 && Math.abs(wrap.clientHeight - h) < 80) return; // ignore phone toolbar jiggle
@@ -183,6 +191,7 @@ export default function FlowBackdrop({ intensity = 1 }: { intensity?: number }) 
             cancelAnimationFrame(raf);
             ro.disconnect();
             mo.disconnect();
+            io.disconnect();
             document.removeEventListener('visibilitychange', onVis);
             window.removeEventListener('pointermove', onMove);
             document.removeEventListener('pointerleave', onLeave);

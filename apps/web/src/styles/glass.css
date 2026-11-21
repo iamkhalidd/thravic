@@ -452,3 +452,17 @@
   .lp-bar-toggle span, .lp-menu-link { transition-property: opacity; }
   .lp-menu-link { transform: none; }
 }
+
+/* ==========================================================================
+   Landing page (.lp-page): calmer buttons than the demo. The flow lines and
+   glass panels stay as they are above, behind the whole page.
+   ========================================================================== */
+/* Buttons: a quick surface change on hover and a small press, nothing that
+   loops, glows or sweeps on its own */
+.lp-page :is(.btn-primary, .btn-secondary)::after { content: none; }
+.glass-scope.lp-page .lp-hero-content .btn-primary { animation: none; }
+@media (hover: hover) {
+  .glass-scope.lp-page .btn-primary:hover { transform: none; box-shadow: none; opacity: .9; }
+  .glass-scope.lp-page .btn-secondary:hover { transform: none; box-shadow: none; border-color: var(--color-border-hover); }
+  .glass-scope.lp-page :is(.btn-primary, .btn-secondary):hover svg { transform: translateX(2px); }
+}

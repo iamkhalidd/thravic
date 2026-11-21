@@ -170,16 +170,17 @@ function NavItem({ item, pathname, collapsed }: NavItemProps) {
                 width: '100%',
                 display: 'flex',
                 alignItems: 'center',
-                gap: collapsed ? '0' : '9px',
-                padding: collapsed ? '7px 0' : '5px 12px',
+                gap: collapsed ? '0' : '10px',
+                height: '32px',
+                padding: collapsed ? '0' : '0 12px',
                 justifyContent: collapsed ? 'center' : 'flex-start',
                 background: 'transparent',
-                borderRadius: '6px',
+                borderRadius: '8px',
                 color: isActive ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
                 fontSize: '0.8125rem',
                 fontWeight: isActive ? 500 : 400,
                 textDecoration: 'none',
-                transition: 'all 150ms ease',
+                transition: 'color 120ms ease, background-color 120ms ease',
                 position: 'relative',
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
@@ -340,15 +341,15 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                                 style={{
                                     width: '100%', display: 'flex', alignItems: 'center',
                                     justifyContent: 'space-between',
-                                    padding: '6px 10px',
+                                    height: '32px', padding: '0 10px',
                                     background: 'var(--color-bg-primary)',
                                     border: '1px solid var(--color-border)',
-                                    borderRadius: '6px', cursor: 'pointer',
+                                    borderRadius: '8px', cursor: 'pointer',
                                     fontSize: '0.8125rem', color: 'var(--color-text-primary)',
                                 }}
                             >
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                    {appSelected ? <Smartphone size={13} aria-label="App" /> : <Globe size={13} aria-label="Website" />}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                                    {appSelected ? <Smartphone size={14} aria-label="App" /> : <Globe size={14} aria-label="Website" />}
                                     <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '140px' }}>
                                         {(appSelected && currentDomain?.name) || currentDomain?.domain || 'Select property'}
                                     </span>
@@ -356,21 +357,21 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                                         <span style={{ fontSize: '0.6875rem', color: 'var(--color-text-muted)', flexShrink: 0 }}>Paused</span>
                                     )}
                                 </div>
-                                <ChevronDown size={12} />
+                                <ChevronDown size={14} style={{ color: 'var(--color-text-muted)', flexShrink: 0 }} />
                             </button>
                             {domainDropdownOpen && (
                                 <div style={{
                                     position: 'absolute', top: '100%', left: 0, right: 0,
                                     marginTop: '4px', background: 'var(--color-bg-card)',
-                                    border: '1px solid var(--color-border)', borderRadius: '6px',
+                                    border: '1px solid var(--color-border)', borderRadius: '10px',
                                     boxShadow: 'var(--shadow-md)', zIndex: 100, maxHeight: '200px', overflow: 'auto',
                                 }}>
                                     {switcherGroups(domainList).map(([heading, items]) => (
                                         <div key={heading ?? 'all'} role="group" aria-label={heading ?? undefined}>
                                             {heading && (
                                                 <div style={{
-                                                    padding: '8px 12px 4px', fontSize: '0.6875rem', fontWeight: 500,
-                                                    textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--color-text-muted)',
+                                                    padding: '8px 12px 4px', fontSize: '0.75rem', fontWeight: 500,
+                                                    color: 'var(--color-text-muted)',
                                                 }}>{heading}</div>
                                             )}
                                             {items.map(domain => {
@@ -383,13 +384,13 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                                                         title={app ? domain.domain : undefined}
                                                         style={{
                                                             width: '100%', padding: '8px 12px',
-                                                            display: 'flex', alignItems: 'center', gap: '6px',
+                                                            display: 'flex', alignItems: 'center', gap: '8px',
                                                             background: selectedDomain === domain.id ? 'var(--color-bg-hover)' : 'transparent',
                                                             border: 'none', textAlign: 'left', cursor: 'pointer',
                                                             fontSize: '0.8125rem', color: selectedDomain === domain.id ? 'var(--color-accent-primary)' : 'var(--color-text-primary)',
                                                         }}
                                                     >
-                                                        <Icon size={13} style={{ flexShrink: 0, color: 'var(--color-text-muted)' }} aria-hidden="true" />
+                                                        <Icon size={14} style={{ flexShrink: 0, color: 'var(--color-text-muted)' }} aria-hidden="true" />
                                                         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                                             {(app && domain.name) || domain.domain}
                                                         </span>
@@ -419,21 +420,21 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                 {/* Navigation */}
                 <nav className="no-scrollbar" style={{
                     flex: 1, overflowY: 'auto', overflowX: 'hidden',
-                    padding: (sidebarCollapsed && !isMobile) ? '6px 4px' : '6px 0',
+                    padding: (sidebarCollapsed && !isMobile) ? '8px 4px' : '8px 0',
                 }}>
                     {nav.map(section => (
                         <div
                             key={section.label || 'main'}
                             role="group"
                             aria-label={section.label || undefined}
-                            style={{ display: 'flex', flexDirection: 'column', gap: '1px', marginTop: section.label ? 10 : 0 }}
+                            style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginTop: section.label ? 20 : 0 }}
                         >
                             {section.label && ((sidebarCollapsed && !isMobile) ? (
-                                <div aria-hidden="true" style={{ height: 1, margin: '0 8px 4px', background: 'var(--color-sidebar-border)' }} />
+                                <div aria-hidden="true" style={{ height: 1, margin: '0 8px 6px', background: 'var(--color-sidebar-border)' }} />
                             ) : (
                                 <div style={{
-                                    padding: '0 12px 3px', fontSize: '0.6875rem', fontWeight: 500,
-                                    textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--color-text-muted)',
+                                    padding: '0 12px 6px', fontSize: '0.75rem', fontWeight: 500,
+                                    color: 'var(--color-text-muted)',
                                 }}>{section.label}</div>
                             ))}
                             {section.children!.map(item => (
@@ -471,14 +472,14 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                 {/* Top Header */}
                 <header style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    padding: '0 16px', height: '52px',
+                    padding: '0 16px', height: '56px',
                     background: 'var(--color-bg-card)',
                     borderBottom: '1px solid var(--color-border)',
                     position: 'sticky', top: 0, zIndex: 40,
                     gap: '8px',
                 }}>
                     {/* Left: hamburger (mobile) + date controls */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
                         {/* Mobile hamburger */}
                         <button
                             className="dash-hamburger"
@@ -491,26 +492,20 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                         {/* Date Range — always visible */}
                         <div style={{ position: 'relative' }}>
                             <button
+                                className="dash-control"
                                 onClick={() => setDateDropdownOpen(!dateDropdownOpen)}
-                                style={{
-                                    display: 'flex', alignItems: 'center', gap: '5px',
-                                    padding: '5px 10px',
-                                    background: 'var(--color-bg-primary)',
-                                    border: '1px solid var(--color-border)',
-                                    borderRadius: '6px', cursor: 'pointer',
-                                    fontSize: '0.8125rem', color: 'var(--color-text-primary)',
-                                    whiteSpace: 'nowrap',
-                                }}
+                                aria-expanded={dateDropdownOpen}
+                                style={{ color: 'var(--color-text-primary)' }}
                             >
-                                <Calendar size={13} />
+                                <Calendar size={14} />
                                 <span>{currentDatePreset?.label || 'Date range'}</span>
-                                <ChevronDown size={12} />
+                                <ChevronDown size={14} style={{ color: 'var(--color-text-muted)' }} />
                             </button>
                             {dateDropdownOpen && (
                                 <div style={{
                                     position: 'absolute', top: '100%', left: 0,
                                     marginTop: '4px', background: 'var(--color-bg-card)',
-                                    border: '1px solid var(--color-border)', borderRadius: '6px',
+                                    border: '1px solid var(--color-border)', borderRadius: '10px',
                                     boxShadow: 'var(--shadow-md)', zIndex: 100, minWidth: '150px',
                                 }}>
                                     {datePresets.map(preset => (
@@ -532,65 +527,38 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
 
                         {/* Compare — desktop only, and only where a page shows the previous period */}
                         {COMPARE_PAGES.includes(pathname) && <button
-                            className="desktop-only"
+                            className="dash-control desktop-only"
                             onClick={toggleComparison}
                             aria-pressed={comparisonEnabled}
                             title="Compare with the previous period of the same length"
-                            style={{
-                                alignItems: 'center', gap: '6px',
-                                padding: '5px 10px',
-                                background: comparisonEnabled ? 'var(--color-bg-hover)' : 'var(--color-bg-primary)',
-                                border: `1px solid ${comparisonEnabled ? 'var(--color-accent-primary)' : 'var(--color-border)'}`,
-                                borderRadius: '6px', cursor: 'pointer',
-                                fontSize: '0.8125rem',
-                                color: comparisonEnabled ? 'var(--color-accent-primary)' : 'var(--color-text-secondary)',
-                            }}
                         >
-                            <TrendingUp size={13} />
+                            <TrendingUp size={14} />
                             <span>Compare</span>
                         </button>}
                     </div>
 
                     {/* Right: actions — Live and Export desktop only, theme always */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
                         <AskThravic pathname={pathname} />
                         <ThemeToggle />
                         
                         {/* Live — desktop only; on, the open page re-fetches as the API pushes new events */}
                         <button
-                            className="desktop-only"
+                            className="dash-control desktop-only"
                             onClick={() => setLive(!live)}
                             aria-pressed={live}
                             title={!live ? 'Live paused. Click to show new data as it arrives.' : streaming ? 'Live: new data shows up as it arrives. Click to pause.' : 'Live: connecting, checking every 30 seconds meanwhile. Click to pause.'}
-                            style={{
-                                alignItems: 'center', gap: '6px',
-                                padding: '5px 10px',
-                                background: live ? 'rgba(16,185,129,0.1)' : 'var(--color-bg-primary)',
-                                border: `1px solid ${live ? '#10b981' : 'var(--color-border)'}`,
-                                borderRadius: '6px', cursor: 'pointer',
-                                fontSize: '0.8125rem',
-                                color: live ? '#10b981' : 'var(--color-text-secondary)',
-                            }}
                         >
-                            <RefreshCw size={13} />
+                            {/* On: the green live dot (pulsing once the stream is connected). Off: a refresh icon */}
+                            {live
+                                ? <span aria-hidden="true" className={`dash-live-dot${streaming ? ' is-live' : ''}`} />
+                                : <RefreshCw size={14} />}
                             <span>Live</span>
                         </button>
 
                         {/* Export — desktop only; the downloads live on the Reports page */}
-                        <Link
-                            href="/dashboard/reports"
-                            className="desktop-only"
-                            style={{
-                                alignItems: 'center', gap: '6px',
-                                padding: '5px 10px',
-                                background: 'var(--color-bg-primary)',
-                                border: '1px solid var(--color-border)',
-                                borderRadius: '6px', cursor: 'pointer',
-                                fontSize: '0.8125rem', color: 'var(--color-text-secondary)',
-                                textDecoration: 'none',
-                            }}
-                        >
-                            <Download size={13} />
+                        <Link href="/dashboard/reports" className="dash-control desktop-only">
+                            <Download size={14} />
                             <span>Export</span>
                         </Link>
                     </div>

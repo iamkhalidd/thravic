@@ -3,9 +3,6 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import {
-    Users,
-    Eye,
-    Clock,
     Globe,
     RefreshCw,
     MousePointer2,
@@ -19,7 +16,6 @@ import {
     Code,
     ExternalLink,
     X,
-    Activity,
 } from 'lucide-react';
 import { analytics, domains } from '@/lib/api';
 import type { Metrics, TopPage, TimeseriesData, RealtimeData } from '@/types';
@@ -36,6 +32,7 @@ import { useDomain } from '@/contexts/DomainContext';
 import { useApiRange } from '@/contexts/DateRangeContext';
 import { useSubscription } from '@/hooks/useSubscription';
 import { explainHref } from '@/components/AnalystPanel';
+import { useToast } from '@/components/Toast';
 
 // Fallback when the script request fails; the API normally supplies the snippet.
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
@@ -82,6 +79,7 @@ export default function DashboardPage() {
     // An app's overview: screens for pages, and versions where a site shows its sources.
     const app = isApp(selectedDomain);
     const { hasFeature } = useSubscription();
+    const { toast } = useToast();
     const canExplain = hasFeature('insights', selectedDomain?.features || undefined);
     const why = (metric: string, pct: number | undefined) =>
         canExplain && pct !== undefined && Math.abs(pct) >= BIG_CHANGE_PCT
@@ -163,7 +161,7 @@ export default function DashboardPage() {
     if (domainList.length === 0) {
         return (
             <div>
-                <h1 style={{ marginBottom: 'var(--space-xl)' }}>Welcome to Thravic!</h1>
+                <h1 className="page-title" style={{ marginBottom: 'var(--space-xl)' }}>Get started</h1>
 
                 {/* Getting Started Card */}
                 <div className="card" style={{ padding: 'var(--space-2xl)', textAlign: 'center', marginBottom: 'var(--space-xl)', background: 'var(--color-bg-card)', border: '1px solid var(--color-border)' }}>
@@ -186,8 +184,8 @@ export default function DashboardPage() {
                         Get started by adding your website. We&apos;ll generate a tracking script you can install in minutes.
                     </p>
                     <Link href="/dashboard/domains/new" className="btn btn-primary" style={{ padding: 'var(--space-md) var(--space-xl)' }}>
-                        <Plus size={20} />
-                        Add Website
+                        <Plus size={16} />
+                        Add website
                     </Link>
                 </div>
 
@@ -195,15 +193,15 @@ export default function DashboardPage() {
                 <h3 style={{ marginBottom: 'var(--space-lg)' }}>What you&apos;ll get</h3>
                 <div className="grid grid-cols-3 gap-lg">
                     {[
-                        { icon: BarChart3, title: 'Real-time Analytics', desc: 'See visitors, pageviews, and engagement as it happens' },
-                        { icon: Target, title: 'Funnel Tracking', desc: 'Track conversion paths and identify drop-offs' },
-                        { icon: MousePointer2, title: 'Heatmaps', desc: 'Visualize where users click and scroll' },
-                        { icon: Video, title: 'Session Recordings', desc: 'Watch how visitors interact with your site' },
-                        { icon: Sparkles, title: 'AI Insights', desc: 'Get automated recommendations to improve' },
-                        { icon: Globe, title: 'Traffic Sources', desc: 'Know where your visitors come from' }
+                        { icon: BarChart3, title: 'Live analytics', desc: 'Visitors, page views and time on site as they happen' },
+                        { icon: Target, title: 'Funnels', desc: 'See the step where people drop off' },
+                        { icon: MousePointer2, title: 'Heatmaps', desc: 'Where people click and how far they scroll' },
+                        { icon: Video, title: 'Session recordings', desc: 'Watch how visitors use your site' },
+                        { icon: Sparkles, title: 'AI insights', desc: 'Plain answers on what changed and why' },
+                        { icon: Globe, title: 'Traffic sources', desc: 'Where your visitors come from' }
                     ].map((feature, i) => (
-                        <div key={i} className="card" style={{ background: 'var(--color-bg-card)', padding: 'var(--space-lg)', borderRadius: '16px' }}>
-                            <feature.icon size={20} style={{ color: 'var(--color-text-primary)', marginBottom: 'var(--space-md)' }} />
+                        <div key={i} className="card" style={{ background: 'var(--color-bg-card)', padding: 'var(--space-lg)', borderRadius: 'var(--radius-lg)' }}>
+                            <feature.icon size={16} style={{ color: 'var(--color-text-secondary)', marginBottom: 'var(--space-md)' }} />
                             <h4 style={{ marginBottom: 'var(--space-xs)', fontSize: '0.9375rem', fontWeight: 500 }}>{feature.title}</h4>
                             <p style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', margin: 0 }}>{feature.desc}</p>
                         </div>
@@ -246,13 +244,12 @@ export default function DashboardPage() {
                 subtitle={selectedDomain?.domain}
                 badge={
                     <span title="Visitors in the last 5 minutes" style={{
-                        display: 'inline-flex', alignItems: 'center', gap: 6, marginLeft: 6,
-                        padding: '2px 10px', borderRadius: 999, border: '1px solid var(--color-border)',
-                        fontSize: '0.75rem', fontWeight: 500, color: 'var(--color-text-secondary)',
+                        display: 'inline-flex', alignItems: 'center', gap: 8, marginLeft: 8,
+                        fontSize: '0.8125rem', fontWeight: 400, color: 'var(--color-text-secondary)',
+                        fontVariantNumeric: 'tabular-nums',
                     }}>
                         <span aria-hidden="true" className={`dash-live-dot${realtime?.activeVisitors ? ' is-live' : ''}`} style={{
-                            width: 6, height: 6, borderRadius: '50%',
-                            background: realtime?.activeVisitors ? 'var(--color-success)' : 'var(--color-text-muted)',
+                            background: realtime?.activeVisitors ? undefined : 'var(--color-text-muted)',
                         }} />
                         {realtime?.activeVisitors || 0} online
                     </span>
@@ -261,12 +258,12 @@ export default function DashboardPage() {
 
             {/* No data yet - show tracking code */}
             {!hasData && (
-                <div className="card" style={{ borderColor: 'var(--color-warning)', background: 'rgba(245, 158, 11, 0.05)' }}>
+                <div className="card">
                     <div className="flex items-start gap-md">
-                        <Code size={20} aria-hidden="true" style={{ color: 'var(--color-warning)', flexShrink: 0, marginTop: 2 }} />
+                        <Code size={16} aria-hidden="true" style={{ color: 'var(--color-text-secondary)', flexShrink: 0, marginTop: 2 }} />
                         <div style={{ flex: 1, minWidth: 0 }}>
                             <h2 className="card-title">{app ? 'Install the SDK' : 'Install your tracking script'}</h2>
-                            <p className="card-subtitle" style={{ marginBottom: 12 }}>
+                            <p className="card-subtitle" style={{ marginBottom: 16 }}>
                                 {app
                                     ? <>Run <code>npm install @thravic/react-native</code>, then add this where your app starts.</>
                                     : <>Add this to the <code>&lt;head&gt;</code> of your website to start collecting data.</>}
@@ -274,12 +271,12 @@ export default function DashboardPage() {
                             <div style={{
                                 position: 'relative', background: 'var(--color-bg-primary)',
                                 border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)',
-                                padding: '12px 96px 12px 12px', marginBottom: 12,
+                                padding: '12px 96px 12px 12px', marginBottom: 16,
                             }}>
                                 <pre style={{ margin: 0, fontSize: '0.75rem', fontFamily: 'var(--font-mono)', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
                                     {trackingScript || `<script async src="${API_URL}/tf.js" data-tracking-id="${selectedDomain?.trackingId}"></script>`}
                                 </pre>
-                                <button onClick={handleCopyScript} className="btn btn-secondary" style={{ position: 'absolute', top: 8, right: 8, padding: '4px 10px' }}>
+                                <button onClick={handleCopyScript} className="btn btn-secondary" style={{ position: 'absolute', top: 8, right: 8, padding: '4px 12px' }}>
                                     {copied ? <Check size={14} /> : <Copy size={14} />}
                                     {copied ? 'Copied' : 'Copy'}
                                 </button>
@@ -295,7 +292,7 @@ export default function DashboardPage() {
 
             {/* Instruction Modal */}
             {showInstructions && selectedDomain && (
-                <div role="dialog" aria-modal="true" aria-label={app ? 'Install the SDK' : 'Install tracking script'} style={{
+                <div role="dialog" aria-modal="true" aria-label={app ? 'Install the SDK' : 'Install your tracking script'} style={{
                     position: 'fixed', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.5)', backdropFilter: 'blur(4px)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 'var(--space-md)',
                 }}>
@@ -304,9 +301,9 @@ export default function DashboardPage() {
                             position: 'absolute', top: 'var(--space-md)', right: 'var(--space-md)',
                             background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--color-text-muted)',
                         }}>
-                            <X size={20} />
+                            <X size={16} />
                         </button>
-                        <h2 style={{ marginBottom: 'var(--space-xs)' }}>{app ? 'Install the SDK' : 'Install tracking script'}</h2>
+                        <h2 style={{ marginBottom: 'var(--space-xs)' }}>{app ? 'Install the SDK' : 'Install your tracking script'}</h2>
                         <p style={{ marginBottom: 'var(--space-lg)', fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
                             {app ? 'Pick how your app is built and follow the steps.' : 'Select your platform below and follow the steps to install Thravic.'}
                         </p>
@@ -322,7 +319,7 @@ export default function DashboardPage() {
                                         setShowInstructions(false);
                                         window.location.reload();
                                     } else {
-                                        alert((result.data as any)?.message || (app ? 'No data from your app yet.' : 'Script not detected. Please verify your installation.'));
+                                        toast('error', (result.data as any)?.message || (app ? 'No data from your app yet' : 'We could not find the script on your site yet'));
                                     }
                                 }}
                                 className="btn btn-primary"
@@ -335,23 +332,23 @@ export default function DashboardPage() {
             )}
 
             <div className="stat-grid">
-                <StatCard label="Visitors" icon={Users} value={(metrics?.uniqueVisitors ?? 0).toLocaleString()}
+                <StatCard label="Visitors" value={(metrics?.uniqueVisitors ?? 0).toLocaleString()}
                     change={visitorsChange} hint={why('visitors', visitorsChange)}
                     info={app ? 'Different people who opened your app.' : 'Different people who came to your site. Someone who visits twice counts once.'}
                     selected={metric === 'visitors'} onSelect={() => setMetric('visitors')} />
-                <StatCard label={app ? 'Screen views' : 'Page views'} icon={Eye} value={(metrics?.pageviews ?? 0).toLocaleString()}
+                <StatCard label={app ? 'Screen views' : 'Page views'} value={(metrics?.pageviews ?? 0).toLocaleString()}
                     change={pageviewsChange} hint={why('pageviews', pageviewsChange)}
                     info={app ? 'Every time a screen was opened.' : 'Every time a page was opened, counting repeat views.'}
                     selected={metric === 'pageviews'} onSelect={() => setMetric('pageviews')} />
-                <StatCard label="Visits" icon={Activity} value={(metrics?.sessions ?? 0).toLocaleString()}
+                <StatCard label="Visits" value={(metrics?.sessions ?? 0).toLocaleString()}
                     change={change(metrics?.sessions, previous?.sessions)}
                     hint={why('sessions', change(metrics?.sessions, previous?.sessions))}
                     info="A visit (session) ends after 30 minutes without activity. One person can make several." />
-                <StatCard label="Left after one page" icon={MousePointer2} value={`${Number(metrics?.bounceRate ?? 0).toFixed(1)}%`}
+                <StatCard label="Left after one page" value={`${Number(metrics?.bounceRate ?? 0).toFixed(1)}%`}
                     change={change(metrics?.bounceRate, previous?.bounceRate)} lowerIsBetter
                     hint={why('bounce_rate', change(metrics?.bounceRate, previous?.bounceRate))}
                     info="Bounce rate: the share of visits that saw one page and left. Lower is better." />
-                <StatCard label="Time on site" icon={Clock} value={duration(metrics?.avgSessionDuration ?? 0)}
+                <StatCard label="Time on site" value={duration(metrics?.avgSessionDuration ?? 0)}
                     change={change(metrics?.avgSessionDuration, previous?.avgSessionDuration)}
                     info="How long an average visit lasts, from the first page to the last." />
             </div>
@@ -409,7 +406,7 @@ export default function DashboardPage() {
                     <BarList items={topPages.map(p => ({ label: p.path, value: p.views }))} emptyText={app ? 'No screen views in this period' : 'No pageviews in this period'} />
                 </ChartCard>
                 <ChartCard title="Right now" subtitle="Visitors in the last 5 minutes" info="People active on your site in the last 5 minutes, updated every 30 seconds.">
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 12 }}>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 16 }}>
                         <span className="stat-value" style={{ fontSize: '2rem' }}>{realtime?.activeVisitors || 0}</span>
                         <span className="stat-hint">
                             {realtime?.pageviewsLast30Min ?? 0} {app ? 'screen views' : 'pageviews'} in the last 30 minutes

@@ -16,6 +16,7 @@ interface StatCardProps {
     hint?: ReactNode;
     /** One sentence explaining the metric, behind an ⓘ. */
     info?: string;
+    /** Not drawn: tiles are numbers, a label is enough. Kept so existing pages still compile. */
     icon?: LucideIcon;
     /** Small colored dot before the label, for an entity that has a color elsewhere. */
     dot?: string;
@@ -42,7 +43,7 @@ export function ChangeChip({ change, lowerIsBetter }: { change: number; lowerIsB
 }
 
 /** One stat tile for every page: label, value, optional change and hint. */
-export function StatCard({ label, value, change, lowerIsBetter, hint, info, icon: Icon, dot, loading, onSelect, selected }: StatCardProps) {
+export function StatCard({ label, value, change, lowerIsBetter, hint, info, dot, loading, onSelect, selected }: StatCardProps) {
     if (loading) {
         return (
             <div className="card stat-card" aria-busy="true">
@@ -55,7 +56,6 @@ export function StatCard({ label, value, change, lowerIsBetter, hint, info, icon
     const body = (
         <>
             <span className="stat-label">
-                {Icon && <Icon size={14} aria-hidden="true" style={{ color: 'var(--color-text-muted)' }} />}
                 {dot && <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: '50%', background: dot }} />}
                 {label}
                 {info && !onSelect && <InfoTip text={info} />}

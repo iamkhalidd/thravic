@@ -105,7 +105,9 @@ a:hover {
   border-radius: var(--radius-md);
   border: none;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition-property: background-color, color, border-color, opacity, transform;
+  transition-duration: 120ms;
+  transition-timing-function: ease;
   white-space: nowrap;
 }
 
@@ -165,14 +167,13 @@ a.card:hover {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-sm);
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 }
 
 .card-title {
   font-size: 0.875rem;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--color-text-primary);
-  letter-spacing: -0.005em;
 }
 
 .card-subtitle {
@@ -240,14 +241,14 @@ a.card:hover {
 .stat-card {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 16px 18px;
+  gap: 8px;
+  padding: 16px;
   min-width: 0;
 }
 
 .stat-value {
   font-size: 1.625rem;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1.15;
   letter-spacing: -0.02em;
   color: var(--color-text-primary);
@@ -1041,7 +1042,7 @@ a.card:hover {
   align-items: center;
   gap: 8px;
   font-size: 1.375rem;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1.25;
   letter-spacing: -0.015em;
   color: var(--color-text-primary);
@@ -1165,7 +1166,7 @@ a.card:hover {
 .lp-hero-facts {
   list-style: none;
   padding: 0;
-  margin: 20px 0 0;
+  margin: 24px 0 0;
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
@@ -1972,34 +1973,11 @@ a.card:hover {
 /* One word per headline in the brand orange */
 .lp-accent {
   color: var(--brand);
-  background: linear-gradient(100deg, var(--brand) 20%, #ff9a5c);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
 }
 
-/* Warm light behind the hero, under the content and above the shader */
-.lp-hero-glow {
-  position: absolute;
-  left: 50%;
-  top: 46%;
-  width: min(1100px, 120vw);
-  height: 640px;
-  transform: translateX(-50%);
-  background: radial-gradient(closest-side, rgba(255, 90, 31, 0.26), rgba(255, 90, 31, 0.08) 55%, transparent);
-  filter: blur(30px);
-  pointer-events: none;
-  z-index: 0;
-  animation: lp-glow 9s ease-in-out infinite alternate;
-}
-
-[data-theme="light"] .lp-hero-glow {
-  opacity: 0.55;
-}
-
-@keyframes lp-glow {
-  from { transform: translateX(-50%) scale(1); }
-  to { transform: translateX(-50%) scale(1.08); }
+/* Orange as ink on the light sand needs a darker shade to keep 4.5:1 */
+[data-theme="light"] .lp-accent {
+  color: #c2410c;
 }
 
 .lp-hero-stage {
@@ -2166,7 +2144,8 @@ a.card:hover {
   margin-right: 8px;
   vertical-align: middle;
   background: var(--color-success);
-  --pulse: rgba(34, 197, 94, 0.55);
+  /* Sample data, not a live feed, so the dot stays still */
+  animation: none;
 }
 
 @keyframes lp-pulse {
@@ -2266,7 +2245,7 @@ a.card:hover {
 }
 
 .lp-replay-card.is-target {
-  border-color: rgba(99, 102, 241, 0.6);
+  border-color: var(--color-text-muted);
 }
 
 .lp-replay-badge {
@@ -2276,9 +2255,9 @@ a.card:hover {
   padding: 0.3cqw 1cqw;
   border-radius: 999px;
   font-size: 1.4cqw;
-  font-weight: 600;
-  background: rgba(99, 102, 241, 0.15);
-  color: #818cf8;
+  font-weight: 500;
+  background: var(--lp-block);
+  color: var(--color-text-secondary);
 }
 
 .lp-replay-card-name {
@@ -2323,8 +2302,8 @@ a.card:hover {
 }
 
 .lp-replay-card.is-target .lp-replay-card-btn {
-  background: #6366f1;
-  color: #fff;
+  background: var(--color-text-primary);
+  color: var(--color-bg-primary);
   animation: lp-dead-btn var(--loop) ease infinite;
 }
 
@@ -2542,7 +2521,7 @@ a.card:hover {
   color: var(--color-text-muted);
 }
 
-.lp-replay-events li.is-click i { background: #6366f1; }
+.lp-replay-events li.is-click i { background: var(--color-text-secondary); }
 
 .lp-replay-events li.is-rage {
   border-color: rgba(255, 90, 31, 0.5);
@@ -2716,7 +2695,6 @@ a.card:hover {
 
 .lp-shot:hover,
 .lp-plan:hover {
-  transform: translateY(-3px);
   border-color: var(--color-border-hover);
 }
 
@@ -2797,70 +2775,19 @@ a.card:hover {
 }
 
 /* ── Scroll motion (driven by landing/ScrollEffects.tsx) ── */
-.lp-scroll-progress {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  z-index: 60;
-  background: linear-gradient(90deg, var(--brand), #ffb347);
-  transform-origin: 0 50%;
-  transform: scaleX(var(--lp-scroll, 0));
-  box-shadow: 0 0 10px rgba(255, 90, 31, 0.6);
-  pointer-events: none;
-}
-
 .lp-motion .sr {
   transition:
-    opacity 0.9s cubic-bezier(0.16, 1, 0.3, 1) var(--sr-delay, 0ms),
-    transform 0.9s cubic-bezier(0.16, 1, 0.3, 1) var(--sr-delay, 0ms),
-    filter 0.9s cubic-bezier(0.16, 1, 0.3, 1) var(--sr-delay, 0ms);
+    opacity 400ms cubic-bezier(0.16, 1, 0.3, 1) var(--sr-delay, 0ms),
+    transform 400ms cubic-bezier(0.16, 1, 0.3, 1) var(--sr-delay, 0ms);
 }
 
 .lp-motion .sr:not(.sr-in) {
   opacity: 0;
-  transform: translateY(28px);
-}
-
-.lp-motion .sr-blur:not(.sr-in) {
-  filter: blur(8px);
-  transform: translateY(18px);
-}
-
-.lp-motion .sr-left:not(.sr-in) {
-  transform: translateX(-48px);
-}
-
-.lp-motion .sr-right:not(.sr-in) {
-  transform: translateX(48px) scale(0.97);
-}
-
-.lp-motion .sr-scale:not(.sr-in) {
-  transform: translateY(32px) scale(0.95);
-}
-
-/* The replay starts tilted back and flattens as it rises into view */
-.lp-motion .lp-hero-stage {
-  perspective: 1600px;
-}
-
-.lp-motion .lp-replay {
-  transform-origin: 50% 0;
-  transform: rotateX(calc((1 - var(--lp-flat, 1)) * 16deg)) scale(calc(0.93 + var(--lp-flat, 1) * 0.07));
-  will-change: transform;
-}
-
-@media (max-width: 640px) {
-  .lp-motion .sr-left:not(.sr-in),
-  .lp-motion .sr-right:not(.sr-in) {
-    transform: translateY(28px);
-  }
+  transform: translateY(12px);
 }
 
 /* Reduced motion: a still frame of the moment that matters */
 @media (prefers-reduced-motion: reduce) {
-  .lp-hero-glow,
   .lp-hero-stage,
   .lp-replay-wrap *,
   .lp-reveal.is-visible > *,
@@ -2956,4 +2883,39 @@ a.card:hover {
     animation: none;
     box-shadow: 0 0 8px rgba(255, 90, 31, 0.45);
   }
+}
+
+/* Top bar controls (date, compare, live, export): one size, one look.
+   display is left to .desktop-only where a control hides on phones. */
+.dash-control {
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 12px;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: color 120ms ease, background-color 120ms ease, border-color 120ms ease;
+}
+.dash-control:not(.desktop-only) { display: inline-flex; }
+.dash-control:hover { color: var(--color-text-primary); border-color: var(--color-border-hover); }
+.dash-control[aria-pressed="true"] {
+  background: var(--color-bg-hover);
+  border-color: var(--color-border-hover);
+  color: var(--color-text-primary);
+}
+
+/* The live dot: the one place green means "happening now" */
+.dash-live-dot {
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--color-success);
 }

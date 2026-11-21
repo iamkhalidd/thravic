@@ -60,27 +60,27 @@ const journeys: Record<Platform, { head: string; sub: string; code: string; code
 const stories = [
     {
         label: 'replays', View: SessionsView, view: 'sessions',
-        title: 'Watch the visit, not a summary of it.',
+        title: 'Watch the visit, not a summary of it',
         body: 'Session replays play back clicks, scrolls and page changes as they happened. Form inputs are masked before anything leaves the browser, so you see where someone struggled without seeing what they typed.',
     },
     {
         label: 'funnels', View: FunnelsView, view: 'funnels',
-        title: 'Find the step where people give up.',
+        title: 'Find the step where people give up',
         body: 'Define the steps of your signup or checkout. Thravic shows how many visitors reach each one and where the biggest drop happens.',
     },
     {
         label: 'heatmaps', View: HeatmapsView, view: 'heatmaps',
-        title: 'See what gets clicked and what never gets seen.',
+        title: 'See what gets clicked and what never gets seen',
         body: 'Click maps show where attention lands on each page. Scroll depth shows how far down people actually get, so you know whether your call to action is above the drop.',
     },
     {
         label: 'AI insights', View: InsightsView, view: 'insights',
-        title: 'A daily read on what changed.',
+        title: 'A daily read on what changed',
         body: 'Each day Thravic reports what moved on your site, ranks it by priority and suggests what to do about it. It flags drops and spikes that are out of the ordinary, forecasts traffic with a likely range, and tells you when an A/B test has a winner.',
     },
     {
         label: 'the sample app', View: AppOverviewView, view: 'overview', href: '/demo?property=app',
-        title: 'Your app, next to your website.',
+        title: 'Your app, next to your website',
         body: 'Add a React Native or Expo app and see its screens, sessions, versions and devices in the same dashboard. Paths, funnels and insights work the same way they do for your site.',
     },
 ];
@@ -167,7 +167,6 @@ const s = {
         maxWidth: '560px',
         margin: '0 auto 36px',
         lineHeight: 1.55,
-        letterSpacing: '-0.01em',
         textWrap: 'pretty' as const,
     },
     ctaRow: {
@@ -181,14 +180,13 @@ const s = {
 
     // Typography
     sectionTitle: {
-        fontSize: 'clamp(2rem, 4vw, 3.5rem)', fontWeight: 600,
+        fontSize: 'clamp(2rem, 4vw, 3.5rem)', fontWeight: 500,
         letterSpacing: '-0.03em', marginBottom: '24px',
         color: 'var(--color-text-primary)'
     },
     sectionSub: {
         fontSize: '1.125rem', color: 'var(--color-text-secondary)',
         maxWidth: '540px', margin: '0 auto', lineHeight: 1.6,
-        letterSpacing: '-0.01em'
     },
 };
 
@@ -224,7 +222,7 @@ export default function LandingPage({ initialTiers }: { initialTiers: Tier[] | n
     }, [initialTiers]);
 
     return (
-        <div className="glass-scope" style={s.page}>
+        <div className="glass-scope lp-page" style={s.page}>
             <FlowBackdrop />
             <ScrollEffects />
             {/* ═══ NAV ═══ */}
@@ -232,10 +230,9 @@ export default function LandingPage({ initialTiers }: { initialTiers: Tier[] | n
 
             {/* ═══ HERO ═══ */}
             <section style={s.hero}>
-                <div className="lp-hero-glow" aria-hidden="true" />
                 <div className="lp-hero-content" style={s.container}>
                     <h1 style={s.h1}>
-                        See why visitors <span className="lp-accent">leave</span>, not just that they did.
+                        See why visitors <span className="lp-accent">leave</span>, not just that they did
                     </h1>
 
                     <p style={s.heroSub}>
@@ -251,7 +248,12 @@ export default function LandingPage({ initialTiers }: { initialTiers: Tier[] | n
                             Try the live demo
                         </Link>
                     </div>
-                    <p className="lp-cta-note">Free plan, no card needed.</p>
+                    <p className="lp-cta-note">Free plan, no card needed</p>
+
+                    {/* A replay playing back, a rage click caught, the heatmap behind it */}
+                    <div className="lp-hero-stage">
+                        <HeroReplay />
+                    </div>
 
                     <ul className="lp-hero-facts">
                         <li>One script tag</li>
@@ -259,11 +261,6 @@ export default function LandingPage({ initialTiers }: { initialTiers: Tier[] | n
                         <li>Form inputs masked in replays</li>
                         <li>React Native SDK for apps</li>
                     </ul>
-
-                    {/* A replay playing back, a rage click caught, the heatmap behind it */}
-                    <div className="lp-hero-stage">
-                        <HeroReplay />
-                    </div>
                 </div>
             </section>
 
@@ -281,7 +278,7 @@ export default function LandingPage({ initialTiers }: { initialTiers: Tier[] | n
                                 <button key={id} type="button" role="tab" aria-selected={platform === id} onClick={() => setPlatform(id)}
                                     style={{
                                         padding: '6px 16px', borderRadius: 999, cursor: 'pointer', fontSize: '0.875rem',
-                                        border: 'none', fontWeight: platform === id ? 600 : 400,
+                                        border: 'none', fontWeight: 500,
                                         background: platform === id ? 'var(--color-bg-card)' : 'transparent',
                                         color: platform === id ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
                                     }}>
@@ -294,7 +291,7 @@ export default function LandingPage({ initialTiers }: { initialTiers: Tier[] | n
                     <ol className="lp-steps">
                         {journey.steps.map((step, i) => (
                             <li key={step.title} className="lp-step">
-                                <span className="lp-step-num">{String(i + 1).padStart(2, '0')}</span>
+                                <span className="lp-step-num">{i + 1}</span>
                                 <h3>{step.title}</h3>
                                 <p>{step.body}</p>
                                 {i === 1 && (
@@ -503,7 +500,7 @@ export default function LandingPage({ initialTiers }: { initialTiers: Tier[] | n
             <section className="lp-section lp-cta-final">
                 <div style={{ ...s.container, textAlign: 'center' as const }}>
                     <div className="lp-cta-box">
-                    <h2 style={s.sectionTitle}>Find out where your visitors <span className="lp-accent">drop off</span>.</h2>
+                    <h2 style={s.sectionTitle}>Find out where your visitors <span className="lp-accent">drop off</span></h2>
                     <p style={{ ...s.sectionSub, marginBottom: '36px' }}>
                         Create a free account and paste the script. Data appears within a few minutes of your next visitor.
                         No card needed.
