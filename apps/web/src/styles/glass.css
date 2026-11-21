@@ -478,21 +478,25 @@
   --glass-sheen: .06;
   --glass-blur:  blur(24px) saturate(140%);
   --glass-shadow: 0 16px 40px -20px rgba(0, 0, 0, .5);
-  --color-sidebar-bg: rgba(10, 10, 12, .55);
+  --color-sidebar-bg: rgba(10, 10, 12, .45);
 }
 [data-theme="light"] .glass-scope.dash-glass {
   --glass-tint:  .65;
   --glass-hover: .75;
   --glass-sheen: .4;
   --glass-blur:  blur(24px) saturate(140%);
-  --color-sidebar-bg: rgba(255, 255, 255, .6);
+  --color-sidebar-bg: rgba(255, 255, 255, .45);
 }
 
-/* Sidebar and top bar: the bars text scrolls under */
+/* Sidebar: a light blur only. The flow lines are 1px and sparse, so a
+   heavy blur averages them away and the sidebar reads as solid black.
+   A lit right edge marks it as a pane. */
 .dash-glass .dash-sidebar {
-  -webkit-backdrop-filter: blur(24px) saturate(140%);
-  backdrop-filter: blur(24px) saturate(140%);
+  -webkit-backdrop-filter: blur(1.5px) saturate(140%);
+  backdrop-filter: blur(1.5px) saturate(140%);
+  box-shadow: inset -1px 0 0 var(--glass-line), 12px 0 40px -24px rgba(0, 0, 0, .6);
 }
+/* Top bar: the bar text scrolls under */
 .dash-glass .dash-topbar {
   background: rgba(10, 10, 12, .5) !important;
   border-bottom-color: var(--glass-line) !important;
